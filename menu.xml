@@ -2,8 +2,9 @@
     <data>
         <menuitem id="imq__topmenu"
                   name="IMQ"
-                  sequence="10000" />
-                  
+                  sequence="10000" 
+                  parent="inouk_core.inouk_topmenu"/>
+
             <menuitem id="queues__menu"
                       name="Queues"
                       sequence="100"
@@ -29,7 +30,6 @@
                       name="Configuration"
                       sequence="1000"
                       parent="inouk_message_queue.imq__topmenu"/>
-                      <!--groups="xy_core.group_user"/-->
                       
                 <menuitem id="queues__menuitem"
                           parent="configuration__menu"
@@ -44,9 +44,9 @@
 
             <menuitem id="tests__menu"
                       name="Tests"
+                      groups="inouk_message_queue.group_debug"
                       sequence="1100"
                       parent="inouk_message_queue.imq__topmenu"/>
-                      <!--groups="xy_core.group_user"/-->
 
                 <menuitem id="test_launcher__menuitem"
                           parent="tests__menu"

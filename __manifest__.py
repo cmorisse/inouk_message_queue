@@ -23,6 +23,7 @@ able to consume Messages.""",
     # any module necessary for this one to work correctly
     'depends': [
         'base',
+        'inouk_core'
     ],
 
     # always loaded

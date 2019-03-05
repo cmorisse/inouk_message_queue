@@ -1,7 +1,11 @@
-# noinspection PyStatementEffect
+##############################################################################
+#
+#    Inouk Message Queue
+#    Copyright (c) 2018-2019  Cyril MORISSE (twitter: @cmorisse)
+#
+##############################################################################
 {
     'name': "Inouk Message Queue",
-
     'summary': """Inouk Message Queue a.k.a. IMQ allows to process tasks 
 and interconnect asynchronously Odoo subprocesses with external programs using
 cloud message queues (AWS SQS for now but more to come).""",
@@ -10,9 +14,9 @@ cloud message queues (AWS SQS for now but more to come).""",
 as asynchronous processing on workers that can be Odoo, AWS Lambda or any program
 able to consume Messages.""",
 
-    'author': "Cyril MORISSE (Twitter @cmorisse)",
-    'website': "https://inouk.io",
+    'author': "Cyril MORISSE (twitter @cmorisse)",
     'license': 'OPL-1',
+    #'website': "",
 
     # Categories can be used to filter modules in modules listing
     # Check https://github.com/odoo/odoo/blob/master/openerp/addons/base/module/module_data.xml

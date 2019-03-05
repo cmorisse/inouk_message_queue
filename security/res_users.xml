@@ -1,0 +1,14 @@
+<?xml version="1.0" ?>
+<openerp>
+    <data noupdate="0">
+        <record id="inouk_message_queue.partner_imq" model="res.partner" >
+            <field name="name">IMQ Workers User</field>
+            <field name="customer" eval="False"/>
+        </record>
+
+        <record id="inouk_message_queue.user_imq" model="res.users">
+            <field name="partner_id" ref="inouk_message_queue.partner_imq"/>
+            <field name="login">imq_user</field>
+        </record>
+    </data>
+</openerp>

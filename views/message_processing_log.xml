@@ -1,0 +1,106 @@
+<openerp>
+    <data>
+        <!--
+            Message Queue
+        -->
+        <record id="imq_message_processing_log__search_view" model="ir.ui.view">
+            <field name="name">imq.message_processing_log.search_view</field>
+            <field name="model">imq.message_processing_log</field>
+            <field name="priority" eval="15"/>
+            <field name="arch" type="xml">
+                <search string="Search logs">
+                    <field name="message_id"/>
+                    <field name="processing_id"/>
+                    <field name="logger_name" />
+                    <field name="log_level" />
+                    <field name="log_message" />
+
+                    <group string="Group by...">
+                        <filter name="group_by_message_id"
+                                string="Message"
+                                context="{'group_by': 'message_id'}"
+                                help="Group logs by Message"/>
+                        <filter name="group_by_processing_id"
+                                string="Execution"
+                                context="{'group_by': 'processing_id'}"
+                                help="Group logs by Processing"/>
+                        <filter name="group_by_logger_name"
+                                string="Logger name"
+                                context="{'group_by': 'logger_name'}"
+                                help="Group logs by Logger name"/>
+                        <filter name="group_by_log_level"
+                                string="Log level"
+                                context="{'group_by': 'log_level'}"
+                                help="Group logs by logging log_level."/>
+                    </group>
+
+                </search>
+            </field>
+        </record>
+
+        <record id="imq_message_processing_log__tree_view" model="ir.ui.view">
+            <field name="name">imq.message_processing_log.tree_view</field>
+            <field name="model">imq.message_processing_log</field>
+            <field name="priority" eval="15"/>
+            <field name="arch" type="xml">
+                <tree colors="teal:log_level=='10';green:log_level=='20';fuchsia:log_level=='30';red:log_level=='40';purple:log_level=='50'" >
+                    <field name="create_date"/>
+                    <field name="message_id" />
+                    <field name="processing_id"/>
+                    <field name="logger_name" />
+                    <field name="log_level" />
+                    <field name="log_message" />
+                </tree>
+            </field>
+        </record>
+
+        <record id="imq_message_processing_log__form_view" model="ir.ui.view">
+            <field name="name">imq.message_processing_log.form.view</field>
+            <field name="model">imq.message_processing_log</field>
+            <field name="priority" eval="15"/>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                        </div>
+                        <div class="oe_title">
+                        </div>
+
+                        <group>
+                            <group>
+                                <field name="create_date"/>
+                                <field name="processing_id"/>
+                                <field name="log_level" />
+                            </group>
+                            <group>
+                                <field name="message_id"/>
+                                <field name="logger_name" />
+                            </group>
+                            <group colspan="4">
+                                <field name="log_message" colpsan="4"/>
+                            </group>
+                        </group>
+
+                        <notebook>
+                            <page string="Debug" groups="inouk_message_queue.group_debug">
+                            </page>
+                            
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="imq_message_processing_log__act_window" model="ir.actions.act_window">
+            <field name="name">Logs</field>
+            <field name="res_model">imq.message_processing_log</field>
+            <field name="view_mode">tree,form</field>
+            <field name="view_type">form</field>
+        </record>
+    </data>
+
+</openerp>
+
+

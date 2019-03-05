@@ -1,0 +1,14 @@
+"id","name","model_id/id","group_id/id","perm_create","perm_read","perm_write","perm_unlink"
+"access_imq_queue_adm","IMQ - Queue for admin","inouk_message_queue.model_imq_queue","inouk_message_queue.group_admin","True","True","True","True"
+"access_imq_queue_usr","IMQ - Queue for user","inouk_message_queue.model_imq_queue","inouk_message_queue.group_user","False","True","False","False"
+"access_imq_message_processor_adm","IMQ - Message Processor for admin","inouk_message_queue.model_imq_message_processor","inouk_message_queue.group_admin","True","True","True","True"
+"access_imq_message_processor_usr","IMQ - Message Processor for user","inouk_message_queue.model_imq_message_processor","inouk_message_queue.group_user","True","True","True","True"
+"access_imq_message_adm","IMQ - Messages for admin","inouk_message_queue.model_imq_message","inouk_message_queue.group_admin","True","True","True","True"
+"access_imq_message_usr","IMQ - Message for user","inouk_message_queue.model_imq_message","inouk_message_queue.group_user","False","True","False","False"
+"access_imq_message_processing_adm","IMQ - Message Processing for admin","inouk_message_queue.model_imq_message_processing","inouk_message_queue.group_admin","True","True","True","True"
+"access_imq_message_processing_usr","IMQ - Message Processing for user","inouk_message_queue.model_imq_message_processing","inouk_message_queue.group_user",False,True,False,False
+"access_imq_worker_adm","IMQ - Worker for admin","inouk_message_queue.model_imq_worker","inouk_message_queue.group_admin","True","True","True","True"
+"access_imq_worker_usr","IMQ - Worker for user","inouk_message_queue.model_imq_worker","inouk_message_queue.group_user","False","True","False","False"
+"access_imq_test_launcher_adm","IMQ - Test Launcher for admin","inouk_message_queue.model_imq_test_launcher","","True","True","True","True"
+"access_imq_message_processing_log_adm","IMQ - Message Processing Log for Admin","inouk_message_queue.model_imq_message_processing_log",inouk_message_queue.group_admin,True,True,True,True
+"access_imq_message_processing_log_usr","IMQ - Message Processing Log for User","inouk_message_queue.model_imq_message_processing_log",inouk_message_queue.group_user,False,True,False,False

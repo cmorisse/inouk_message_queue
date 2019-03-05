@@ -1,0 +1,58 @@
+<openerp>
+    <data>
+        <menuitem id="imq__topmenu"
+                  name="IMQ"
+                  sequence="10000" />
+                  
+            <menuitem id="queues__menu"
+                      name="Queues"
+                      sequence="100"
+                      parent="inouk_message_queue.imq__topmenu"/>
+
+                <menuitem id="messages__menuitem"
+                          parent="queues__menu"
+                          sequence="100"
+                          action="imq_message__act_window" />
+                          
+                <menuitem id="message_processings__menuitem"
+                          parent="queues__menu"
+                          sequence="200"
+                          action="imq_message_processing__act_window" />
+
+                <menuitem id="message_processing_logs__menuitem"
+                          parent="queues__menu"
+                          sequence="300"
+                          action="imq_message_processing_log__act_window" />
+
+
+            <menuitem id="configuration__menu"
+                      name="Configuration"
+                      sequence="1000"
+                      parent="inouk_message_queue.imq__topmenu"/>
+                      <!--groups="xy_core.group_user"/-->
+                      
+                <menuitem id="queues__menuitem"
+                          parent="configuration__menu"
+                          sequence="100"
+                          action="imq_queue__act_window" />
+
+                <menuitem id="processors__menuitem"
+                          parent="configuration__menu"
+                          sequence="200"
+                          action="imq_message_processor__act_window" />
+
+
+            <menuitem id="tests__menu"
+                      name="Tests"
+                      sequence="1100"
+                      parent="inouk_message_queue.imq__topmenu"/>
+                      <!--groups="xy_core.group_user"/-->
+
+                <menuitem id="test_launcher__menuitem"
+                          parent="tests__menu"
+                          sequence="100"
+                          action="imq_test_launcher__act_window" />
+
+
+    </data>
+</openerp>

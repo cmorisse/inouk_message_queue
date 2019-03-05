@@ -1,0 +1,192 @@
+<openerp>
+    <data>
+        <!--
+            Message Queue
+        -->
+        <record id="imq_message__search_view" model="ir.ui.view">
+            <field name="name">imq.message.search_view</field>
+            <field name="model">imq.message</field>
+            <field name="priority" eval="15"/>
+            <field name="arch" type="xml">
+                <search string="Search messages">
+                    <filter name="filter_new"
+                            string="New"
+                            domain="[('state','=', 'new')]" />
+                    <filter name="filter_wip"
+                            string="In progress"
+                            domain="[('state','=', 'wip')]" />
+                    <filter name="filter_done"
+                            string="Done"
+                            domain="[('state','=', 'done')]" />
+                    <filter name="filter_failed"
+                            string="Failed"
+                            domain="[('state','=', 'failed')]" />
+                    <filter name="filter_archived"
+                            string="Archived"
+                            domain="[('state','=', 'archived')]" />
+                    <filter name="filter_reset"
+                            string="Reset"
+                            domain="[('state','=', 'reset')]" />
+
+                    <group string="Group by...">
+                        <filter name="group_by_state"
+                                string="State"
+                                context="{'group_by': 'state'}"
+                                help="Group messages by state"/>
+                        <filter name="group_by_queue"
+                                string="Queue"
+                                context="{'group_by': 'queue_id'}"
+                                help="Group messages by Queue"/>
+                        <filter name="group_by_group"
+                                string="Group"
+                                context="{'group_by': 'group'}"
+                                help="Group messages by Group"/>
+                    </group>
+
+                    <field name="name"/>
+                    <field name="group"/>
+                    <field name="queue_message_id"/>
+                    
+                    <field name="state"/>
+                    <field name="user_id"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="imq_message__tree_view" model="ir.ui.view">
+            <field name="name">imq.message_tree.view</field>
+            <field name="model">imq.message</field>
+            <field name="priority" eval="15"/>
+            <field name="arch" type="xml">
+                <tree colors="red:state=='failed';darkgreen:state=='done'" default_order="id desc">
+                    <field name="id"/>
+                    <field name="user_id"/>
+                    <field name="queue_message_id"/>
+                    <field name="group"/>
+                    <field name="name"/>
+                    <field name="queue_id"/>
+                    <field name="processor_id"/>
+                    <field name="start_time"/>
+                    <field name="end_time"/>
+                    <field name="state"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="imq_message__form_view" model="ir.ui.view">
+            <field name="name">imq.message_form.view</field>
+            <field name="model">imq.message</field>
+            <field name="priority" eval="15"/>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                        <button string="Retry"
+                                type="object"
+                                name="do_retry_processing"
+                                class="oe_highlight"
+                                attrs="{'invisible':[('state', 'not in', ['done', 'failed'])]}"/>
+                        <button string="Archive"
+                                type="object"
+                                name="do_archive"
+                                class="oe_highlight"
+                                groups="inouk_message_queue.group_admin"
+                                attrs="{'invisible':[('state', 'not in', ['failed', 'wip'])]}"/>
+                        <field name="state" widget="statusbar" statusbar_visible="new,wip,done,failed"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button class="oe_stat_button"
+                                    string="Exec. logs"
+                                    icon="fa-align-left"
+                                    name="%(imq_message_processing_log__act_window)d"
+                                    context="{'search_default_message_id': [active_id]}"
+                                    type="action"/>
+                            <button class="oe_stat_button"
+                                    string="Exec. stats"
+                                    icon="fa-bar-chart"
+                                    name="%(imq_message_processing__act_window)d"
+                                    context="{'search_default_message_id': [active_id], 'default_message_id': active_id}"
+                                    type="action"/>
+                            <button class="oe_stat_button"
+                                    type="object"
+                                    string="Refresh"
+                                    icon="fa-refresh"
+                                    name="refresh" />
+                        </div>
+                        <div class="oe_title">
+                            <h2>Cloud id = <field name="queue_message_id" class="oe_inline"/></h2>
+                            <h1><field name="name"/></h1>
+                        </div>
+
+                        <group colspan="4" col="4">
+                            <field name="queue_message_id" colspan="4" />
+                            <field name="processor_id" colspan="4" />
+                            <field name="queue_id"/>
+                            <field name="group"/>
+                            <field name="user_id"/>
+                            <field name="enqueued_time"/>
+                            <field name="start_time"/>
+                            <field name="end_time"/>
+                            <newline/>
+                            <field name="attempt_as_text"/>
+                            <newline/>
+                        </group>
+
+                        <notebook>
+                            <page string="Result">
+                                <field name="result" readonly="1"/>
+                            </page>
+                            <page string="Log / Debug">
+                                <group>
+                                    <field name="ikpdb_debug"  />
+                                    <field name="logging_activated" readonly="1"/>
+                                </group>
+                                <field name="log_ids" >
+                                    <tree colors="teal:log_level=='10';green:level=='20';fuchsia:log_level=='30';red:log_level=='40';purple:log_level=='50'" >
+                                        <field name="processing_id" invisible="1" />
+                                        <field name="create_date" string="Time" />
+                                        <field name="log_level"/>
+                                        <field name="log_message"/>
+                                    </tree>
+                                </field>
+                            </page>
+                            <page string="Exec. params.">
+                                <group>
+                                    <field name="code"/>
+                                    <field name="context"/>
+                                    <field name="payload"/>
+                                </group>
+                            </page>
+                            <page string="Exec. history">
+                                <field name="processing_ids">
+                                    <tree>
+                                        <field name="attempt"/>
+                                        <field name="start_time"/>
+                                        <field name="end_time"/>
+                                        <field name="state"/>
+
+                                    </tree>
+                                </field>
+                            </page>
+                            <page string="Debug" groups="inouk_message_queue.group_debug">
+                            </page>
+                            
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="imq_message__act_window" model="ir.actions.act_window">
+            <field name="name">Messages</field>
+            <field name="res_model">imq.message</field>
+            <field name="view_mode">tree,form</field>
+            <field name="view_type">form</field>
+            <field name="help">Browse messages from all queues</field>
+            <field name="context">{'search_default_filter_wip': True, 'search_default_filter_failed': True, 'search_default_filter_reset': True}</field>
+        </record>
+    </data>
+
+</openerp>
+
+

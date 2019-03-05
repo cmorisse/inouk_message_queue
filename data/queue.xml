@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+<openerp>
+    <data noupdate="1">
+        <record id="imq_queue__default" model="imq.queue">
+            <field name="name">default</field>
+            <field name="description">This queue is created by default when 
+            'Inouk Message Queue' module installs.
+            </field>
+        </record>
+    </data>
+</openerp>

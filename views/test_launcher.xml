@@ -1,0 +1,78 @@
+<openerp>
+    <data>
+
+        <!-- Tree view -->
+        <record id="imq_test_launcher__tree_view" model="ir.ui.view">
+            <field name="name">imq_test_launcher.tree.view</field>
+            <field name="model">imq.test_launcher</field>
+            <field name="priority" eval="15"/>
+            <field name="arch" type="xml">
+                <tree string="IMQ Task launchers">
+                    <field name="name"/>
+                    <field name="debug_mode"/>
+                    <field name="processing_duration_s"/>
+                    <field name="param"/>
+                    <field name="launch_result"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form view -->
+        <record id="imq_test_launcher__form_view" model="ir.ui.view">
+            <field name="name">imq_test_launcher.form.view</field>
+            <field name="model">imq.test_launcher</field>
+            <field name="priority" eval="15"/>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                    </header>
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="name"/>
+                            </h1>
+                        </div>
+                        <group>
+                            <field name="type"/>
+                            <field name="queue_name"/>
+                            <field name="debug_mode"/>
+                            <field name="message_group"/>
+                            <field name="launch_result"/>
+                            <field name="process_result"/>
+                            
+                        </group>
+                        <notebook>
+                            <page string="RPC" attrs="{'invisible':[('type','!=','rpc')]}">
+                                <group>
+                                    <field name="processing_duration_s"/>
+                                    <field name="param"/>
+                                    <field name="should_raise_error"/>
+                                    <button string="Launch" type="object" name="launch"/>
+                                    
+                                </group>
+                                
+                            </page>
+                            <page string="Simple" attrs="{'invisible':[('type','!=','simple')]}">
+                                <group>
+                                    <field name="selector"/>
+                                    <field name="payload"/>
+                                    <button string="Send Message" type="object" name="send_simple_message"/>
+                                </group>                                
+                            </page>
+                            
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="imq_test_launcher__act_window" model="ir.actions.act_window">
+            <field name="name">Launch Test messages</field>
+            <field name="res_model">imq.test_launcher</field>
+            <field name="view_mode">tree,form</field>
+            <field name="view_type">form</field>
+        </record>
+    </data>
+</openerp>
+
+

@@ -1,0 +1,9 @@
+**/__pycache__/
+.hg/
+*.pyc
+c9.sh
+.vscode
+buffer.txt
+.c9/
+
+

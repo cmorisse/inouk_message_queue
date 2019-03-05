@@ -1,0 +1,62 @@
+<openerp>
+    <data>
+        
+        <!--
+            Queue
+        -->
+        
+        <record id="imq_queue__form_view" model="ir.ui.view">
+            <field name="name">imq.queue.form.view</field>
+            <field name="model">imq.queue</field>
+            <field name="priority" eval="15"/>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                        </div>
+                        <div class="oe_title">
+                            <h1><field name="name"/></h1>
+                        </div>
+                        <group>
+                            <field name="description" />
+                            <group>
+                            </group>
+                            <group>
+                            </group>
+                        </group>
+
+                        <notebook>
+                            <page string="Debug" groups="inouk_message_queue.group_debug">
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+        
+        
+        <record id="imq_queue__tree_view" model="ir.ui.view">
+            <field name="name">imq.queue__tree.view</field>
+            <field name="model">imq.queue</field>
+            <field name="priority" eval="15"/>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="description"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="imq_queue__act_window" model="ir.actions.act_window">
+            <field name="name">Queues</field>
+            <field name="res_model">imq.queue</field>
+            <field name="view_mode">tree,form</field>
+            <field name="view_type">form</field>
+            <field name="help">Manage Queues</field>
+        </record>
+    </data>
+</openerp>
+
+

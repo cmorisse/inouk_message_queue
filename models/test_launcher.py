@@ -54,7 +54,8 @@ class IMQTestLauncher(models.Model):
         """ Sends a simple message"""
         self.ensure_one()
         # please note that for send_message() we must provide a complete 
-        result = send_message("%s_%s" % (self.queue_name, self.env.cr.dbname,),
+        result = send_message(self.env,
+                              self.queue_name,
                               self.selector, 
                               eval(self.payload), 
                                    self.message_group or None, 

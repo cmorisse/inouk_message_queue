@@ -20,14 +20,20 @@
                             <h1><field name="name"/></h1>
                         </div>
                         <group>
-                            <field name="description" />
                             <group>
+                                <field name="type" />
+                                <field name="region"  />
                             </group>
                             <group>
+                                <field name="key" />
+                                <field name="secret" password="True" />
                             </group>
                         </group>
 
                         <notebook>
+                            <page string="Decription">
+                                <field name="description" />
+                            </page>
                             <page string="Debug" groups="inouk_message_queue.group_debug">
                             </page>
                         </notebook>

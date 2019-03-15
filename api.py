@@ -343,21 +343,30 @@ def processor_method(queue_name='default'):
     return real_method_decorator
 
 
-def send_message(queue_name, selector, payload, message_group=None, 
+def send_message(env, queue, selector, payload, message_group=None, 
                  message_name=None):
     """ Sending a simple message to AWS SQS queue.
+    :param env: A valid Odoo env
+    :param queue: Queue name prefix of the queue to use or queue obj
     """
+    if isinstance(queue, str):
+        queue_obj = env['imq.queue'].search([('name', '=', queue)])
+        if not queue_obj:
+            raise UserError("Unknow queue:'%s' !!!" % queue)
+    else:
+        queue_obj = queue
+
     if message_name is None:
         name = selector
         
     sqs_resource = boto3.resource(
         'sqs',
-        region_name=os.environ.get('IMQ_SQS_REGION'),
-        aws_access_key_id=os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
+        region_name=queue_obj.region,  # os.environ.get('IMQ_SQS_REGION')
+        aws_access_key_id=queue_obj.key,  # ex os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
+        aws_secret_access_key=queue_obj.secret  # ex os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
     )
-    
-    sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_name)
+    sqs_queue_name = "%s_%s" % (queue_obj.name, env.cr.dbname,)
+    sqs_queue = sqs_resource.get_queue_by_name(QueueName=sqs_queue_name)
     message_body_values = {
         'type': 'simple',
         'selector': selector,

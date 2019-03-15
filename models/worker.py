@@ -17,6 +17,7 @@ import boto3
 import openerp
 from openerp import _, api, fields, models
 from openerp.api import Environment
+from odoo.exceptions import MissingError, UserError
 from odoo.addons.inouk_message_queue.api import unwrap_odoo_model
 
 # Must be equal to cron workers interval_number and interval_type
@@ -41,15 +42,21 @@ class IMQWorker(models.Model):
         
         _logger.debug("Queue[%s] querying next message to process.", 
                       queue_obj.name)
+                      
+        queue_name_prefix = queue_obj.name
+        queue_obj = self.env['imq.queue'].search([('name', '=', queue_name_prefix)])
+        if not queue_obj:
+            raise UserError("Unknown queue:'%s' !!!" % queue_name_prefix)
+        
+        
         sqs_resource = boto3.resource(
             'sqs',
-            region_name=os.environ.get('IMQ_SQS_REGION'),
-            aws_access_key_id=os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
+            region_name=queue_obj.region,   # os.environ.get('IMQ_SQS_REGION'),
+            aws_access_key_id=queue_obj.key,   # os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
+            aws_secret_access_key=queue_obj.secret,   # os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
         )
 
-        queue_prefix = queue_obj.name
-        queue_name = "%s_%s" % (queue_obj.name, self.env.cr.dbname,)
+        queue_name = "%s_%s" % (queue_name_prefix, self.env.cr.dbname,)
         sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_name)
 
         start_time = datetime.datetime.now()
@@ -63,7 +70,7 @@ class IMQWorker(models.Model):
             if messages:
                 message = messages[0]
                 _logger.info("Queue[%s] got message: %s", 
-                             queue_obj.name, 
+                             queue_name_prefix, 
                              message)
                 return message
 

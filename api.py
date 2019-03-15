@@ -221,6 +221,10 @@ def enqueue(runnable, *args, **kwargs):
         del kwargs['__imq_message_name']  # We pass all "__imq" params via context
 
     queue_name_prefix = kwargs.get('__imq_queue_name', 'default')
+    queue_obj = env['imq.queue'].search([('name', '=', queue_name_prefix)])
+    if not queue_obj:
+        raise UserError("Unknown queue:'%s' !!!" % queue_name_prefix)
+
     queue_name = "%s_%s" % (queue_name_prefix, env.cr.dbname,)
     if '__imq_queue_name' in kwargs:
         del kwargs['__imq_queue_name']  # We pass all "__imq" params via context
@@ -261,9 +265,9 @@ def enqueue(runnable, *args, **kwargs):
     }
     sqs_resource = boto3.resource(
         'sqs',
-        region_name=os.environ.get('IMQ_SQS_REGION'),
-        aws_access_key_id=os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
+        region_name=queue_obj.region,   # os.environ.get('IMQ_SQS_REGION'),
+        aws_access_key_id=queue_obj.key,  # os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
+        aws_secret_access_key=queue_obj.secret,  # os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
     )
     
     sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_name)
@@ -352,7 +356,7 @@ def send_message(env, queue, selector, payload, message_group=None,
     if isinstance(queue, str):
         queue_obj = env['imq.queue'].search([('name', '=', queue)])
         if not queue_obj:
-            raise UserError("Unknow queue:'%s' !!!" % queue)
+            raise UserError("Unknown queue:'%s' !!!" % queue)
     else:
         queue_obj = queue
 

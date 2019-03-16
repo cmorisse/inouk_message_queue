@@ -36,7 +36,7 @@ able to consume Messages.""",
 
         # Configuration data
         'data/ir_cron_worker.xml',
-        'data/queue.xml',
+        'data/imq_queue.xml',
 
         # Security objects first as other objects references them
         'security/res_users.xml',

@@ -9,18 +9,18 @@
     <data noupdate="1">
         <record id="group_user" model="res.groups">
             <field name="name">User</field>
-            <field name="implied_ids" eval="[(6,0,[])]" />
             <field name="category_id" ref="module_category_imq"/>
-            <field name="users" eval="[(6,0,[ref('base.user_root')])]"/>
+			<field name="implied_ids" eval="[(5, False, False)]" />
+            <field name="users" eval="[(6,0,[ref('base.user_admin')])]"/>
         </record>
     </data>
 
     <data noupdate="1">
         <record id="group_admin" model="res.groups">
             <field name="name">Administrators</field>
-            <field name="implied_ids" eval="[(6,0,[])]"/>
             <field name="category_id" ref="module_category_imq"/>
-            <field name="users" eval="[(6,0,[ref('base.user_root'),ref('inouk_message_queue.user_imq')])]"/>
+			<field name="implied_ids" eval="[(6,0,[ref('xsid_core.group_user')])]" />
+			<field name="users" eval="[(6,0,[ref('base.user_admin'),ref('inouk_message_queue.user_imq')])]"/>
         </record>
     </data>
 
@@ -28,8 +28,8 @@
         <record id="group_debug" model="res.groups">
             <field name="name">Debug</field>
             <field name="implied_ids" eval="[(6,0,[])]" />
-            <field name="category_id" ref="module_category_imq"/>
-            <field name="users" eval="[(6,0,[ref('base.user_root')])]"/>
+			<field name="category_id" ref="base.module_category_usability"/>
+            <field name="users" eval="[(6,0,[ref('base.user_admin')])]"/>
         </record>
     </data>
 </openerp>

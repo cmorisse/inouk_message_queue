@@ -40,7 +40,7 @@ able to consume Messages.""",
 
         # Security objects first as other objects references them
         'security/res_users.xml',
-        'security/groups.xml',
+        'security/res_groups.xml',
         'security/ir.model.access.csv',
         'security/ir_rule.xml',
 

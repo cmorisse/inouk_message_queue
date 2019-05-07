@@ -257,7 +257,6 @@ def enqueue(runnable, *args, **kwargs):
                                              module_name, 
                                              is_method,
                                              logging_activated)
-
     payload = {
         'self': wrap_odoo_model(self),
         'args': wrap_odoo_model(args),

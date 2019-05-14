@@ -1,12 +1,16 @@
-# -*- coding: utf-8 -*-
 import pickle
 import datetime
-from openerp import models, fields, api
-import openerp
-from openerp.exceptions import except_orm
-from openerp.tools.translate import _
+import json
 
-"""Identified all managed queues."""
+from odoo import models, fields, api
+import odoo
+from odoo.exceptions import except_orm
+from odoo.tools.translate import _
+
+from ..api import send_message
+
+
+"""Identifies all managed queues."""
 
 QUEUE_PROVIDERS = [
     ('aws_sqs', "AWS SQS"),
@@ -31,6 +35,7 @@ class IMQQueue(models.Model):
     key = fields.Char()
     secret = fields.Char()
     description = fields.Text()
+    test_result = fields.Text()
 
     @api.multi
     def copy(self, default=None):
@@ -39,3 +44,20 @@ class IMQQueue(models.Model):
         new_name = chosen_name or _('%s (copy)') % self.name
         default = dict(default or {}, name=new_name)
         return super(IMQQueue, self).copy(default)    
+
+
+    @api.multi
+    def btn_send_simple_message(self):
+        """ Sends a simple message"""
+        self.ensure_one()
+        result = send_message(
+            self.env,
+            self.name,
+            "TestMessage",
+            None,  # payload
+            None,  # MessageGroup
+            "This is a test Message name",
+        )
+        result_str = json.dumps(result, sort_keys=True, indent=4)
+        self.test_result = result_str
+

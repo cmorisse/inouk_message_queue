@@ -31,7 +31,7 @@ class IMQTestLauncher(models.Model):
     name = fields.Char()
     queue_name = fields.Char()
     debug_mode = fields.Boolean(
-        help="When checked, RCP code est executed synch" "ronously."
+        help="When checked, RCP code est executed synchronously."
     )
     launch_result = fields.Text()
     process_result = fields.Text()
@@ -53,7 +53,7 @@ class IMQTestLauncher(models.Model):
         if self.debug_mode:
             a_task(self, self.param)
         else:
-            self.launch_result = a_task.delay(self, self.param)
+            self.launch_result = a_task.message(self, self.param)
 
     @api.multi
     def send_simple_message(self):

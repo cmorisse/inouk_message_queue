@@ -310,10 +310,14 @@ def processor(queue_name='default'):
     if not isinstance(queue_name, str):
         raise Exception("Missing @processor's queue_name mandatory parameter.")
     def real_decorator(decorated_function):
-        def delay(*args, **kwargs):
+        def message(*args, **kwargs):
             kwargs['__imq_queue_name'] = kwargs.get('__imq_queue_name', 
                                                     queue_name)
             return enqueue(decorated_function, *args, **kwargs)
+        def delay(*args, **kwargs):
+            _logger.warning(".delay() is deprecated use .message() instead.")
+            return message(*args, **kwargs)
+        decorated_function.message = message
         decorated_function.delay = delay
         return decorated_function
     return real_decorator

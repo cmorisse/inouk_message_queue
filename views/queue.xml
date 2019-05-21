@@ -34,7 +34,15 @@
                             <page string="Description">
                                 <field name="description" />
                             </page>
+                            <page string="Test" >
+                                <group col="4" colspan="4">
+                                    <button type="object" name="btn_send_simple_message" string="Send Simple Message" class="oe_highlight" />
+                                    <label for="test_result" string="Test Result:" colspan="4" />
+                                    <field name="test_result" colspan="4" widget="ace" options="{'mode': 'python'}" nolabel="1" />
+                                </group>                                
+                            </page>
                             <page string="Debug" groups="inouk_message_queue.group_debug">
+
                             </page>
                         </notebook>
                     </sheet>

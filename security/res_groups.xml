@@ -19,7 +19,7 @@
         <record id="group_admin" model="res.groups">
             <field name="name">Administrators</field>
             <field name="category_id" ref="module_category_imq"/>
-			<field name="implied_ids" eval="[(6,0,[ref('xsid_core.group_user')])]" />
+			<field name="implied_ids" eval="[(6,0,[ref('inouk_message_queue.group_user')])]" />
 			<field name="users" eval="[(6,0,[ref('base.user_admin'),ref('inouk_message_queue.user_imq')])]"/>
         </record>
     </data>

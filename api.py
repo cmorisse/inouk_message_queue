@@ -79,8 +79,10 @@ def unwrap_odoo_model(env, obj):
             return getattr(odoo_obj, obj.method_name)
         else:
             raise UserError("Unwrap of Odoo '%s' not implemented.")
-    if isinstance(obj, (list, tuple,)):
-        return map(lambda elem: unwrap_odoo_model(env, elem), obj)
+    if isinstance(obj, list):
+        return list(map(lambda elem: unwrap_odoo_model(env, elem), obj))
+    if isinstance(obj, tuple):
+        return tuple(map(lambda elem: unwrap_odoo_model(env, elem), obj))
     if isinstance(obj, dict):
         patch = [
             (key, unwrap_odoo_model(env, value),) for key, value in obj.items()
@@ -103,8 +105,9 @@ def extract_message_name(processor, args, kwargs):
         try:
             formatted_message_name = processor_name.format(args, kwargs)
         except Exception as e:
+            print("wxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", dir(e))
             formatted_message_name = "Message name extraction failed with "\
-                                     "error: %s" % e.message
+                                     "error: %s" % e
         return formatted_message_name
 
     return "Un-named Processor"

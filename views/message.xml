@@ -41,6 +41,14 @@
                                 string="Group"
                                 context="{'group_by': 'group'}"
                                 help="Group messages by Group"/>
+                        <filter name="group_by_processor"
+                                string="Processor"
+                                context="{'group_by': 'processor_id'}"
+                                help="Group messages by Processor"/>
+                        <filter name="group_by_user"
+                                string="User"
+                                context="{'group_by': 'user_id'}"
+                                help="Group messages by User"/>
                     </group>
 
                     <field name="name"/>

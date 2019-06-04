@@ -320,7 +320,7 @@ class IMQWorker(models.Model):
                 else:  
                     result_dict = {
                         'state': 'failed',
-                        'result': "No processor defined for message. Will retry once in"
+                        'result': "No processor defined for message. Will retry in"
                                   " a few seconds."
                     }
 
@@ -332,7 +332,7 @@ class IMQWorker(models.Model):
 
                 # TODO: Add a parameter to control deletion which is 
                 # unnecessary if queue has a Dead Letter Queue mechanism
-                if message_obj.attempt >= message_obj.max_number_of_attempts:
+                if result_dict['state'] != 'done' and message_obj.attempt >= message_obj.max_number_of_attempts:
                     _logger.debug("Queue[%s] deleting message %s after %s "
                                   "failed attempts.",
                                   queue_obj.name,

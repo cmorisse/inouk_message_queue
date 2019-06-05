@@ -105,7 +105,6 @@ def extract_message_name(processor, args, kwargs):
         try:
             formatted_message_name = processor_name.format(args, kwargs)
         except Exception as e:
-            print("wxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", dir(e))
             formatted_message_name = "Message name extraction failed with "\
                                      "error: %s" % e
         return formatted_message_name

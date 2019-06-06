@@ -103,7 +103,7 @@ def extract_message_name(processor, args, kwargs):
     if processor.__doc__:
         processor_name = processor.__doc__.split('\n')[0] or ''
         try:
-            formatted_message_name = processor_name.format(args, kwargs)
+            formatted_message_name = processor_name.format(*args, **kwargs)
         except Exception as e:
             formatted_message_name = "Message name extraction failed with "\
                                      "error: %s" % e

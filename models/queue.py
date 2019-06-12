@@ -42,9 +42,9 @@ class IMQQueue(models.Model):
     @api.depends('name')
     def _compute_sqs_name(self):
         for record in self:
-            self.sqs_name = "{}_{}".format(
-                self.name,
-                self.env.cr.dbname
+            record.sqs_name = "{}_{}".format(
+                record.name,
+                record.env.cr.dbname
             )
 
 

@@ -27,15 +27,27 @@ class IMQQueue(models.Model):
             _("Queue name must be unique among all queue providers.")
         )
     ]
-
+    
     # fields
     name = fields.Char(size=20, index=True, uniq=True, required=True)
+    sqs_name = fields.Char(compute='_compute_sqs_name')
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
     region = fields.Char()
     key = fields.Char()
     secret = fields.Char()
     description = fields.Text()
     test_result = fields.Text()
+
+    @api.multi
+    @api.depends('name')
+    def _compute_sqs_name(self):
+        for record in self:
+            self.sqs_name = "{}_{}".format(
+                self.name,
+                self.env.cr.dbname
+            )
+
+
 
     @api.multi
     def copy(self, default=None):

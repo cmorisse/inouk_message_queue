@@ -45,7 +45,7 @@ able to consume Messages.""",
         'security/ir_rule.xml',
 
         # views
-        'views/queue.xml',
+        'views/queue_views.xml',
         'views/message_processing_log.xml',
         'views/message_processing.xml',
         'views/message_processor.xml',

@@ -338,7 +338,7 @@ def processor_method(queue_name='default'):
         raise Exception("Missing @processor_method's queue_name mandatory "
                         "parameter.")
     def real_method_decorator(decorated_method):
-        def delay(*args, **kwargs):
+        def message(*args, **kwargs):
             assert args and isinstance(args[0], odoo.models.Model), \
                 _("First parameter of functions decorated with "
                   "@processor_method decorator is mandatory and must always be "
@@ -347,6 +347,10 @@ def processor_method(queue_name='default'):
                                                     queue_name)
             kwargs['__imq_is_method'] = True
             return enqueue(decorated_method, *args, **kwargs)
+        def delay(*args, **kwargs):
+            _logger.warning(".delay() is deprecated use .message() instead.")
+            return message(*args, **kwargs)
+        decorated_method.message = message
         decorated_method.delay = delay
         return decorated_method
     return real_method_decorator

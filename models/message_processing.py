@@ -44,15 +44,18 @@ class IMQMessageProcessing(models.Model):
     # duplicated to ease analysis
     queue_id = fields.Many2one('imq.queue', 
                                _("Queue"), 
-                               related='message_id.queue_id', 
+                               related='message_id.queue_id',
+                               store=True,
                                readonly=True)
     user_id = fields.Many2one('res.users',
                               _("User"),
                               related='message_id.user_id',
+                              store=True,
                               readonly=True)
     processor_id = fields.Many2one('imq.message_processor',
                                    _("Processor"),
-                                   related='message_id.processor_id', 
+                                   related='message_id.processor_id',
+                                   store=True,
                                    readonly=True)
 
     # statistics

@@ -92,8 +92,8 @@ class IMQMessage(models.Model):
     @api.depends('attempt','max_number_of_attempts')
     def _calc_attempt_vs_max_as_text(self):
         for record in self:
-            self.attempt_as_text = "%s / %s" % (self.attempt, 
-                                                self.max_number_of_attempts)
+            record.attempt_as_text = "%s / %s" % (record.attempt, 
+                                                  record.max_number_of_attempts)
 
     @api.multi
     def refresh(self):

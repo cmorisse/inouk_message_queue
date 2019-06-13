@@ -132,7 +132,7 @@ def find_or_create_queue(env, queue_name):
     return queue
 
 def find_or_create_processor(env, function_name, module_name, is_method=False, 
-                             logging_activated=False):
+                             logging_activated=False, processor_visibility_timeout=0):
     """Find or create an imq.message_processor from module and python function 
     names (for messages of type 'rpc')
     :return: an imq.message_processor or raise an Error
@@ -151,7 +151,8 @@ def find_or_create_processor(env, function_name, module_name, is_method=False,
                 'module': module_name,
                 'function': function_name,
                 'is_method': is_method,
-                'logging_activated': logging_activated
+                'logging_activated': logging_activated,
+                'visibility_timeout': processor_visibility_timeout
             })
         if not processor_obj:
             raise Exception("Failed to created imq.message_processor for "
@@ -254,11 +255,16 @@ def enqueue(runnable, *args, **kwargs):
         module_name = runnable.__module__
         function_name = runnable.__name__
 
+    processor_visibility_timeout = kwargs.get('__imq_processor_visibility_timeout', 0)
+    if '__imq_processor_visibility_timeout' in kwargs: 
+        del kwargs['__imq_processor_visibility_timeout']
+
     processor_obj = find_or_create_processor(env, 
                                              function_name, 
                                              module_name, 
                                              is_method,
-                                             logging_activated)
+                                             logging_activated,
+                                             processor_visibility_timeout)
     payload = {
         'self': wrap_odoo_model(self),
         'args': wrap_odoo_model(args),
@@ -304,7 +310,7 @@ def enqueue(runnable, *args, **kwargs):
     return response
     
 
-def processor(queue_name='default'):
+def processor(queue_name='default', processor_visibility_timeout=0):
     """ Decorator that allows to enqueue a pure function (not method) call.
     See enqueue() help for detail.
     Note that @processor simply call enqueue() that does the real work.
@@ -315,6 +321,7 @@ def processor(queue_name='default'):
         def message(*args, **kwargs):
             kwargs['__imq_queue_name'] = kwargs.get('__imq_queue_name', 
                                                     queue_name)
+            kwargs['__imq_processor_visibility_timeout'] = processor_visibility_timeout
             return enqueue(decorated_function, *args, **kwargs)
         def delay(*args, **kwargs):
             _logger.warning(".delay() is deprecated use .message() instead.")
@@ -325,7 +332,7 @@ def processor(queue_name='default'):
     return real_decorator
 
 
-def processor_method(queue_name='default'):
+def processor_method(queue_name='default', processor_visibility_timeout=0):
     """ Decorator that allows to enqueue Odoo models.Model method calls.
     Since we are unable to know if a callable is a method or a function we
     rely on developer's declaration, hence both decorators @processor and 
@@ -345,6 +352,7 @@ def processor_method(queue_name='default'):
                   "an odoo.models.Model instance !")
             kwargs['__imq_queue_name'] = kwargs.get('__imq_queue_name', 
                                                     queue_name)
+            kwargs['__imq_processor_visibility_timeout'] = processor_visibility_timeout
             kwargs['__imq_is_method'] = True
             return enqueue(decorated_method, *args, **kwargs)
         def delay(*args, **kwargs):

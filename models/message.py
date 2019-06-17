@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 import datetime
 import logging
+import json
+
+import boto3
+import jsonpickle
 
 import odoo
 from odoo import models, fields, api
@@ -46,7 +50,7 @@ class IMQMessage(models.Model):
     queue_message_id = fields.Char("Queue Message id",
                                     help="id of message on cloud queue.",
                                    readonly=True)
-    
+    queue_message_id_history = fields.Text()
     user_id = fields.Many2one('res.users', _("User"),
                               default = lambda o: o.env.user.id,
                               help=_("User owner of the Message. This defines "
@@ -58,7 +62,7 @@ class IMQMessage(models.Model):
                               "manually create messages."))
     context = fields.Text(help=_("pickled context dict"))
     payload = fields.Text(help=_("dict {'args': ..., 'kwargs': ...} pickled."))
-
+    raw_message_body = fields.Text()
     processing_id = fields.Many2one('imq.message_processing', 'message_id')
     processing_ids = fields.One2many('imq.message_processing', 'message_id')
     attempt = fields.Integer(default=0)
@@ -103,7 +107,53 @@ class IMQMessage(models.Model):
     @api.multi
     def do_retry_processing(self):
         self.ensure_one()
-        raise UserError("Not implemented.")
+        sqs_resource = boto3.resource(
+            'sqs',
+            region_name=self.queue_id.region,
+            aws_access_key_id=self.queue_id.key, 
+            aws_secret_access_key=self.queue_id.secret,
+        )
+    
+        sqs_queue = sqs_resource.get_queue_by_name(QueueName=self.queue_id.sqs_name)
+        message_body_values = {
+            'type': 'rpc',
+            'logging_activated': self.logging_activated,
+            'module_name': self.processor_id.module,
+            'function_name': self.processor_id.function,
+            'is_method': self.processor_id.is_method,
+            'context': json.loads(self.context),
+            'payload': json.loads(self.payload),
+            'user_id': self.user_id.id,
+        }
+        send_message_kwargs = {
+            'MessageBody': json.dumps(message_body_values),
+            # We want SQS to wait 10s before IMQ Workers can read this message.
+            # We need this time to commit the message id change.
+            'DelaySeconds': 10,  
+            'MessageAttributes': {
+                'name': {
+                    'DataType': 'String',
+                    'StringValue': self.name,
+                },
+                'code': {
+                    'DataType': 'String',
+                    'StringValue': "%s" % (self.code),
+                }
+            }
+        }
+        if self.group:
+            send_message_kwargs['MessageGroupId'] = self.group
+        response = sqs_queue.send_message(**send_message_kwargs)
+        _logger.debug("response={resp}".format(resp=response))
+        queue_message_id_history = self.queue_message_id_history or ''
+        queue_message_id_history = "%s %s\n" % (
+            datetime.datetime.now(),
+            self.queue_message_id,
+        ) + queue_message_id_history
+        self.queue_message_id_history = queue_message_id_history
+        if response:
+            self.queue_message_id = response['MessageId']
+        return        
 
     @api.multi
     def do_archive(self):

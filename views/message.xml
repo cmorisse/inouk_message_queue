@@ -164,9 +164,19 @@
                                     <field name="code"/>
                                     <field name="context"/>
                                     <field name="payload"/>
+                                    <field name="raw_message_body"
+                                           readonly="1"
+                                           widget="ace" options="{'mode': 'python'}" 
+                                           colspan="4" />
                                 </group>
                             </page>
                             <page string="Exec. history">
+                                <group>
+                                    <field name="queue_message_id_history"
+                                           readonly="1"
+                                           colspan="4" />
+                                </group>
+                                
                                 <field name="processing_ids">
                                     <tree>
                                         <field name="attempt"/>

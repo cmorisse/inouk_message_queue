@@ -47,8 +47,7 @@ class IMQWorker(models.Model):
         queue_obj = self.env['imq.queue'].search([('name', '=', queue_name_prefix)])
         if not queue_obj:
             raise UserError("Unknown queue:'%s' !!!" % queue_name_prefix)
-        
-        
+
         sqs_resource = boto3.resource(
             'sqs',
             region_name=queue_obj.region,   # os.environ.get('IMQ_SQS_REGION'),
@@ -73,7 +72,6 @@ class IMQWorker(models.Model):
                              queue_name_prefix, 
                              message)
                 return message
-
         return None
 
     def store_sqs_message(self, queue_obj, sqs_message, start_timestamp=None):
@@ -123,6 +121,11 @@ class IMQWorker(models.Model):
             'user_id': user_id,
             'context': jsonpickle.encode(body.get('context', {})),
             'payload': jsonpickle.encode(body.get('payload', {})),
+            'raw_message_body': json.dumps(
+                json.loads(sqs_message.body),
+                sort_keys=True,
+                indent=4
+            ),
         }
         if processor_obj:
             message_values_dict.update({
@@ -136,7 +139,6 @@ class IMQWorker(models.Model):
                 'logging_activated': False,
                 'max_number_of_attempts': 3
             })
-            
 
         if message_obj:  #update
             message_obj.write(message_values_dict)
@@ -185,7 +187,7 @@ class IMQWorker(models.Model):
                         message_obj.processor_id.function
                     )(*payload['args'], **payload['kwargs'])
                 else:
-                    _logger.debug("executing 'function'.")
+                    _logger.debug("Executing 'function'.")
                     function_module = importlib.import_module(
                         message_obj.processor_id.module, 
                         package=None
@@ -256,7 +258,6 @@ class IMQWorker(models.Model):
         m_timeout = message_obj.processor_id.visibility_timeout
         if m_timeout:
             sqs_message.change_visibility(VisibilityTimeout=m_timeout)
-
 
     @api.model
     def process_message_queue(self, queue_name, worker_name=None, worker_param=None):

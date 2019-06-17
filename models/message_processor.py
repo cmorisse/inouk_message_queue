@@ -62,7 +62,14 @@ class IMQMessageProcessor(models.Model):
                                              "message will be invisible to other workers."
                                              "If 0 SQS will use the 'VisibilityTimeout' "
                                              "declared in the Queue.")
-    # TODO: add statistics
+    # TODO: add statistics fields
+    _sql_constraints =  [
+        (
+            'processor_uniq', 
+            'UNIQUE(type, selector, module, function)', 
+            _("Processor must be unique !")
+        )
+    ]    
 
     @api.model
     def upsert_processor_from_message(self, sqs_message):

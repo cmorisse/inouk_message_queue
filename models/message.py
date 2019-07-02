@@ -92,6 +92,13 @@ class IMQMessage(models.Model):
                                  default=False,
                                  help=_("Will open IKPdb in post mortem mode "
                                         "if an exception is raised."))
+    _sql_constraints = [
+        (
+            'remote_id_uniq', 
+            "UNIQUE(queue_id,queue_message_id)", 
+            "Message ID must be unique per Queue.")
+    ]
+
     @api.multi
     @api.depends('attempt','max_number_of_attempts')
     def _calc_attempt_vs_max_as_text(self):

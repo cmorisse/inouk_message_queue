@@ -93,13 +93,13 @@
                                 type="object"
                                 name="do_retry_processing"
                                 class="oe_highlight"
-                                attrs="{'invisible':[('state', 'not in', ['done', 'failed'])]}"/>
+                                attrs="{'invisible':[('state', 'in', ['new'])]}"/>
                         <button string="Archive"
                                 type="object"
                                 name="do_archive"
                                 class="oe_highlight"
                                 groups="inouk_message_queue.group_admin"
-                                attrs="{'invisible':[('state', 'not in', ['failed', 'wip'])]}"/>
+                                attrs="{'invisible':[('state', 'in', ['new', 'wip'])]}"/>
                         <field name="state" widget="statusbar" statusbar_visible="new,wip,done,failed"/>
                     </header>
                     <sheet>

@@ -293,6 +293,9 @@ class IMQWorker(models.Model):
         
         processing_start_timestamp = datetime.datetime.now()
         while True: 
+            
+            self.invalidate_cache()
+            
             # query SQS for message
             sqs_message = self.get_message(queue_obj)
             

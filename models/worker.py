@@ -293,9 +293,6 @@ class IMQWorker(models.Model):
         
         processing_start_timestamp = datetime.datetime.now()
         while True: 
-            
-            self.invalidate_cache()
-            
             # query SQS for message
             sqs_message = self.get_message(queue_obj)
             
@@ -346,7 +343,8 @@ class IMQWorker(models.Model):
 
             # Store message log modifications
             self._cr.commit()
-
+            self.env.clear()  # Clear all ORM cache for Environment
+            
             processing_duration = (
                 datetime.datetime.now() - processing_start_timestamp).seconds
             if processing_duration >= IMQ_SLEEP_INTERVAL:
@@ -356,8 +354,6 @@ class IMQWorker(models.Model):
                               processing_duration)
                 return
 
-            # We need this to force reset of ORM cache 
-            self.env.clear()
     
     def start_log_capture(self, message_obj, processing_obj, log_level=None, 
                          log_format="%(asctime)s %(name)s %(levelname)s %(message)s"):

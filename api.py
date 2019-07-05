@@ -205,7 +205,7 @@ def enqueue(runnable, *args, **kwargs):
     if env is None:
         raise MissingError("@processor decorated methods must receive at least "
                            "one parameter of type odoo.models.Model or "
-                           "odoo.api.Environment")        
+                           "odoo.api.Environment")
 
     is_method = kwargs.get('__imq_is_method', False)
     if '__imq_is_method' in kwargs:
@@ -231,18 +231,15 @@ def enqueue(runnable, *args, **kwargs):
     queue_name = "%s_%s" % (queue_name_prefix, env.cr.dbname,)
     if '__imq_queue_name' in kwargs:
         del kwargs['__imq_queue_name']  # We pass all "__imq" params via context
-    
+
     if env:
         processor_context = env.context.copy()
         user_id = env.user.id
     else:
         processor_context = {}
         user_id = env.ref('inouk_message_queue.user_imq')
-        
     processor_context['__imq_message_group'] = message_group
     processor_context['__imq_message_name'] = message_name
-
-    # TODO: ensure __imq_logger is a named parameter and raise if not
 
     # We serialize payload differently based on is_method
     if is_method:
@@ -255,6 +252,8 @@ def enqueue(runnable, *args, **kwargs):
         module_name = runnable.__module__
         function_name = runnable.__name__
 
+    # TODO: ensure __imq_logger is a named parameter and raise if not
+
     processor_visibility_timeout = kwargs.get('__imq_processor_visibility_timeout', 0)
     if '__imq_processor_visibility_timeout' in kwargs: 
         del kwargs['__imq_processor_visibility_timeout']
@@ -265,6 +264,14 @@ def enqueue(runnable, *args, **kwargs):
                                              is_method,
                                              logging_activated,
                                              processor_visibility_timeout)
+    # Manage synchronous execution
+    run_synchronously = kwargs.get('__imq_run_synchronously', False)
+    if '__imq_run_synchronously' in kwargs:
+        del kwargs['__imq_run_synchronously']
+    
+    if run_synchronously:
+        return runnable(*args, **kwargs)
+
     payload = {
         'self': wrap_odoo_model(self),
         'args': wrap_odoo_model(args),
@@ -306,7 +313,7 @@ def enqueue(runnable, *args, **kwargs):
     if message_group:
         send_message_kwargs['MessageGroupId'] = message_group
     response = sqs_queue.send_message(**send_message_kwargs)
-    _logger.debug("response={resp}".format(resp=response))
+    _logger.debug("SQS::send_message response={resp}".format(resp=response))
     return response
     
 

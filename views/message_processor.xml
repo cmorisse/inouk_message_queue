@@ -43,6 +43,15 @@
                                     </group>
                                 </group>
                             </page>
+                            <page string="Console Output">
+                                <group>
+                                    <group>
+                                        <field name="capture_console" />
+                                    </group>
+                                    <group>
+                                    </group>
+                                </group>
+                            </page>
                             <page string="SQS Parameters">
                                 <group>
                                     <group>

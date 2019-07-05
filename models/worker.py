@@ -131,12 +131,14 @@ class IMQWorker(models.Model):
             message_values_dict.update({
                 'processor_id': processor_obj.id,
                 'logging_activated': processor_obj.logging_activated,
+                'capture_console': processor_obj.capture_console,
                 'max_number_of_attempts': processor_obj.max_attempt,
             })
         else:
             message_values_dict.update({
                 'processor_id': None,
                 'logging_activated': False,
+                'capture_console': False,
                 'max_number_of_attempts': 3
             })
 
@@ -179,6 +181,9 @@ class IMQWorker(models.Model):
                 )
                 if message_obj.logging_activated and message_obj.processor_id.capture_log:
                     payload['kwargs']['__imq_logger'] = self.logger
+                
+                if message_obj.capture_console:
+                    payload['kwargs']['__imq_stream'] = self._imq_stream 
     
                 if message_obj.processor_id.is_method:
                     _logger.debug("Executing 'method'.")
@@ -313,10 +318,14 @@ class IMQWorker(models.Model):
                                            processing_obj,
                                            log_level=message_obj.processor_id.log_level,
                                            log_format=message_obj.processor_id.log_format)
+                    if message_obj.capture_console:
+                        self.start_stream_capture(message_obj, processing_obj)
                     result_dict = self.process_message(sqs_message,
                                                        message_obj, 
                                                        worker_param)
                     self.stop_log_capture()
+                    if message_obj.capture_console:
+                        self.stop_stream_capture()
     
                 else:  
                     result_dict = {
@@ -385,6 +394,18 @@ class IMQWorker(models.Model):
         """
         self.log_handler.flush()
 
+    def start_stream_capture(self, message_obj, processing_obj):
+        """Start capturing log output to a string buffer.
+        :return: nothing
+        """
+        self._imq_stream = MpyStringIO(message_obj, processing_obj)
+
+    def stop_stream_capture(self):
+        """ Stop capturing streams output.
+        """
+        self._imq_stream.stop_capture()
+        self._imq_stream = None
+
 
 class IMQLogHandler(logging.Handler):
     def __init__(self, message_obj, processing_obj):
@@ -405,8 +426,62 @@ class IMQLogHandler(logging.Handler):
         self._env.cr.commit()
         
     def flush(self):
-        """ We can(t commit in flush since flush can be cold long after last emit()
-        at a time where cursor has been released."""
-        #print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx flush()")
+        """ We can't commit in flush since flush can be called long after 
+        last emit(), at a time where cursor has been released.
+        """
         #self._env.cr.commit()
         pass
+
+
+class MpyStringIO(StringIO):
+
+    def __init__(self, message_obj, processing_obj):
+        _logger.info("MpyStringIO(%s, %s)", message_obj, processing_obj)
+        self._env = message_obj.env
+        self._message_id = message_obj.id
+        self._processing_id = processing_obj.id
+        self._log_model = message_obj.env['imq.message_processing_log']
+        self._mpy_buffer = None
+        return super(MpyStringIO, self).__init__()
+        
+    def write(self, s:str):
+        super(MpyStringIO, self).write(s)
+        if '\n' in s:
+            if s.endswith('\n'):
+                new_buffer = ''
+                output_str = s
+            else:
+                new_buffer = s[s.rfind('\n')+1:]
+                output_str = s[:s.rfind('\n')+1]
+        else:
+            new_buffer = s
+            output_str = ''
+
+        self._log_model.create({
+            'message_id': self._message_id,
+            'active_message_id': self._message_id,
+            'processing_id': self._processing_id,
+            'logger_name': "Console",
+            'log_level': None,
+            'log_message': "%s%s" % (self._mpy_buffer, output_str)
+        })
+        self._env.cr.commit()
+        #print(">>>>>>>>>>>>>>>>>>>>>>>>")
+        #print("%s%s" % (self._mpy_buffer, output_str))
+        #print("<<<<<<<<<<<<<<<<<<<<<<<<")
+        self._mpy_buffer = new_buffer
+
+    def stop_capture(self):
+        self.flush()
+        if self._mpy_buffer:
+            self._log_model.sudo().create({
+                'message_id': self._message_id,
+                'active_message_id': self._message_id,
+                'processing_id': self._processing_id,
+                'logger_name': "Console",
+                'log_level': None,
+                'log_message': "%s" % (self._mpy_buffer)
+            })
+            self._env.cr.commit()
+        self._mpy_buffer = None
+

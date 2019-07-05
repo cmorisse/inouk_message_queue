@@ -43,13 +43,13 @@
             <field name="model">imq.message_processing_log</field>
             <field name="priority" eval="15"/>
             <field name="arch" type="xml">
-                <tree colors="teal:log_level=='10';green:log_level=='20';fuchsia:log_level=='30';red:log_level=='40';purple:log_level=='50'" >
+                <tree colors="teal:log_level=='10';green:log_level=='20';fuchsia:log_level=='30';red:log_level=='40';purple:log_level=='50'">
                     <field name="create_date"/>
                     <field name="message_id" />
                     <field name="processing_id"/>
                     <field name="logger_name" />
                     <field name="log_level" />
-                    <field name="log_message" />
+                    <field name="log_message" widget="html" class="ik_console" />
                 </tree>
             </field>
         </record>
@@ -79,7 +79,7 @@
                                 <field name="logger_name" />
                             </group>
                             <group colspan="4">
-                                <field name="log_message" colpsan="4"/>
+                                <field name="log_message" colpsan="4" class="ik_console" />
                             </group>
                         </group>
 

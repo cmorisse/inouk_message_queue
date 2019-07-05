@@ -147,15 +147,22 @@
                             </page>
                             <page string="Log / Debug">
                                 <group>
-                                    <field name="ikpdb_debug"  />
-                                    <field name="logging_activated" readonly="1"/>
+                                    <group>
+                                        <field name="ikpdb_debug"  />
+                                        <field name="logging_activated" readonly="1"/>
+                                        
+                                    </group>
+                                    <group>
+                                        <field name="capture_console" />
+                                        
+                                    </group>
                                 </group>
                                 <field name="log_ids" >
                                     <tree colors="teal:log_level=='10';green:level=='20';fuchsia:log_level=='30';red:log_level=='40';purple:log_level=='50'" >
                                         <field name="processing_id" invisible="1" />
                                         <field name="create_date" string="Time" />
                                         <field name="log_level"/>
-                                        <field name="log_message"/>
+                                        <field name="log_message" class="ik_console" />
                                     </tree>
                                 </field>
                             </page>

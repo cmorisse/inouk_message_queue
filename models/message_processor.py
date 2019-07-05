@@ -54,6 +54,13 @@ class IMQMessageProcessor(models.Model):
     capture_log = fields.Boolean(default=False,
                                  help="Check if you want to capture log of processor"
                                       "having 'logging activated'.")
+    capture_console = fields.Boolean(
+        default=False,
+        help="Check if you want to capture console output having 'logging activated'."
+             "If you check this, IMQ will pass an '__imq_stream' parameter to "
+             "each called task. This option is only effective for task that "
+             "implement it (eg. Muppy)."
+    )
     log_level = fields.Selection(IMQ_MESSAGE_PROCESSOR_LOG_LEVEL, 
                                  required=True,
                                  default='20')

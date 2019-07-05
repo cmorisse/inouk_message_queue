@@ -82,6 +82,7 @@ class IMQMessage(models.Model):
     end_time_microseconds = fields.Integer()
     result = fields.Text(readonly=True)
 
+    capture_console = fields.Boolean(default=False)
     logging_activated = fields.Boolean(readonly=True, default=False)
     log_ids = fields.One2many('imq.message_processing_log', 'active_message_id')
 
@@ -125,6 +126,7 @@ class IMQMessage(models.Model):
         message_body_values = {
             'type': 'rpc',
             'logging_activated': self.logging_activated,
+            'capture_console': self.capture_console,
             'module_name': self.processor_id.module,
             'function_name': self.processor_id.function,
             'is_method': self.processor_id.is_method,
@@ -165,7 +167,6 @@ class IMQMessage(models.Model):
     @api.multi
     def do_archive(self):
         self.state = 'archived'
-
 
     @api.multi
     def create_processing_object(self):

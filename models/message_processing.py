@@ -81,12 +81,12 @@ class IMQMessageProcessing(models.Model):
 class IMQMessageProcessingLog(models.Model):
     _name = 'imq.message_processing_log'
     _description = "IMQ - Message Processing Log"
-    _order = "processing_id, id DESC"
+    _order = "processing_id, id"
 
-    processing_id = fields.Many2one('imq.message_processing', _("Processing"))
-    message_id = fields.Many2one('imq.message', _("Message"))
-    active_message_id = fields.Many2one('imq.message', _("Active Message"))
+    processing_id = fields.Many2one('imq.message_processing', _("Processing"), ondelete='cascade')
+    message_id = fields.Many2one('imq.message', _("Message"), ondelete='cascade')
+    active_message_id = fields.Many2one('imq.message', _("Active Message"), ondelete='restrict')
     
     logger_name = fields.Char()
     log_level = fields.Selection(IMQ_MESSAGE_PROCESSOR_LOG_LEVEL)
-    log_message = fields.Char()
+    log_message = fields.Text()

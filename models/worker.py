@@ -441,7 +441,7 @@ class MpyStringIO(StringIO):
         self._message_id = message_obj.id
         self._processing_id = processing_obj.id
         self._log_model = message_obj.env['imq.message_processing_log']
-        self._mpy_buffer = None
+        self._mpy_buffer = ''
         return super(MpyStringIO, self).__init__()
         
     def write(self, s:str):

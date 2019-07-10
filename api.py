@@ -17,6 +17,14 @@ from odoo import fields
 
 _logger = logging.getLogger(__name__)
 
+
+class IMQError(UserError):
+    pass
+
+class IMQRetryableError(UserError):
+    pass
+
+
 class OdooModelWrapper:
     """
     Allows to pickle Odoo models.Model

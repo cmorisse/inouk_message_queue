@@ -102,9 +102,12 @@ class IMQWorker(models.Model):
         processor_obj = self.env['imq.message_processor']\
             .upsert_processor_from_message(sqs_message)
 
+        _logger.debug("Searching for message with queue_message_id='%s'", queue_message_id)
         message_obj = message_model.search(
             [('queue_message_id', '=', queue_message_id)]
         )
+        _logger.debug("Found '%s'", message_obj)
+
         epoch_s = int(
             sqs_message.attributes['ApproximateFirstReceiveTimestamp']
         ) / 1000

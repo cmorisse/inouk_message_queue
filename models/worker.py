@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import os, threading
 import sys
 import traceback
@@ -9,6 +8,8 @@ import json
 import jsonpickle
 import threading
 import datetime
+import math
+
 from dateutil.relativedelta import relativedelta
 import psycopg2
 import time
@@ -18,7 +19,8 @@ import openerp
 from openerp import _, api, fields, models
 from openerp.api import Environment
 from odoo.exceptions import MissingError, UserError
-from odoo.addons.inouk_message_queue.api import unwrap_odoo_model
+#from odoo.addons.inouk_message_queue.api import unwrap_odoo_model
+from ..api import unwrap_odoo_model, IMQError, IMQRetryableError
 
 # Must be equal to cron workers interval_number and interval_type
 IMQ_SLEEP_INTERVAL = 60  
@@ -233,18 +235,47 @@ class IMQWorker(models.Model):
             sqs_message.delete()  # Delete message from Cloud Queue
             run_cursor.commit()
             state = 'done'
-        except Exception as e:
-            raised = e
+
+        except Exception as exc:
+            raised = exc
             exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
             returned_value = traceback.format_exception(exc_type, 
                                                         exc_value, 
                                                         exc_traceback)
             returned_value = "\n".join(returned_value)
             state = 'failed'
+            sqs_message.delete()  # Delete message from Cloud Queue
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
+
+        except IMQRetryableError as imq_rerr:
+            raised = imq_rerr
+            exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
+            returned_value = traceback.format_exception(exc_type, 
+                                                        exc_value, 
+                                                        exc_traceback)
+            returned_value = "\n".join(returned_value)
+            state = 'failed'
+            if run_env.has_todo():
+                run_env.recompute()
+            run_cursor.commit()
+            
+        except IMQError as imq_err:
+            raised = imq_err
+            exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
+            returned_value = traceback.format_exception(exc_type, 
+                                                        exc_value, 
+                                                        exc_traceback)
+            returned_value = "\n".join(returned_value)
+            state = 'failed'
+            sqs_message.delete()  # Delete message from Cloud Queue
+            if run_env.has_todo():
+                run_env.recompute()
+            run_cursor.commit()
+            
         finally:
             run_cursor.close()
+
         if raised and message_obj.ikpdb_debug:
             try: 
                 import ikp3db; ikp3db.post_mortem(exc_info[2])
@@ -263,9 +294,11 @@ class IMQWorker(models.Model):
         """ Update message visibility with timeout defined in processor
         if any
         """
-        m_timeout = message_obj.processor_id.visibility_timeout
+        m_timeout = message_obj.processor_id.visibility_timeout or 60
         if m_timeout:
-            sqs_message.change_visibility(VisibilityTimeout=m_timeout)
+            assert  message_obj.attempt>0, "Internal Error: attempt <= 0"
+            v_timeout = int(math.pow(2, message_obj.attempt-1) * m_timeout)
+            sqs_message.change_visibility(VisibilityTimeout=v_timeout)
 
     @api.model
     def process_message_queue(self, queue_name, worker_name=None, worker_param=None):

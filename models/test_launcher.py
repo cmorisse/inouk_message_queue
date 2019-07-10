@@ -73,7 +73,7 @@ class IMQTestLauncher(models.Model):
 
 @processor()
 def a_task(an_object, a_param, __imq_logger=None):
-    """Run atask #{0[1]}
+    """Run atask #{0}
     This is our task. It simplied inject param in value adding it current time.
     """
     f_logger = __imq_logger or _logger

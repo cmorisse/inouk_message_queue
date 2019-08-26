@@ -68,7 +68,7 @@ class IMQMessageProcessor(models.Model):
     visibility_timeout = fields.Integer(help="Time in seconds (from processing start) the"
                                              "message will be invisible to other workers."
                                              "If 0 SQS will use the 'VisibilityTimeout' "
-                                             "declared in the Queue.")
+                                             "declared in the Queue. Min=0s, Max=12h.")
     # TODO: add statistics fields
     _sql_constraints =  [
         (

@@ -283,7 +283,7 @@ class IMQWorker(models.Model):
                 _logger.critical("ImportError: module 'ikpdb' or 'ikp3db' "
                                  "is not installed !")
 
-        _logger.info("Storing function returned_value as message processing "
+        _logger.debug("Storing function returned_value as message processing "
                      "result: %s", returned_value)
         return {
             'result': "%s" % returned_value,
@@ -309,7 +309,7 @@ class IMQWorker(models.Model):
         defined in related processor.
         """
         queue_name = queue_name or 'default'
-        _logger.info("process_message_queue(queue_name=%s, worker_name=%s, "
+        _logger.debug("process_message_queue(queue_name=%s, worker_name=%s, "
                      "worker_param=%s)", 
                      queue_name, worker_name, worker_param)
         _logger.debug("    %s-%s pid/thread = %s/%x", 

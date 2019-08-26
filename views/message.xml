@@ -143,7 +143,7 @@
 
                         <notebook>
                             <page string="Result">
-                                <field name="result" readonly="1"/>
+                                <field name="result" widget="ace" readonly="1"/>
                             </page>
                             <page string="Log / Debug">
                                 <group>

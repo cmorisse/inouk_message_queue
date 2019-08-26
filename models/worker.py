@@ -285,8 +285,16 @@ class IMQWorker(models.Model):
 
         _logger.info("Storing function returned_value as message processing "
                      "result: %s", returned_value)
+                     
+        if isinstance(returned_value, str) and returned_value[:9].lower()=='traceback':
+            result = returned_value
+        else:
+            try:
+                result = json.dumps(returned_value, indent=4)
+            except:
+                result = str(returned_value)
         return {
-            'result': "%s" % returned_value,
+            'result': result,
             'state': state
         }
 
@@ -478,7 +486,7 @@ class MpyStringIO(StringIO):
         self._processing_id = processing_obj.id
         self._log_model = message_obj.env['imq.message_processing_log']
         self._mpy_buffer = ''
-        return super(MpyStringIO, self).__init__()
+        super(MpyStringIO, self).__init__()
         
     def write(self, s:str):
         super(MpyStringIO, self).write(s)

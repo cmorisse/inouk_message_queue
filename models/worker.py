@@ -184,20 +184,30 @@ class IMQWorker(models.Model):
                     run_env,
                     jsonpickle.decode(message_obj.payload)
                 )
-                if message_obj.logging_activated and message_obj.processor_id.capture_log:
-                    payload['kwargs']['__imq_logger'] = self.logger
-                
-                if message_obj.capture_console:
-                    payload['kwargs']['__imq_stream'] = self._imq_stream 
     
                 if message_obj.processor_id.is_method:
                     _logger.debug("Executing 'method'.")
+
+                    if message_obj.logging_activated and message_obj.processor_id.capture_log:
+                        payload['kwargs']['_imq_logger'] = self.logger
+                    
+                    if message_obj.capture_console:
+                        payload['kwargs']['_imq_stream'] = self._imq_stream 
+                    
                     returned_value = getattr(
                         payload['self'], 
                         message_obj.processor_id.function
                     )(*payload['args'], **payload['kwargs'])
+
                 else:
                     _logger.debug("Executing 'function'.")
+    
+                    if message_obj.logging_activated and message_obj.processor_id.capture_log:
+                        payload['kwargs']['__imq_logger'] = self.logger
+                    
+                    if message_obj.capture_console:
+                        payload['kwargs']['__imq_stream'] = self._imq_stream 
+                    
                     function_module = importlib.import_module(
                         message_obj.processor_id.module, 
                         package=None
@@ -305,8 +315,8 @@ class IMQWorker(models.Model):
         m_timeout = message_obj.processor_id.visibility_timeout or 60
         if m_timeout:
             assert  message_obj.attempt>0, "Internal Error: attempt <= 0"
-            v_timeout = int(math.pow(2, message_obj.attempt-1) * m_timeout)
-            sqs_message.change_visibility(VisibilityTimeout=v_timeout)
+            #v_timeout = int(math.pow(2, message_obj.attempt-1) * m_timeout)
+            sqs_message.change_visibility(VisibilityTimeout=m_timeout)
 
     @api.model
     def process_message_queue(self, queue_name, worker_name=None, worker_param=None):

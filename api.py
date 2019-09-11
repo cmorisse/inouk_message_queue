@@ -100,12 +100,12 @@ def unwrap_odoo_model(env, obj):
 
 def extract_message_name(processor, args, kwargs):
     """Extract message name from (in this order):
-       * __imq_message_name named parameter
+       * _imq_message_name named parameter
        * processor doc string
     :return: message name as str
     """
-    if kwargs.get('__imq_message_name'):
-        message_name = kwargs['__imq_message_name']
+    if kwargs.get('_imq_message_name'):
+        message_name = kwargs['_imq_message_name']
         return message_name
 
     if processor.__doc__:
@@ -176,7 +176,7 @@ def extract_env_from_params(runnable, args, kwargs):
     """extracts and odoo.api.env from parameters.
     First try find a param of type odoo.models.Model
     then tries to find an odoo.api.Environment
-    if there is an __imq_ephemeral_env in kwargs is it removed
+    if there is an _imq_ephemeral_env in kwargs is it removed
     :returns: found odoo.api.Environment or None
     """
     env = None
@@ -190,8 +190,8 @@ def extract_env_from_params(runnable, args, kwargs):
             if isinstance(scanned_arg, odoo.api.Environment):
                 env = scanned_arg
                 break
-    if '__imq_ephemeral_env' in kwargs:
-        del kwargs['__imq_ephemeral_env']
+    if '_imq_ephemeral_env' in kwargs:
+        del kwargs['_imq_ephemeral_env']
     return env
 
 
@@ -216,9 +216,9 @@ def enqueue(runnable, *args, **kwargs):
                            "one parameter of type odoo.models.Model or "
                            "odoo.api.Environment")
 
-    is_method = kwargs.get('__imq_is_method', False)
-    if '__imq_is_method' in kwargs:
-        del kwargs['__imq_is_method']
+    is_method = kwargs.get('_imq_is_method', False)
+    if '_imq_is_method' in kwargs:
+        del kwargs['_imq_is_method']
 
     # detect whether logging is requested
     function_signature = inspect.getargspec(runnable)
@@ -234,7 +234,7 @@ def enqueue(runnable, *args, **kwargs):
 
     message_name = extract_message_name(runnable, args, kwargs)
     if '_imq_message_name' in kwargs:
-        del kwargs['_imq_message_name']  # We pass all "__imq" params via context
+        del kwargs['_imq_message_name']  # We pass all "_imq" params via context
 
     queue_name_prefix = kwargs.get('_imq_queue_name', 'default')
     queue_obj = env['imq.queue'].search([('name', '=', queue_name_prefix)])
@@ -243,7 +243,7 @@ def enqueue(runnable, *args, **kwargs):
 
     queue_name = "%s_%s" % (queue_name_prefix, env.cr.dbname,)
     if '_imq_queue_name' in kwargs:
-        del kwargs['_imq_queue_name']  # We pass all "__imq" params via context
+        del kwargs['_imq_queue_name']  # We pass all "_imq" params via context
 
     if env:
         processor_context = env.context.copy()
@@ -266,7 +266,7 @@ def enqueue(runnable, *args, **kwargs):
         module_name = runnable.__module__
         function_name = runnable.__name__
 
-    # TODO: ensure __imq_logger is a named parameter and raise if not
+    # TODO: ensure _imq_logger is a named parameter and raise if not
 
     processor_visibility_timeout = kwargs.get('_imq_processor_visibility_timeout', 0)
     if '_imq_processor_visibility_timeout' in kwargs: 
@@ -340,9 +340,9 @@ def processor(queue_name='default', processor_visibility_timeout=0):
         raise Exception("Missing @processor's queue_name mandatory parameter.")
     def real_decorator(decorated_function):
         def message(*args, **kwargs):
-            kwargs['__imq_queue_name'] = kwargs.get('__imq_queue_name', 
+            kwargs['_imq_queue_name'] = kwargs.get('_imq_queue_name', 
                                                     queue_name)
-            kwargs['__imq_processor_visibility_timeout'] = processor_visibility_timeout
+            kwargs['_imq_processor_visibility_timeout'] = processor_visibility_timeout
             return enqueue(decorated_function, *args, **kwargs)
         def delay(*args, **kwargs):
             _logger.warning(".delay() is deprecated use .message() instead.")
@@ -371,10 +371,10 @@ def processor_method(queue_name='default', processor_visibility_timeout=0):
                 _("First parameter of functions decorated with "
                   "@processor_method decorator is mandatory and must always be "
                   "an odoo.models.Model instance !")
-            kwargs['__imq_queue_name'] = kwargs.get('__imq_queue_name', 
+            kwargs['_imq_queue_name'] = kwargs.get('_imq_queue_name', 
                                                     queue_name)
-            kwargs['__imq_processor_visibility_timeout'] = processor_visibility_timeout
-            kwargs['__imq_is_method'] = True
+            kwargs['_imq_processor_visibility_timeout'] = processor_visibility_timeout
+            kwargs['_imq_is_method'] = True
             return enqueue(decorated_method, *args, **kwargs)
         def delay(*args, **kwargs):
             _logger.warning(".delay() is deprecated use .message() instead.")

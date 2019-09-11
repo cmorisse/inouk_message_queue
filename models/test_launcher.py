@@ -72,11 +72,11 @@ class IMQTestLauncher(models.Model):
 
 
 @processor()
-def a_task(an_object, a_param, __imq_logger=None):
+def a_task(an_object, a_param, _imq_logger=None):
     """Run atask #{0}
     This is our task. It simplied inject param in value adding it current time.
     """
-    f_logger = __imq_logger or _logger
+    f_logger = _imq_logger or _logger
 
     # This is a time consuming task ...
     f_logger.info("a_task sleeping for %ss", an_object.processing_duration_s)
@@ -98,8 +98,8 @@ def a_task(an_object, a_param, __imq_logger=None):
     return an_object.process_result  # is stored in queue
 
 
-def simple_processor(env, payload, __imq_logger=None):
-    f_logger = __imq_logger or _logger
+def simple_processor(env, payload, _imq_logger=None):
+    f_logger = _imq_logger or _logger
 
     f_logger.info("Hello")
     f_logger.info("payload=%s", payload)

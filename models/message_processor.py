@@ -49,7 +49,7 @@ class IMQMessageProcessor(models.Model):
                                     " a pure function.") 
     logging_activated = fields.Boolean(default=False,
                                        help="Defines if the function accepts an "
-                                            "__imq_logger parameter. Must be set manually"
+                                            "_imq_logger parameter. Must be set manually"
                                             "for processor of 'simple' messages.")
     capture_log = fields.Boolean(default=False,
                                  help="Check if you want to capture log of processor"
@@ -57,7 +57,7 @@ class IMQMessageProcessor(models.Model):
     capture_console = fields.Boolean(
         default=False,
         help="Check if you want to capture console output having 'logging activated'."
-             "If you check this, IMQ will pass an '__imq_stream' parameter to "
+             "If you check this, IMQ will pass an '_imq_stream' parameter to "
              "each called task. This option is only effective for task that "
              "implement it (eg. Muppy)."
     )

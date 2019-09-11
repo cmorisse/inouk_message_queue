@@ -206,10 +206,10 @@ class IMQWorker(models.Model):
                     _logger.debug("Executing 'function'.")
     
                     if message_obj.logging_activated and message_obj.processor_id.capture_log:
-                        payload['kwargs']['__imq_logger'] = self.logger
+                        payload['kwargs']['_imq_logger'] = self.logger
                     
                     if message_obj.capture_console:
-                        payload['kwargs']['__imq_stream'] = self._imq_stream 
+                        payload['kwargs']['_imq_stream'] = self._imq_stream 
                     
                     function_module = importlib.import_module(
                         message_obj.processor_id.module, 

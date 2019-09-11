@@ -108,8 +108,8 @@ class IMQWorker(models.Model):
         message_obj = message_model.search(
             [('queue_message_id', '=', queue_message_id)]
         )
-        _logger.debug("Found '%s'", message_obj)
-
+        _logger.debug("Found '%s' with queue_message_id=%s", message_obj or 'No Message', queue_message_id)
+    
         epoch_s = int(
             sqs_message.attributes['ApproximateFirstReceiveTimestamp']
         ) / 1000
@@ -352,6 +352,10 @@ class IMQWorker(models.Model):
         
         processing_start_timestamp = datetime.datetime.now()
         while True: 
+
+            # Clear all ORM cache for Environment
+            self.env.clear()  
+
             # query SQS for message
             sqs_message = self.get_message(queue_obj)
             
@@ -406,7 +410,6 @@ class IMQWorker(models.Model):
 
             # Store message log modifications
             self._cr.commit()
-            self.env.clear()  # Clear all ORM cache for Environment
             
             processing_duration = (
                 datetime.datetime.now() - processing_start_timestamp).seconds
@@ -469,15 +472,18 @@ class IMQLogHandler(logging.Handler):
         self._processing_id = processing_obj.id
     
     def emit(self, record):
-        self._env['imq.message_processing_log'].sudo().create({
-            'message_id': self._message_id,
-            'active_message_id': self._message_id,
-            'processing_id': self._processing_id,
-            'logger_name': record.name,
-            'log_level': str(record.levelno),
-            'log_message': record.msg % record.args
-        })
-        self._env.cr.commit()
+        try:
+            self._env['imq.message_processing_log'].sudo().create({
+                'message_id': self._message_id,
+                'active_message_id': self._message_id,
+                'processing_id': self._processing_id,
+                'logger_name': record.name,
+                'log_level': str(record.levelno),
+                'log_message': record.msg % record.args
+            })
+            self._env.cr.commit()
+        except:
+            _logger.critical("Failed to log:%s with %s", record.msg, record.args)
         
     def flush(self):
         """ We can't commit in flush since flush can be called long after 

@@ -55,6 +55,7 @@
                             <page string="SQS Parameters">
                                 <group>
                                     <group>
+                                        <field name="use_visibility_timeout"/>
                                         <field name="visibility_timeout"/>
                                     </group>
                                     <group>

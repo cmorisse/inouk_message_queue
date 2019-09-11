@@ -113,6 +113,7 @@ def extract_message_name(processor, args, kwargs):
         try:
             formatted_message_name = processor_name.format(*args, **kwargs)
         except Exception as e:
+            _logger.error("Failed to generate Message name with: '%s', %s, %s", processor_name, args, kwargs)
             formatted_message_name = "Message name extraction failed with "\
                                      "error: %s" % e
         return formatted_message_name

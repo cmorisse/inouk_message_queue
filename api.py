@@ -224,6 +224,10 @@ def enqueue(runnable, *args, **kwargs):
     function_signature = inspect.getargspec(runnable)
     logging_activated = function_signature.args.count('__imq_logger') == 1
 
+    parent_message_id = kwargs.get('_imq_parent_message_id', None)
+    if '_imq_parent_message_id' in kwargs:
+        del kwargs['_imq_parent_message_id']
+
     message_group = kwargs.get('__imq_message_group', None)
     if '__imq_message_group' in kwargs:
         del kwargs['__imq_message_group']
@@ -249,6 +253,7 @@ def enqueue(runnable, *args, **kwargs):
         user_id = env.ref('inouk_message_queue.user_imq')
     processor_context['__imq_message_group'] = message_group
     processor_context['__imq_message_name'] = message_name
+    processor_context['__imq_parent_message_id'] = parent_message_id
 
     # We serialize payload differently based on is_method
     if is_method:

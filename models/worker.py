@@ -113,9 +113,11 @@ class IMQWorker(models.Model):
         epoch_s = int(
             sqs_message.attributes['ApproximateFirstReceiveTimestamp']
         ) / 1000
+        context = body.get('context', {})
         message_values_dict = {
             'state': 'wip',
             'queue_message_id': sqs_message.message_id,
+            'parent_message_id': context.get('_imq_parent_message_id'),
             'name': name,
             'code': code,
             'enqueued_time': datetime.datetime.utcfromtimestamp(epoch_s),
@@ -166,8 +168,9 @@ class IMQWorker(models.Model):
                       message_obj.name)
 
         run_context = jsonpickle.decode(message_obj.context)
+        run_context['_imq_message_id'] = sqs_message.message_id
         if worker_param:
-            run_context['__imq_worker_param'] = worker_param
+            run_context['_imq_worker_param'] = worker_param
 
         raised = None
         try:
@@ -226,7 +229,7 @@ class IMQWorker(models.Model):
                         package=None
                     )
                     kwargs = {
-                        '__imq_logger': self.logger
+                        '_imq_logger': self.logger
                     }
                     returned_value = getattr(
                         function_module, 

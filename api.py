@@ -222,28 +222,28 @@ def enqueue(runnable, *args, **kwargs):
 
     # detect whether logging is requested
     function_signature = inspect.getargspec(runnable)
-    logging_activated = function_signature.args.count('__imq_logger') == 1
+    logging_activated = function_signature.args.count('_imq_logger') == 1
 
     parent_message_id = kwargs.get('_imq_parent_message_id', None)
     if '_imq_parent_message_id' in kwargs:
         del kwargs['_imq_parent_message_id']
 
-    message_group = kwargs.get('__imq_message_group', None)
-    if '__imq_message_group' in kwargs:
-        del kwargs['__imq_message_group']
+    message_group = kwargs.get('_imq_message_group', None)
+    if '_imq_message_group' in kwargs:
+        del kwargs['_imq_message_group']
 
     message_name = extract_message_name(runnable, args, kwargs)
-    if '__imq_message_name' in kwargs:
-        del kwargs['__imq_message_name']  # We pass all "__imq" params via context
+    if '_imq_message_name' in kwargs:
+        del kwargs['_imq_message_name']  # We pass all "__imq" params via context
 
-    queue_name_prefix = kwargs.get('__imq_queue_name', 'default')
+    queue_name_prefix = kwargs.get('_imq_queue_name', 'default')
     queue_obj = env['imq.queue'].search([('name', '=', queue_name_prefix)])
     if not queue_obj:
         raise UserError("Unknown queue:'%s' !!!" % queue_name_prefix)
 
     queue_name = "%s_%s" % (queue_name_prefix, env.cr.dbname,)
-    if '__imq_queue_name' in kwargs:
-        del kwargs['__imq_queue_name']  # We pass all "__imq" params via context
+    if '_imq_queue_name' in kwargs:
+        del kwargs['_imq_queue_name']  # We pass all "__imq" params via context
 
     if env:
         processor_context = env.context.copy()
@@ -251,9 +251,9 @@ def enqueue(runnable, *args, **kwargs):
     else:
         processor_context = {}
         user_id = env.ref('inouk_message_queue.user_imq')
-    processor_context['__imq_message_group'] = message_group
-    processor_context['__imq_message_name'] = message_name
-    processor_context['__imq_parent_message_id'] = parent_message_id
+    processor_context['_imq_message_group'] = message_group
+    processor_context['_imq_message_name'] = message_name
+    processor_context['_imq_parent_message_id'] = parent_message_id
 
     # We serialize payload differently based on is_method
     if is_method:
@@ -268,9 +268,9 @@ def enqueue(runnable, *args, **kwargs):
 
     # TODO: ensure __imq_logger is a named parameter and raise if not
 
-    processor_visibility_timeout = kwargs.get('__imq_processor_visibility_timeout', 0)
-    if '__imq_processor_visibility_timeout' in kwargs: 
-        del kwargs['__imq_processor_visibility_timeout']
+    processor_visibility_timeout = kwargs.get('_imq_processor_visibility_timeout', 0)
+    if '_imq_processor_visibility_timeout' in kwargs: 
+        del kwargs['_imq_processor_visibility_timeout']
 
     processor_obj = find_or_create_processor(env, 
                                              function_name, 
@@ -279,9 +279,9 @@ def enqueue(runnable, *args, **kwargs):
                                              logging_activated,
                                              processor_visibility_timeout)
     # Manage synchronous execution
-    run_synchronously = kwargs.get('__imq_run_synchronously', False)
-    if '__imq_run_synchronously' in kwargs:
-        del kwargs['__imq_run_synchronously']
+    run_synchronously = kwargs.get('_imq_run_synchronously', False)
+    if '_imq_run_synchronously' in kwargs:
+        del kwargs['_imq_run_synchronously']
     
     if run_synchronously:
         return runnable(*args, **kwargs)

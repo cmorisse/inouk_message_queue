@@ -128,7 +128,9 @@
                         </div>
 
                         <group colspan="4" col="4">
-                            <field name="queue_message_id" colspan="4" />
+                            <field name="queue_message_id" />
+                            <field name="parent_message_id" />
+                            
                             <field name="processor_id" colspan="4" />
                             <field name="queue_id"/>
                             <field name="group"/>

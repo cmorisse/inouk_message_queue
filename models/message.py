@@ -47,9 +47,14 @@ class IMQMessage(models.Model):
     message_type = fields.Selection(IMQ_MESSAGE_PROCESSOR_TYPES, 
                                     related='processor_id.type', 
                                     readonly=True)
-    queue_message_id = fields.Char("Queue Message id",
+    queue_message_id = fields.Char("Queue Message Id",
+                                    index=True,
                                     help="id of message on cloud queue.",
                                    readonly=True)
+    parent_message_id = fields.Char("Parent Message Id", 
+                                    help="id of parent message on cloud queue.",
+                                    readonly=True,
+                                    index=True)
     queue_message_id_history = fields.Text()
     user_id = fields.Many2one('res.users', _("User"),
                               default = lambda o: o.env.user.id,

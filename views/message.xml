@@ -132,7 +132,7 @@
                             <field name="parent_message_id" />
                             
                             <field name="processor_id" />
-                            <field name="work_target_items" />
+                            <field name="target_children_count" />
                             
                             <field name="queue_id"/>
                             <field name="group"/>

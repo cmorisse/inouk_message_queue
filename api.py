@@ -51,7 +51,7 @@ class OdooModelWrapper:
 
 
 def wrap_odoo_model(arg):
-    """ Returns an OdooModelWrapper if arg is an Odoo Mdel else returns arg
+    """ Returns an OdooModelWrapper if arg is an Odoo Model else returns arg
     if arg is an Odoo returns wrapper else returns arg
     :param arg:
     :return:
@@ -66,7 +66,7 @@ def wrap_odoo_model(arg):
     elif isinstance(arg, dict):
         patch = [(key, wrap_odoo_model(value),) for key, value in arg.items()]
         arg.update(patch)
-    elif isinstance(arg, types.MethodType):  # bound method
+    elif isinstance(arg, types.MethodType):  # For bound methods
         return OdooModelWrapper(arg, type='method')
     return arg
 
@@ -215,7 +215,6 @@ def enqueue(runnable, *args, **kwargs):
         raise MissingError("@processor decorated methods must receive at least "
                            "one parameter of type odoo.models.Model or "
                            "odoo.api.Environment")
-
     is_method = kwargs.get('_imq_is_method', False)
     if '_imq_is_method' in kwargs:
         del kwargs['_imq_is_method']
@@ -227,7 +226,11 @@ def enqueue(runnable, *args, **kwargs):
     parent_message_id = kwargs.get('_imq_parent_message_id', None)
     if '_imq_parent_message_id' in kwargs:
         del kwargs['_imq_parent_message_id']
-
+    
+    target_children_count = kwargs.get('_imq_target_children_count', None)
+    if '_imq_target_children_count' in kwargs:
+        del kwargs['_imq_target_children_count']
+    
     message_group = kwargs.get('_imq_message_group', None)
     if '_imq_message_group' in kwargs:
         del kwargs['_imq_message_group']
@@ -254,6 +257,7 @@ def enqueue(runnable, *args, **kwargs):
     processor_context['_imq_message_group'] = message_group
     processor_context['_imq_message_name'] = message_name
     processor_context['_imq_parent_message_id'] = parent_message_id
+    processor_context['_imq_target_children_count'] = target_children_count
 
     # We serialize payload differently based on is_method
     if is_method:

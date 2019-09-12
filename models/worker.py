@@ -117,7 +117,6 @@ class IMQWorker(models.Model):
         message_values_dict = {
             'state': 'wip',
             'queue_message_id': sqs_message.message_id,
-            'parent_message_id': context.get('_imq_parent_message_id'),
             'name': name,
             'code': code,
             'enqueued_time': datetime.datetime.utcfromtimestamp(epoch_s),
@@ -134,6 +133,12 @@ class IMQWorker(models.Model):
                 indent=4
             ),
         }
+        # Add only id present
+        if '_imq_parent_message_id' in context:
+            message_values_dict['parent_message_id'] = context['_imq_parent_message_id']
+        if '_imq_target_children_count' in context:
+            message_values_dict['target_children_count'] = context['_imq_target_children_count']
+
         if processor_obj:
             message_values_dict.update({
                 'processor_id': processor_obj.id,
@@ -168,7 +173,6 @@ class IMQWorker(models.Model):
                       message_obj.name)
 
         run_context = jsonpickle.decode(message_obj.context)
-        #run_context['_imq_message_obj'] = message_obj
         run_context['_imq_message_id'] = sqs_message.message_id
         if worker_param:
             run_context['_imq_worker_param'] = worker_param

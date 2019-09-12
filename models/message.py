@@ -55,7 +55,7 @@ class IMQMessage(models.Model):
                                     help="id of parent message on cloud queue.",
                                     readonly=True,
                                     index=True)
-    work_target_items = fields.Integer()
+    target_children_count = fields.Integer("Expected Children Items")
     queue_message_id_history = fields.Text()
     user_id = fields.Many2one('res.users', _("User"),
                               default = lambda o: o.env.user.id,
@@ -114,7 +114,7 @@ class IMQMessage(models.Model):
         if current:
             pass
         if target:
-            values['work_target_items'] = target
+            values['target_children_count'] = target
         self.write(values)
         self.env.cr.commit()
         return

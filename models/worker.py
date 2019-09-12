@@ -168,6 +168,7 @@ class IMQWorker(models.Model):
                       message_obj.name)
 
         run_context = jsonpickle.decode(message_obj.context)
+        #run_context['_imq_message_obj'] = message_obj
         run_context['_imq_message_id'] = sqs_message.message_id
         if worker_param:
             run_context['_imq_worker_param'] = worker_param

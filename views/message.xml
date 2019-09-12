@@ -131,7 +131,9 @@
                             <field name="queue_message_id" />
                             <field name="parent_message_id" />
                             
-                            <field name="processor_id" colspan="4" />
+                            <field name="processor_id" />
+                            <field name="work_target_items" />
+                            
                             <field name="queue_id"/>
                             <field name="group"/>
                             <field name="user_id"/>

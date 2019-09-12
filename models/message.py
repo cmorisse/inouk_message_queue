@@ -55,6 +55,7 @@ class IMQMessage(models.Model):
                                     help="id of parent message on cloud queue.",
                                     readonly=True,
                                     index=True)
+    work_target_items = fields.Integer()
     queue_message_id_history = fields.Text()
     user_id = fields.Many2one('res.users', _("User"),
                               default = lambda o: o.env.user.id,
@@ -104,6 +105,19 @@ class IMQMessage(models.Model):
             "UNIQUE(queue_id,queue_message_id)", 
             "Message ID must be unique per Queue.")
     ]
+
+    @api.multi
+    def set_work_progress(self, current=None, target=None):
+        if not current and not target:
+            return
+        values = {}
+        if current:
+            pass
+        if target:
+            values['work_target_items'] = target
+        self.write(values)
+        self.env.cr.commit()
+        return
 
     @api.multi
     @api.depends('attempt','max_number_of_attempts')

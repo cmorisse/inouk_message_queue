@@ -181,7 +181,7 @@ class IMQWorker(models.Model):
         try:
             # create an environment dedicated to function execution
             run_cursor = self.env.registry.cursor()
-            _logger.debug("Processing cursor: %s", run_cursor)
+            _logger.debug("run_cursor: %s created.", run_cursor)
             run_env = Environment(run_cursor,
                                   message_obj.user_id.id,
                                   run_context)
@@ -247,12 +247,13 @@ class IMQWorker(models.Model):
                                         message_obj.queue_id.name
                                     )
                     raise Exception(error_message)
-
+            _logger.debug("message %s processed.", sqs_message.message_id)
             if run_env.has_todo():
                 run_env.recompute()
             sqs_message.delete()  # Delete message from Cloud Queue
             run_cursor.commit()
             state = 'done'
+            _logger.debug("run_cursor:%s committed.", run_cursor)
 
         except Exception as exc:
             raised = exc
@@ -293,6 +294,7 @@ class IMQWorker(models.Model):
             
         finally:
             run_cursor.close()
+            _logger.debug("run_cursor:%s closed." % run_cursor)
 
         if raised and message_obj.ikpdb_debug:
             try: 

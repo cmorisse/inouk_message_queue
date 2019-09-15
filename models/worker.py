@@ -364,7 +364,7 @@ class IMQWorker(models.Model):
         while True: 
 
             # Clear all ORM cache for Environment
-            self.env.clear()  
+            self.invalidate_cache()
 
             # query SQS for message
             sqs_message = self.get_message(queue_obj)
@@ -419,7 +419,8 @@ class IMQWorker(models.Model):
                     sqs_message.delete()
 
             # Store message log modifications
-            self._cr.commit()
+            self.env.cr.commit()
+            _logger.debug("message/cron cursor:%s committed." % self.env.cr)
             
             processing_duration = (
                 datetime.datetime.now() - processing_start_timestamp).seconds

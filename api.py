@@ -11,9 +11,10 @@ import boto3
 
 
 import odoo
+from odoo import fields, api, SUPERUSER_ID
 from odoo.tools.translate import _
 from odoo.exceptions import MissingError, UserError
-from odoo import fields
+
 
 _logger = logging.getLogger(__name__)
 
@@ -140,35 +141,46 @@ def find_or_create_queue(env, queue_name):
         })
     return queue
 
-def find_or_create_processor(env, function_name, module_name, is_method=False, 
+def find_or_create_processor(caller_env, function_name, module_name, is_method=False, 
                              logging_activated=False, processor_visibility_timeout=0):
     """Find or create an imq.message_processor from module and python function 
     names (for messages of type 'rpc')
     :return: an imq.message_processor or raise an Error
     """
-    processor_model = env['imq.message_processor']
-    processor_obj = processor_model.search([
-        ('type', '=', 'rpc'),
-        ('module', '=', module_name),
-        ('function', '=', function_name),
-    ])
-    if not processor_obj:
-        processor_obj = processor_model.sudo(
-                env.ref('inouk_message_queue.user_imq')
-            ).create({
-                'type': 'rpc',
-                'module': module_name,
-                'function': function_name,
-                'is_method': is_method,
-                'logging_activated': logging_activated,
-                'visibility_timeout': processor_visibility_timeout
-            })
-        if not processor_obj:
-            raise Exception("Failed to created imq.message_processor for "
-                            "module=%s, function=%s" % (
-                                module_name,
-                                function_name
-                            ))
+    USER_IMQ_ID = caller_env.ref('inouk_message_queue.user_imq').id
+    try:
+        with caller_env.registry.cursor() as cr:
+            #env = api.Environment(cr, SUPERUSER_ID, {})
+            env = api.Environment(cr, USER_IMQ_ID, {})
+            processor_model = env['imq.message_processor']                    
+            processor_obj = processor_model.search([
+                ('type', '=', 'rpc'),
+                ('module', '=', module_name),
+                ('function', '=', function_name),
+            ])
+            if not processor_obj:
+                processor_obj = processor_model.sudo(USER_IMQ_ID).create({
+                    'type': 'rpc',
+                    'module': module_name,
+                    'function': function_name,
+                    'is_method': is_method,
+                    'logging_activated': logging_activated,
+                    'visibility_timeout': processor_visibility_timeout
+                })
+                if not processor_obj:
+                    raise Exception("Failed to created imq.message_processor for "
+                                    "module=%s, function=%s" % (
+                                        module_name,
+                                        function_name
+                                    ))
+    except:
+        _logger.error(
+            "Failed to created imq.message_processor for module=%s, function=%s", 
+            module_name,
+            function_name
+        )
+        raise
+
     return processor_obj
     
 

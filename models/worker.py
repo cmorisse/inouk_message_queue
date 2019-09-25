@@ -431,8 +431,9 @@ class IMQWorker(models.Model):
                 return
 
     
-    def start_log_capture(self, message_obj, processing_obj, log_level=None, 
-                         log_format="%(asctime)s %(name)s %(levelname)s %(message)s"):
+    def start_log_capture(
+        self, message_obj, processing_obj, log_level=None, log_format="%(asctime)s %(name)s %(levelname)s %(message)s"
+    ):
         """Start capturing log output to a string buffer.
 
         See. http://docs.python.org/release/2.6/library/logging.html

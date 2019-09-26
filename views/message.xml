@@ -52,6 +52,7 @@
                     </group>
 
                     <field name="name"/>
+                    <field name="processor_id"/>
                     <field name="group"/>
                     <field name="queue_message_id"/>
                     

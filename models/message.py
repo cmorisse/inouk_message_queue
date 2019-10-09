@@ -242,7 +242,7 @@ DELETE FROM imq_message WHERE id IN (
 );""" % (MESSAGE_PURGE_OLDER_THAN_HOURS, MESSAGE_PURGE_BATCH_SIZE,)
 
         _logger.info("Starting to delete %s messages older than %s hours",
-            self.env.cr.rowcount, 
+            MESSAGE_PURGE_BATCH_SIZE, 
             MESSAGE_PURGE_OLDER_THAN_HOURS
         )
         self.env.cr.execute(PURGE_QUERY)

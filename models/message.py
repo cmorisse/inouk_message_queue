@@ -240,10 +240,14 @@ DELETE FROM imq_message WHERE id IN (
     WHERE im.end_time < (NOW() - INTERVAL '%s hours')
     LIMIT %s
 );""" % (MESSAGE_PURGE_OLDER_THAN_HOURS, MESSAGE_PURGE_BATCH_SIZE,)
-    
-        self.env.cr.execute(PURGE_QUERY)
-        _logger.info("Deleted %s messages older than %s hours",
+
+        _logger.info("Starting to delete %s messages older than %s hours",
             self.env.cr.rowcount, 
             MESSAGE_PURGE_OLDER_THAN_HOURS
         )
-    
+        self.env.cr.execute(PURGE_QUERY)
+        self.env.cr.commit()
+        _logger.info("Deleted %s messages older than %s hours",
+            self.env.cr.rowcount, 
+            MESSAGE_PURGE_OLDER_THAN_HOURS
+        )    

@@ -218,3 +218,32 @@ class IMQMessage(models.Model):
             'processing_id': new_processing_obj.id,
         })
         return new_processing_obj
+
+    @api.model
+    def purge_message_history(self):
+        """ Purge messages a batch of x messages older that y hours
+        With:
+            - x is defined by system parameter: imq.MESSAGE_PURGE_BATCH_SIZE or 800 by default.
+            - y is defined by system parameter: imq.MESSAGE_PURGE_OLDER_THAN_HOURS or 48 by default     
+        """
+        icp_model = self.env["ir.config_parameter"].sudo()
+        MESSAGE_PURGE_BATCH_SIZE = int(
+            icp_model.get_param("imq.MESSAGE_PURGE_BATCH_SIZE", '10')
+        )        
+        MESSAGE_PURGE_OLDER_THAN_HOURS = int(
+            icp_model.get_param("imq.MESSAGE_PURGE_OLDER_THAN_HOURS", '48')
+        )        
+        PURGE_QUERY = """
+DELETE FROM imq_message WHERE id IN (
+    SELECT id
+    FROM imq_message AS im
+    WHERE im.end_time < (NOW() - INTERVAL '%s hours')
+    LIMIT %s
+);""" % (MESSAGE_PURGE_OLDER_THAN_HOURS, MESSAGE_PURGE_BATCH_SIZE,)
+    
+        self.env.cr.execute(PURGE_QUERY)
+        _logger.info("Deleted %s messages older than %s hours",
+            self.env.cr.rowcount, 
+            MESSAGE_PURGE_OLDER_THAN_HOURS
+        )
+    

@@ -264,6 +264,7 @@ class IMQWorker(models.Model):
             returned_value = "\n".join(returned_value)
             state = 'failed'
             sqs_message.delete()  # Delete message from Cloud Queue
+            _logger.debug("Deleted message:'%s' on SQS (@267)", sqs_message.message_id)
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
 
@@ -288,6 +289,7 @@ class IMQWorker(models.Model):
             returned_value = "\n".join(returned_value)
             state = 'failed'
             sqs_message.delete()  # Delete message from Cloud Queue
+            _logger.debug("Deleted message:'%s' on SQS (@292)", sqs_message.message_id)
             if run_env.has_todo():
                 run_env.recompute()
             run_cursor.commit()

@@ -2,7 +2,7 @@
     <data>
         <menuitem id="imq__topmenu"
                   name="IMQ"
-                  sequence="10000" 
+                  sequence="1000" 
                   parent="inouk_core.inouk_topmenu"/>
 
             <menuitem id="queues__menu"

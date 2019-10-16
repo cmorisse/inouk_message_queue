@@ -34,15 +34,15 @@ able to consume Messages.""",
     'data': [
         #'views/web_assets_loader.xml',
 
-        # Configuration data
-        'data/ir_cron_worker.xml',
-        'data/imq_queue.xml',
-
         # Security objects first as other objects references them
         'security/res_users.xml',
         'security/res_groups.xml',
         'security/ir.model.access.csv',
         'security/ir_rule.xml',
+
+        # Configuration data
+        'data/ir_cron_worker.xml',
+        'data/imq_queue.xml',
 
         # views
         'views/queue_views.xml',

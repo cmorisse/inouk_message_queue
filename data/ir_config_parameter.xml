@@ -5,5 +5,9 @@
             <field name="key">imq.STOP_WORKERS_disabled</field>
             <field name="value">Rename the key as imq.STOP_WORKERS to stop workers once they will have finished their current job. IMQ only checks for the key to exist so you don't need to modify this value.</field>
         </record>
+        <record id="icp__imq_stop_msg_purge_template" model="ir.config_parameter">
+            <field name="key">imq.STOP_MESSAGES_PURGE_disabled</field>
+            <field name="value">Rename the key as imq.STOP_MESSAGES_PURGE to stop purge of messages. IMQ only checks for the key to exist so you don't need to modify this value.</field>
+        </record>
     </data>
 </openerp>

@@ -9,6 +9,7 @@ import jsonpickle
 import threading
 import datetime
 import math
+import socket
 
 from dateutil.relativedelta import relativedelta
 import psycopg2
@@ -338,10 +339,13 @@ class IMQWorker(models.Model):
         For each message, creates an `imq.message` object then run code 
         defined in related processor.
         """
-        if self.env["ir.config_parameter"].sudo().get_param("imq.STOP_WORKERS", None):
+        host_name = socket.gethostname()
+        stopped_workers_nodes = self.env["ir.config_parameter"].sudo().get_param("imq.STOP_WORKERS", "").split(',')
+        if host_name in stopped_workers_nodes or '*' in stopped_workers_nodes:
             _logger.info("Leaving process_message_queue(queue_name=%s, worker_name=%s, "
-                         "worker_param=%s) due to imq.STOP_WORKERS being defined.", 
-                         queue_name, worker_name, worker_param)
+                         "worker_param=%s) as host_name:%s is present in system "
+                         "parameter 'imq.STOP_WORKERS'.",
+                         queue_name, worker_name, worker_param, host_name)
             return
 
         queue_name = queue_name or 'default'

@@ -42,6 +42,7 @@ able to consume Messages.""",
 
         # Configuration data
         'data/ir_cron_worker.xml',
+        'data/ir_config_parameter.xml',        
         'data/imq_queue.xml',
 
         # views

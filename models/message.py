@@ -227,6 +227,11 @@ class IMQMessage(models.Model):
             - y is defined by system parameter: imq.MESSAGE_PURGE_OLDER_THAN_HOURS or 48 by default     
         """
         icp_model = self.env["ir.config_parameter"].sudo()
+        STOP_MESSAGES_PURGE = icp_model.get_param("imq.STOP_MESSAGES_PURGE", None)
+        if STOP_MESSAGES_PURGE:
+            _logger.info("Messages Purge deactivated. System parameter imq.STOP_MESSAGES_PURGE is defined.")
+            return
+        
         MESSAGE_PURGE_BATCH_SIZE = int(
             icp_model.get_param("imq.MESSAGE_PURGE_BATCH_SIZE", '10')
         )        

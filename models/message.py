@@ -87,6 +87,7 @@ class IMQMessage(models.Model):
                                readonly=True)
     end_time_microseconds = fields.Integer()
     result = fields.Text(readonly=True)
+    operator_comment = fields.Text()
 
     capture_console = fields.Boolean(default=False)
     logging_activated = fields.Boolean(readonly=True, default=False)

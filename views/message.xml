@@ -45,6 +45,10 @@
                                 string="Processor"
                                 context="{'group_by': 'processor_id'}"
                                 help="Group messages by Processor"/>
+                        <filter name="group_by_name"
+                                string="Name"
+                                context="{'group_by': 'name'}"
+                                help="Group messages by Name"/>
                         <filter name="group_by_user"
                                 string="User"
                                 context="{'group_by': 'user_id'}"
@@ -52,7 +56,10 @@
                     </group>
 
                     <field name="name"/>
+                    <field name="result"/>
+                    <field name="payload"/>
                     <field name="processor_id"/>
+                    <field name="operator_comment"/>
                     <field name="group"/>
                     <field name="queue_message_id"/>
                     
@@ -100,7 +107,7 @@
                                 name="do_archive"
                                 class="oe_highlight"
                                 groups="inouk_message_queue.group_admin"
-                                attrs="{'invisible':[('state', 'in', ['new', 'wip'])]}"/>
+                                attrs="{'invisible':[('state', 'in', ['new'])]}"/>
                         <field name="state" widget="statusbar" statusbar_visible="new,wip,done,failed"/>
                     </header>
                     <sheet>
@@ -144,6 +151,7 @@
                             <newline/>
                             <field name="attempt_as_text"/>
                             <newline/>
+                            <field name="operator_comment" colspan="4"/>
                         </group>
 
                         <notebook>

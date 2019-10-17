@@ -338,6 +338,12 @@ class IMQWorker(models.Model):
         For each message, creates an `imq.message` object then run code 
         defined in related processor.
         """
+        if self.env["ir.config_parameter"].sudo().get_param("imq.STOP_WORKERS", None):
+            _logger.info("Leaving process_message_queue(queue_name=%s, worker_name=%s, "
+                         "worker_param=%s) due to imq.STOP_WORKERS being defined.", 
+                         queue_name, worker_name, worker_param)
+            return
+
         queue_name = queue_name or 'default'
         _logger.debug("process_message_queue(queue_name=%s, worker_name=%s, "
                      "worker_param=%s)", 

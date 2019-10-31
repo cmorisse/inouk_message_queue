@@ -224,6 +224,23 @@
             <field name="help">Browse messages from all queues</field>
             <field name="context">{'search_default_filter_wip': True, 'search_default_filter_failed': True, 'search_default_filter_reset': True}</field>
         </record>
+
+        <!--
+        -->
+        <record id="retry_msg__server_action" model="ir.actions.server">
+            <field name="name">Retry</field>
+            <field name="state">code</field>
+            <field name="type">ir.actions.server</field>
+            <field name="usage">ir_actions_server</field>
+            <field name="activity_user_type">specific</field>
+            <field name="model_id" ref="model_imq_message"/>
+            <field name="binding_model_id" ref="model_imq_message"/>
+            <field name="binding_type">action</field>
+            <field name="code">records.do_retry_processing()</field>
+        </record>
+
+
+
     </data>
 
 </openerp>

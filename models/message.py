@@ -135,7 +135,7 @@ class IMQMessage(models.Model):
     @api.multi
     def do_retry_processing(self):
         for record in self:
-            if self.state == 'new':
+            if record.state == 'new':
                 continue
             sqs_resource = boto3.resource(
                 'sqs',

@@ -21,7 +21,8 @@ class IMQMessageProcessing(models.Model):
     _order = "message_id DESC, attempt DESC"
 
     message_id = fields.Many2one('imq.message', 
-                                 _("Message"), 
+                                 _("Message"),
+                                 index=True,
                                  ondelete='cascade')
     attempt = fields.Integer(default=1)
 

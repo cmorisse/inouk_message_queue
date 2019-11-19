@@ -67,7 +67,9 @@ class IMQMessage(models.Model):
     context = fields.Text(help=_("pickled context dict"))
     payload = fields.Text(help=_("dict {'args': ..., 'kwargs': ...} pickled."))
     raw_message_body = fields.Text()
-    processing_id = fields.Many2one('imq.message_processing', 'message_id')
+    processing_id = fields.Many2one('imq.message_processing', 
+                                    'message_id',
+                                    index=True)
     processing_ids = fields.One2many('imq.message_processing', 'message_id')
     attempt = fields.Integer(default=0)
     attempt_as_text = fields.Char(_("Attempt / max"), 
@@ -227,8 +229,8 @@ class IMQMessage(models.Model):
     def purge_message_history(self):
         """ Purge messages a batch of x messages older that y hours
         With:
-            - x is defined by system parameter: imq.MESSAGE_PURGE_BATCH_SIZE or 800 by default.
-            - y is defined by system parameter: imq.MESSAGE_PURGE_OLDER_THAN_HOURS or 48 by default     
+            - x is defined by system parameter: imq.MESSAGE_PURGE_BATCH_SIZE or 2000 by default.
+            - y is defined by system parameter: imq.MESSAGE_PURGE_OLDER_THAN_HOURS or 72 by default     
         """
         icp_model = self.env["ir.config_parameter"].sudo()
         STOP_MESSAGES_PURGE = icp_model.get_param("imq.STOP_MESSAGES_PURGE", None)
@@ -237,10 +239,10 @@ class IMQMessage(models.Model):
             return
         
         MESSAGE_PURGE_BATCH_SIZE = int(
-            icp_model.get_param("imq.MESSAGE_PURGE_BATCH_SIZE", '10')
+            icp_model.get_param("imq.MESSAGE_PURGE_BATCH_SIZE", '2000')
         )        
         MESSAGE_PURGE_OLDER_THAN_HOURS = int(
-            icp_model.get_param("imq.MESSAGE_PURGE_OLDER_THAN_HOURS", '48')
+            icp_model.get_param("imq.MESSAGE_PURGE_OLDER_THAN_HOURS", '72')
         )        
         PURGE_QUERY = """
 DELETE FROM imq_message WHERE id IN (

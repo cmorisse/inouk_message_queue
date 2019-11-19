@@ -22,13 +22,13 @@ from openerp.api import Environment
 from odoo.exceptions import MissingError, UserError
 #from odoo.addons.inouk_message_queue.api import unwrap_odoo_model
 from ..api import unwrap_odoo_model, IMQError, IMQRetryableError
+from .message_processor import MAX_ATTEMPTS
 
 # Must be equal to cron workers interval_number and interval_type
 IMQ_SLEEP_INTERVAL = 60  
 
 
 _logger = logging.getLogger('IMQWorker')
-
 
 
 class IMQWorker(models.Model):
@@ -152,7 +152,7 @@ class IMQWorker(models.Model):
                 'processor_id': None,
                 'logging_activated': False,
                 'capture_console': False,
-                'max_number_of_attempts': 3
+                'max_number_of_attempts': MAX_ATTEMPTS
             })
 
         if message_obj:  #update
@@ -256,31 +256,6 @@ class IMQWorker(models.Model):
             state = 'done'
             _logger.debug("run_cursor:%s committed.", run_cursor)
 
-        except Exception as exc:
-            raised = exc
-            exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
-            returned_value = traceback.format_exception(exc_type, 
-                                                        exc_value, 
-                                                        exc_traceback)
-            returned_value = "\n".join(returned_value)
-            state = 'failed'
-            sqs_message.delete()  # Delete message from Cloud Queue
-            _logger.debug("Deleted message:'%s' on SQS (@267)", sqs_message.message_id)
-            run_cursor.rollback()
-            run_env.clear()  # invalidates and purges todos
-
-        except IMQRetryableError, psycopg2.extensions.TransactionRollbackError as imq_rerr:
-            raised = imq_rerr
-            exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
-            returned_value = traceback.format_exception(exc_type, 
-                                                        exc_value, 
-                                                        exc_traceback)
-            returned_value = "\n".join(returned_value)
-            state = 'retry'
-            if run_env.has_todo():
-                run_env.recompute()
-            run_cursor.commit()
-            
         except IMQError as imq_err:
             raised = imq_err
             exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
@@ -294,6 +269,45 @@ class IMQWorker(models.Model):
             if run_env.has_todo():
                 run_env.recompute()
             run_cursor.commit()
+
+
+        except (IMQRetryableError, psycopg2.extensions.TransactionRollbackError,) as imq_rerr:
+            raised = imq_rerr
+            exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
+            returned_value = traceback.format_exception(exc_type, 
+                                                        exc_value, 
+                                                        exc_traceback)
+            returned_value = "\n".join(returned_value)
+            if run_env.has_todo():
+                run_env.recompute()
+            run_cursor.commit()
+            if message_obj.attempt >= message_obj.max_number_of_attempts:
+                state = 'failed'
+                sqs_message.delete()  # Delete message from Cloud Queue
+                _logger.debug("Deleted message:'%s' on SQS after %s failed attempts.", 
+                              sqs_message.message_id,
+                              message_obj.attempt
+                             )
+            else:
+                _logger.critical("banzai")
+                state = 'retry' 
+                # Task will retry after visibility timeout
+            run_cursor.rollback()
+            run_env.clear()  # invalidates and purges todos
+            
+        except Exception as exc:
+            raised = exc
+            exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
+            returned_value = traceback.format_exception(exc_type, 
+                                                        exc_value, 
+                                                        exc_traceback)
+            returned_value = "\n".join(returned_value)
+            state = 'failed'
+            sqs_message.delete()  # Delete message from Cloud Queue
+            _logger.debug("Deleted message:'%s' on SQS (@267)", sqs_message.message_id)
+            run_cursor.rollback()
+            run_env.clear()  # invalidates and purges todos
+
             
         finally:
             run_cursor.close()

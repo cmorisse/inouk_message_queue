@@ -10,14 +10,11 @@ import odoo
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools.translate import _
-from .message_processor import IMQ_MESSAGE_PROCESSOR_TYPES, IMQ_MESSAGE_PROCESSOR_LOG_LEVEL
+from .message_processor import IMQ_MESSAGE_PROCESSOR_TYPES, IMQ_MESSAGE_PROCESSOR_LOG_LEVEL, MAX_ATTEMPTS
 
 """Stores all odoo's processed messages for user inspection."""
 
 _logger = logging.getLogger("IMQ")
-
-MAX_ATTEMPTS = 3  # TODO make this a system parameter or a configuration
-
 
 IMQ_MESSAGE_STATES = [
     ('new', "New"),

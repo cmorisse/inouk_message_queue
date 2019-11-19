@@ -25,6 +25,7 @@ IMQ_MESSAGE_PROCESSOR_TYPES = [
     ('rpc', "RPC"),
     ('simple', "Simple"),  # A worker has been assigned
 ]
+MAX_ATTEMPTS = 4  # TODO make this a system parameter or a configuration
 
 
 class IMQMessageProcessor(models.Model):
@@ -43,7 +44,7 @@ class IMQMessageProcessor(models.Model):
     selector = fields.Char(help="Message selector for 'simple' message")
     module = fields.Char(help="Name of module that contains the function.")
     function = fields.Char(help="Name of function called by processor.")
-    max_attempt = fields.Integer(default=3)
+    max_attempt = fields.Integer(default=MAX_ATTEMPTS)
     is_method = fields.Boolean(default=False,
                                help="Checked if function is a method, unchecked if it is"
                                     " a pure function.") 

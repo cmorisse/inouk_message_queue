@@ -57,7 +57,6 @@ class IMQMessageProcessing(models.Model):
                                    related='message_id.processor_id',
                                    store=True,
                                    readonly=True)
-
     # statistics
     processing_time = fields.Float(compute='_calc_processing_time', store=True)
 
@@ -75,7 +74,6 @@ class IMQMessageProcessing(models.Model):
     @api.multi
     def refresh(self):
         pass
-
 
 
 class IMQMessageProcessingLog(models.Model):

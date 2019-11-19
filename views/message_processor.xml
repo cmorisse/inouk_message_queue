@@ -22,6 +22,7 @@
                             <group>
                                 <field name="type" />
                                 <field name="selector" attrs="{'required': [('type','!=','rpc')], 'invisible': [('type','!=','simple')]}"/>
+                                <field name="max_attempt" />
                             </group>
                             <group>
                                 <field name="module" required="True"/>

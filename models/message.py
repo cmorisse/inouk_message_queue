@@ -22,6 +22,7 @@ MAX_ATTEMPTS = 3  # TODO make this a system parameter or a configuration
 IMQ_MESSAGE_STATES = [
     ('new', "New"),
     ('wip', "In progress"),
+    ('retry', "Retry"),
     ('done', "Done"),
     ('failed', "Failed"),
     ('archived', "Archived"),
@@ -131,7 +132,6 @@ class IMQMessage(models.Model):
     def refresh(self):
         pass
 
-
     @api.multi
     def do_retry_processing(self):
         for record in self:
@@ -181,9 +181,13 @@ class IMQMessage(models.Model):
                 datetime.datetime.now(),
                 record.queue_message_id,
             ) + queue_message_id_history
-            record.queue_message_id_history = queue_message_id_history
+            update_dict = {
+                'queue_message_id_history': queue_message_id_history,
+                'state': 'retry'
+            } 
             if response:
-                record.queue_message_id = response['MessageId']
+                update_dict['queue_message_id'] = response['MessageId']
+            record.write(update_dict)
         return        
 
     @api.multi

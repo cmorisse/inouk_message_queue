@@ -269,14 +269,14 @@ class IMQWorker(models.Model):
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
 
-        except IMQRetryableError as imq_rerr:
+        except IMQRetryableError, psycopg2.extensions.TransactionRollbackError as imq_rerr:
             raised = imq_rerr
             exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
             returned_value = traceback.format_exception(exc_type, 
                                                         exc_value, 
                                                         exc_traceback)
             returned_value = "\n".join(returned_value)
-            state = 'failed'
+            state = 'retry'
             if run_env.has_todo():
                 run_env.recompute()
             run_cursor.commit()

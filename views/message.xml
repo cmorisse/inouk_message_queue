@@ -15,6 +15,9 @@
                     <filter name="filter_wip"
                             string="In progress"
                             domain="[('state','=', 'wip')]" />
+                    <filter name="filter_retry"
+                            string="Retry"
+                            domain="[('state','=', 'retry')]" />
                     <filter name="filter_done"
                             string="Done"
                             domain="[('state','=', 'done')]" />

@@ -85,6 +85,7 @@
                     <field name="log_level"/>
                     <field name="log_format"/>
                     <field name="is_method"/>
+                    <field name="use_visibility_timeout"/>
                     <field name="visibility_timeout"/>
                 </tree>
             </field>

@@ -342,7 +342,6 @@ class IMQWorker(models.Model):
         m_timeout = message_obj.processor_id.visibility_timeout or 60
         if m_timeout:
             assert  message_obj.attempt>0, "Internal Error: attempt <= 0"
-            #v_timeout = int(math.pow(2, message_obj.attempt-1) * m_timeout)
             sqs_message.change_visibility(VisibilityTimeout=m_timeout)
 
     @api.model

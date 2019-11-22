@@ -67,7 +67,7 @@ class IMQMessageProcessor(models.Model):
                                  default='20')
     log_format = fields.Char(default="%(asctime)s %(name)s %(levelname)s %(message)s")
     visibility_timeout = fields.Integer(help="Time in seconds (from processing start) the"
-                                             "message will be invisible to other workers."
+                                             " message will be invisible to other workers."
                                              "If 0 SQS will use the 'VisibilityTimeout' "
                                              "declared in the Queue. Min=0s, Max=12h.")
     use_visibility_timeout = fields.Boolean(

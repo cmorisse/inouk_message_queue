@@ -22,6 +22,7 @@ IMQ_MESSAGE_STATES = [
     ('wip', "In progress"),
     ('retry', "Retry"),
     ('done', "Done"),
+    ('terminated', "Terminated"),  # For message that processing decided to stop
     ('failed', "Failed"),
     ('archived', "Archived"),
     ('reset', "Reset"),
@@ -192,7 +193,7 @@ class IMQMessage(models.Model):
 
     @api.multi
     def do_archive(self):
-        self.state = 'archived'
+        self.write({'state': 'archived'})
 
     @api.multi
     def create_processing_object(self):

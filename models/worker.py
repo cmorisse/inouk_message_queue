@@ -21,7 +21,7 @@ from openerp import _, api, fields, models
 from openerp.api import Environment
 from odoo.exceptions import MissingError, UserError
 #from odoo.addons.inouk_message_queue.api import unwrap_odoo_model
-from ..api import unwrap_odoo_model, IMQError, IMQRetryableError
+from ..api import unwrap_odoo_model, IMQError, IMQRetryableError, IMQTerminateException
 from .message_processor import MAX_ATTEMPTS
 
 # Must be equal to cron workers interval_number and interval_type
@@ -265,11 +265,23 @@ class IMQWorker(models.Model):
             returned_value = "\n".join(returned_value)
             state = 'failed'
             sqs_message.delete()  # Delete message from Cloud Queue
-            _logger.debug("Deleted message:'%s' on SQS (@292)", sqs_message.message_id)
+            _logger.info("Deleted message:'%s' on SQS (IMQError)", sqs_message.message_id)
             if run_env.has_todo():
                 run_env.recompute()
             run_cursor.commit()
 
+        except IMQTerminateException as imq_err:
+            raised = imq_err
+            exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
+            returned_value = traceback.format_exception(exc_type, 
+                                                        exc_value, 
+                                                        exc_traceback)
+            returned_value = "\n".join(returned_value)
+            state = 'terminated'
+            sqs_message.delete()  # Delete message from Cloud Queue
+            _logger.info("Deleted message:'%s' on SQS (IMQTerminateException)", sqs_message.message_id)
+            run_cursor.rollback()
+            run_env.clear()  # invalidates and purges todos
 
         except (IMQRetryableError, psycopg2.extensions.TransactionRollbackError,) as imq_rerr:
             raised = imq_rerr
@@ -278,9 +290,6 @@ class IMQWorker(models.Model):
                                                         exc_value, 
                                                         exc_traceback)
             returned_value = "\n".join(returned_value)
-            if run_env.has_todo():
-                run_env.recompute()
-            run_cursor.commit()
             if message_obj.attempt >= message_obj.max_number_of_attempts:
                 state = 'failed'
                 sqs_message.delete()  # Delete message from Cloud Queue
@@ -289,7 +298,6 @@ class IMQWorker(models.Model):
                               message_obj.attempt
                              )
             else:
-                _logger.critical("banzai")
                 state = 'retry' 
                 # Task will retry after visibility timeout
             run_cursor.rollback()
@@ -304,10 +312,11 @@ class IMQWorker(models.Model):
             returned_value = "\n".join(returned_value)
             state = 'failed'
             sqs_message.delete()  # Delete message from Cloud Queue
-            _logger.debug("Deleted message:'%s' on SQS (@267)", sqs_message.message_id)
+            _logger.info("Deleted message:'%s' on SQS (%s)", 
+                         sqs_message.message_id,
+                         exc_type)
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
-
             
         finally:
             run_cursor.close()

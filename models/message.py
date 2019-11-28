@@ -2,6 +2,7 @@
 import datetime
 import logging
 import json
+import timeit
 
 import boto3
 import jsonpickle
@@ -249,6 +250,7 @@ DELETE FROM imq_message WHERE id IN (
     SELECT id
     FROM imq_message AS im
     WHERE im.end_time < (NOW() - INTERVAL '%s hours')
+    AND state NOT IN ('failed', 'retry', 'reset', 'wip', 'archived')
     LIMIT %s
 );""" % (MESSAGE_PURGE_OLDER_THAN_HOURS, MESSAGE_PURGE_BATCH_SIZE,)
 
@@ -256,9 +258,12 @@ DELETE FROM imq_message WHERE id IN (
             MESSAGE_PURGE_BATCH_SIZE, 
             MESSAGE_PURGE_OLDER_THAN_HOURS
         )
+        start_ts = timeit.default_timer()
         self.env.cr.execute(PURGE_QUERY)
         self.env.cr.commit()
-        _logger.info("Deleted %s messages older than %s hours",
+        end_ts = timeit.default_timer()
+        _logger.info("Deleted %s messages older than %s hours in %.3fs.",
             self.env.cr.rowcount, 
-            MESSAGE_PURGE_OLDER_THAN_HOURS
+            MESSAGE_PURGE_OLDER_THAN_HOURS,
+            end_ts-start_ts
         )    

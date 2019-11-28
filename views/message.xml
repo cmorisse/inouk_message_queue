@@ -24,6 +24,9 @@
                     <filter name="filter_failed"
                             string="Failed"
                             domain="[('state','=', 'failed')]" />
+                    <filter name="filter_terminated"
+                            string="Terminated"
+                            domain="[('state','=', 'terminated')]" />
                     <filter name="filter_archived"
                             string="Archived"
                             domain="[('state','=', 'archived')]" />
@@ -44,10 +47,18 @@
                                 string="Group"
                                 context="{'group_by': 'group'}"
                                 help="Group messages by Group"/>
+                        <filter name="group_by_parent_message_id"
+                                string="Parent Message"
+                                context="{'group_by': 'parent_message_id'}"
+                                help="Group messages by Parent Message"/>
                         <filter name="group_by_processor"
                                 string="Processor"
                                 context="{'group_by': 'processor_id'}"
                                 help="Group messages by Processor"/>
+                        <filter name="group_by_start_time"
+                                string="Start time"
+                                context="{'group_by': 'start_time'}"
+                                help="Group messages by Name"/>
                         <filter name="group_by_name"
                                 string="Name"
                                 context="{'group_by': 'name'}"
@@ -240,6 +251,18 @@
             <field name="binding_model_id" ref="model_imq_message"/>
             <field name="binding_type">action</field>
             <field name="code">records.do_retry_processing()</field>
+        </record>
+
+        <record id="retry_msg__server_action" model="ir.actions.server">
+            <field name="name">Archive</field>
+            <field name="state">code</field>
+            <field name="type">ir.actions.server</field>
+            <field name="usage">ir_actions_server</field>
+            <field name="activity_user_type">specific</field>
+            <field name="model_id" ref="model_imq_message"/>
+            <field name="binding_model_id" ref="model_imq_message"/>
+            <field name="binding_type">action</field>
+            <field name="code">records.do_archive()</field>
         </record>
 
 

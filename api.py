@@ -25,6 +25,9 @@ class IMQError(UserError):
 class IMQRetryableError(UserError):
     pass
 
+class IMQTerminateException(UserError):
+    pass
+
 
 class OdooModelWrapper:
     """

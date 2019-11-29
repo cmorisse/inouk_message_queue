@@ -253,7 +253,7 @@
             <field name="code">records.do_retry_processing()</field>
         </record>
 
-        <record id="retry_msg__server_action" model="ir.actions.server">
+        <record id="archive_msg__server_action" model="ir.actions.server">
             <field name="name">Archive</field>
             <field name="state">code</field>
             <field name="type">ir.actions.server</field>

@@ -37,7 +37,7 @@
                     <filter string="Today" name="filter_today" domain="[ ('start_time', '>', context_today().strftime('%%Y-%%m-%%d 00:00:00') ) ]"/>
                     <filter string="Yesterday" name="filter_yesterday" domain="[ ('start_time', '>', (context_today() - datetime.timedelta(days=1)).strftime('%%Y-%%m-%%d 00:00:00')), ('start_time', '&lt;', context_today().strftime('%%Y-%%m-%%d 00:00:00')) ]"/>
                     <separator/>
-
+                    <filter string="Retried" name="filter_retried" domain="[ ('attempt', '>', 1) ]"/>
 
                     <group string="Group by...">
                         <filter name="group_by_state"

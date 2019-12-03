@@ -241,7 +241,7 @@
             <field name="view_mode">tree,form</field>
             <field name="view_type">form</field>
             <field name="help">Browse messages from all queues</field>
-            <field name="context">{'search_default_filter_wip': True, 'search_default_filter_failed': True, 'search_default_filter_reset': True}</field>
+            <field name="context">{'search_default_filter_wip': True, 'search_default_filter_failed': True, 'search_default_filter_reset': True, 'search_default_filter_today': True}</field>
         </record>
 
         <!--

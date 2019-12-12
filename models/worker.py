@@ -283,7 +283,10 @@ class IMQWorker(models.Model):
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
 
-        except (IMQRetryableError, psycopg2.extensions.TransactionRollbackError,) as imq_rerr:
+        except (IMQRetryableError, 
+                psycopg2.extensions.TransactionRollbackError,
+                psycopg2.IntegrityError
+        ) as imq_rerr:
             raised = imq_rerr
             exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
             returned_value = traceback.format_exception(exc_type, 

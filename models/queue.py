@@ -1,6 +1,8 @@
 import pickle
 import datetime
 import json
+import logging
+import requests
 
 from odoo import models, fields, api
 import odoo
@@ -9,8 +11,7 @@ from odoo.tools.translate import _
 
 from ..api import send_message
 
-
-"""Identifies all managed queues."""
+_logger = logging.getLogger(__name__)
 
 QUEUE_PROVIDERS = [
     ('aws_sqs', "AWS SQS"),
@@ -35,6 +36,7 @@ class IMQQueue(models.Model):
     region = fields.Char()
     key = fields.Char()
     secret = fields.Char()
+    slack_webhook_url = fields.Char("Slack webhook URL")
     description = fields.Text()
     test_result = fields.Text()
 
@@ -46,8 +48,6 @@ class IMQQueue(models.Model):
                 record.name,
                 record.env.cr.dbname
             )
-
-
 
     @api.multi
     def copy(self, default=None):
@@ -73,3 +73,41 @@ class IMQQueue(models.Model):
         result_str = json.dumps(result, sort_keys=True, indent=4)
         self.test_result = result_str
 
+    @api.multi
+    def btn_test_slack_notifications(self):
+        """ Sends a Slack test notifications."""
+        self.ensure_one()
+        self.send_slack_notification(":bear:")
+        self.send_slack_notification("Queue: *%s* is ready to send notifications." % self.name)
+        return
+
+    @api.multi
+    def send_slack_notification(self, message, obj=None):
+        """ Send message to slack channels of all queues in record set """
+        for record in self:
+            if record.slack_webhook_url:
+                if obj:
+                    notification_text = message.format(
+                        object_link="*<%s|%s>*" % (obj.get_form_url(), obj.name)
+                    )
+                    payload = { "text": notification_text }
+                else:
+                    payload = { "text": message }
+                    
+                headers = {'Content-type': 'application/json'}
+                result = requests.post(record.slack_webhook_url, 
+                                       data=json.dumps(payload), 
+                                       headers=headers)
+                _logger.info("requests.post(%s, data=%s, headers=%s) => %s", 
+                    record.slack_webhook_url, 
+                    json.dumps(payload), 
+                    headers, 
+                    result
+                )
+                _logger.info("result.text => %s", result.text)
+
+    @api.multi
+    def send_notification(self, message, obj=None):
+        """ Send message to all 'channels' (slack, sms) of all queues in recordset """
+        self.send_slack_notification(message, obj=obj)
+            

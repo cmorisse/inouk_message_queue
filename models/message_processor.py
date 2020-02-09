@@ -74,6 +74,12 @@ class IMQMessageProcessor(models.Model):
         help="Use Timeout to Retry. If unchecked message will be deleted as they are received.",
         default=False)
 
+    notify_message_processing_start = fields.Boolean(help="Send a notification when message processing starts.")
+    notify_message_processing_end = fields.Boolean(help="Send a notification when message processing ends (normally).")
+    notify_message_processing_retry = fields.Boolean(help="Send a notification when message processing is restarted (timeout or retryable errors).")
+    notify_message_processing_terminate = fields.Boolean(help="Send a notification when message processing ends because of an error or exception.")
+    notify_message_processing_fail = fields.Boolean(help="Send a notification when message processing fails.")
+
     # TODO: add statistics fields
     _sql_constraints =  [
         (

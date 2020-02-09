@@ -110,6 +110,29 @@ class IMQMessage(models.Model):
     ]
 
     @api.multi
+    def get_formview_id(self, access_uid=None):
+        self.ensure_one()
+        return self.env.ref('inouk_message_queue.imq_message__form_view').id
+
+    @api.multi
+    def get_default_action(self, access_uid=None):
+        self.ensure_one()
+        return self.env.ref('inouk_message_queue.imq_message__act_window')
+
+    def get_form_url(self):
+        self.ensure_one()
+        web_base_url = self.env['ir.config_parameter'].get_param('web.base.url')
+        action_dict = self.get_formview_action()
+        action_dict['action_id'] = self.get_default_action().id
+        action_dict['web_base_url'] = web_base_url
+        # target:
+        # https://xsid-dev.inouk.ovh/web?debug#id=1&action=257&model=imq.test_launcher&view_type=form&menu_id=140
+        url_str = "{web_base_url}/web#id={res_id}&action={action_id}&model="\
+                  "{res_model}&view_type={view_type}".format(**action_dict)
+        _logger.critical(url_str)
+        return url_str
+
+    @api.multi
     def set_work_progress(self, current=None, target=None):
         if not current and not target:
             return

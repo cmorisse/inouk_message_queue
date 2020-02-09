@@ -63,6 +63,19 @@
                                     </group>                                    
                                 </group>
                             </page>
+                            <page string="Notifications">
+                                <group>
+                                    <group class="ik_lw250">
+                                        <field name="notify_message_processing_start" />
+                                        <field name="notify_message_processing_end" />
+                                        <field name="notify_message_processing_retry" />
+                                        <field name="notify_message_processing_terminate" />
+                                        <field name="notify_message_processing_fail" />
+                                    </group>
+                                    <group>
+                                    </group>
+                                </group>
+                            </page>
                             <page string="Debug" groups="inouk_message_queue.group_debug">
                             </page>
                         </notebook>

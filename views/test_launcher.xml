@@ -46,8 +46,11 @@
                                 <group>
                                     <field name="processing_duration_s"/>
                                     <field name="param"/>
-                                    <field name="should_raise_error"/>
-                                    <button string="Launch" type="object" name="launch"/>
+                                    <field name="should_raise_exception"/>
+                                    <field name="should_raise_imqerror"/>
+                                    <field name="should_raise_imqterminateexception"/>
+                                    <field name="should_raise_imqretryableerror"/>
+                                    <button string="Launch" type="object" class="btn-warning" name="launch"/>
                                     
                                 </group>
                                 

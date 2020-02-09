@@ -14,6 +14,7 @@ from odoo.addons.inouk_message_queue.api import (
     processor,
     processor_method,
     send_message,
+    IMQError, IMQRetryableError, IMQTerminateException
 )
 from odoo.addons.inouk_message_queue.models.message_processor import (
     IMQ_MESSAGE_PROCESSOR_TYPES,
@@ -38,7 +39,11 @@ class IMQTestLauncher(models.Model):
     message_group = fields.Char(
         help="Sent to SQS as MessageGroupId param for FIFO Queues."
     )
-    should_raise_error = fields.Boolean()
+
+    should_raise_exception = fields.Boolean("Should raise Exception", help="Will raise a UserError().")
+    should_raise_imqerror = fields.Boolean("Should raise IMQError", help="Will raise a IMQError().")
+    should_raise_imqterminateexception = fields.Boolean("Should raise IMQTerminateException", help="Will raise a IMQTerminateException().")
+    should_raise_imqretryableerror = fields.Boolean("Should raise IMQRetryableError", help="Will raise a IMQRetryableError().")
 
     selector = fields.Char()
     payload = fields.Text()
@@ -89,9 +94,17 @@ def a_task(an_object, a_param, _imq_logger=None):
         an_object.param,
         datetime.datetime.now(),
     )
+    param = "Param=%s" % an_object.param
     an_object.process_result = p_result
-    if an_object.should_raise_error:
-        raise Exception("Error raised during processing")
+    if an_object.should_raise_exception:
+        raise UserError(param)
+    elif an_object.should_raise_imqerror:
+        raise IMQError(param)
+    elif an_object.should_raise_imqterminateexception:
+        raise IMQTerminateException(param)
+    elif an_object.should_raise_imqretryableerror:
+        raise IMQRetryableError(param)
+
     # We use print to get a trace in celery
     print("Processed: %s" % an_object)
     f_logger.debug("Processed %s", an_object)
@@ -104,6 +117,8 @@ def simple_processor(env, payload, _imq_logger=None):
     f_logger.info("Hello")
     f_logger.info("payload=%s", payload)
     f_logger.debug("And with DEBUG level => payload=%s", payload)
+
     if payload.get("should_raise_error"):
-        raise Exception("Error raised during simple message processing")
+        raise UserError("Error raised during simple message processing")
+
     return "processor returned string"  # is stored in queue

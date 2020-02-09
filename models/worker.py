@@ -169,6 +169,13 @@ class IMQWorker(models.Model):
         :type message_obj: odoo.addons.inouk_message_queue.message.IMQMessage
         :return:
         """
+
+        def strfdelta(tdelta, fmt):
+            d = {"days": tdelta.days}
+            d["hours"], rem = divmod(tdelta.seconds, 3600)
+            d["minutes"], d["seconds"] = divmod(rem, 60)            
+            return fmt.format(**d)        
+        
         _logger.debug("Processing message with id=%s (%s)", 
                       message_obj.queue_message_id, 
                       message_obj.name)
@@ -178,6 +185,12 @@ class IMQWorker(models.Model):
         if worker_param:
             run_context['_imq_worker_param'] = worker_param
 
+        msg_processor_obj = message_obj.processor_id
+
+        if msg_processor_obj.notify_message_processing_start:
+            message_obj.queue_id.send_notification("Start to process {object_link}.", message_obj)
+
+        start_timestamp = datetime.datetime.now()
         raised = None
         try:
             # create an environment dedicated to function execution
@@ -193,30 +206,22 @@ class IMQWorker(models.Model):
                     run_env,
                     jsonpickle.decode(message_obj.payload)
                 )
+
+                if message_obj.logging_activated and msg_processor_obj.capture_log:
+                    payload['kwargs']['_imq_logger'] = self.logger
+                if message_obj.capture_console:
+                    payload['kwargs']['_imq_stream'] = self._imq_stream 
+                    
     
                 if message_obj.processor_id.is_method:
                     _logger.debug("Executing 'method'.")
-
-                    if message_obj.logging_activated and message_obj.processor_id.capture_log:
-                        payload['kwargs']['_imq_logger'] = self.logger
-                    
-                    if message_obj.capture_console:
-                        payload['kwargs']['_imq_stream'] = self._imq_stream 
-                    
                     returned_value = getattr(
                         payload['self'], 
-                        message_obj.processor_id.function
+                        msg_processor_obj.function
                     )(*payload['args'], **payload['kwargs'])
 
                 else:
-                    _logger.debug("Executing 'function'.")
-    
-                    if message_obj.logging_activated and message_obj.processor_id.capture_log:
-                        payload['kwargs']['_imq_logger'] = self.logger
-                    
-                    if message_obj.capture_console:
-                        payload['kwargs']['_imq_stream'] = self._imq_stream 
-                    
+                    _logger.debug("Executing 'function'.")                    
                     function_module = importlib.import_module(
                         message_obj.processor_id.module, 
                         package=None
@@ -227,8 +232,7 @@ class IMQWorker(models.Model):
                     )(*payload['args'], **payload['kwargs'])
 
             else:
-                if(message_obj.processor_id.module 
-                   and message_obj.processor_id.function):
+                if(msg_processor_obj.module and message_obj.processor_id.function):
                     payload = json.loads(message_obj.payload)
                     function_module = importlib.import_module(
                         message_obj.processor_id.module, 
@@ -239,22 +243,30 @@ class IMQWorker(models.Model):
                     }
                     returned_value = getattr(
                         function_module, 
-                        message_obj.processor_id.function
+                        msg_processor_obj.function
                     )(run_env, payload, **kwargs)
                 else:
                     error_message = "No python function defined for "\
                                     "selector: %s on queue: %s." % (
-                                        message_obj.processor_id.selector,
+                                        msg_processor_obj.selector,
                                         message_obj.queue_id.name
                                     )
                     raise Exception(error_message)
-            _logger.debug("message %s processed.", sqs_message.message_id)
+            end_timestamp = datetime.datetime.now()
+            duration_str = strfdelta(end_timestamp-start_timestamp, "{minutes}min{seconds}s")
+            _logger.debug("message %s processed (duration=%s).", sqs_message.message_id, duration_str)
             if run_env.has_todo():
                 run_env.recompute()
             sqs_message.delete()  # Delete message from Cloud Queue
             run_cursor.commit()
             state = 'done'
             _logger.debug("run_cursor:%s committed.", run_cursor)
+
+            if msg_processor_obj.notify_message_processing_end:
+                message_obj.queue_id.send_notification(
+                    ":white_check_mark: {object_link} processing done without error (duration=%s)." % duration_str, 
+                    message_obj
+                )
 
         except IMQError as imq_err:
             raised = imq_err
@@ -270,6 +282,9 @@ class IMQWorker(models.Model):
                 run_env.recompute()
             run_cursor.commit()
 
+            if msg_processor_obj.notify_message_processing_fail:
+                message_obj.queue_id.send_notification(":x: Failed to process {object_link} ! (raised *IMQError*).", message_obj)
+
         except IMQTerminateException as imq_err:
             raised = imq_err
             exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
@@ -282,6 +297,12 @@ class IMQWorker(models.Model):
             _logger.info("Deleted message:'%s' on SQS (IMQTerminateException)", sqs_message.message_id)
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
+
+            if msg_processor_obj.notify_message_processing_terminate:
+                message_obj.queue_id.send_notification(
+                    ":bangbang: Processing of {object_link} terminated (*IMQTerminateException* raised).", 
+                    message_obj
+                )
 
         except (IMQRetryableError, 
                 psycopg2.extensions.TransactionRollbackError,
@@ -300,7 +321,17 @@ class IMQWorker(models.Model):
                               sqs_message.message_id,
                               message_obj.attempt
                              )
+                if msg_processor_obj.notify_message_processing_fail:
+                    message_obj.queue_id.send_notification(
+                        ":x: Failed (%s attempts) to process {object_link} (IMQRetryableError raised)!" % message_obj.max_number_of_attempts, 
+                        message_obj)
+
             else:
+                if msg_processor_obj.notify_message_processing_retry:
+                    message_obj.queue_id.send_notification(
+                        ":warning: Retry (%s attempt(s)) to process {object_link} (IMQRetryableError raised)." % message_obj.attempt, 
+                        message_obj
+                    )
                 state = 'retry' 
                 # Task will retry after visibility timeout
             run_cursor.rollback()
@@ -320,7 +351,12 @@ class IMQWorker(models.Model):
                          exc_type)
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
-            
+            if msg_processor_obj.notify_message_processing_fail:
+                message_obj.queue_id.send_notification(
+                    ":x: Failed to process {object_link} (*%s* raised)!" % repr(exc_value),
+                    message_obj
+                )
+
         finally:
             run_cursor.close()
             _logger.debug("run_cursor:%s closed." % run_cursor)
@@ -329,8 +365,7 @@ class IMQWorker(models.Model):
             try: 
                 import ikp3db; ikp3db.post_mortem(exc_info[2])
             except ImportError:
-                _logger.critical("ImportError: module 'ikpdb' or 'ikp3db' "
-                                 "is not installed !")
+                _logger.critical("ImportError: Failed to import 'ikp3db'.")
 
         _logger.debug("Storing function returned_value as message processing "
                      "result: %s", returned_value)
@@ -417,12 +452,12 @@ class IMQWorker(models.Model):
                 message_obj.env.cr.commit()
 
                 self.change_message_visibility(message_obj, sqs_message)
-                    
-                if message_obj.processor_id:
+                processor_obj =  message_obj.processor_id
+                if processor_obj:
                     self.start_log_capture(message_obj,
                                            processing_obj,
-                                           log_level=message_obj.processor_id.log_level,
-                                           log_format=message_obj.processor_id.log_format)
+                                           log_level=processor_obj.log_level,
+                                           log_format=processor_obj.log_format)
                     if message_obj.capture_console:
                         self.start_stream_capture(message_obj, processing_obj)
                     result_dict = self.process_message(sqs_message,

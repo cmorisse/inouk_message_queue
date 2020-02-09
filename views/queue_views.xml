@@ -46,6 +46,21 @@
                                     <field name="test_result" colspan="4" widget="ace" options="{'mode': 'python'}" nolabel="1" />
                                 </group>                                
                             </page>
+                            <page string="Slack">
+                                <div colspan="4" >IMQ can send several kinds of notifications related to message processing in queue.<br/> For that you must follow instructions here to create an &quot;Incoming Webhook&quot;: https://api.slack.com/messaging/webhooks <br/>
+                                Once it's done, copy your hook in the field below, then click on the Test Slack notification below. <br/>
+                                You should get a message in the Slack channel linked to the webhook.
+                                </div>
+                                <group col="4" colspan="4">
+                                    <field name="slack_webhook_url" colspan="4" />
+                                    <button type="object" name="btn_test_slack_notifications" string="Test Slack notifications" class="oe_highlight" />
+                                    <!--
+                                    <label for="slack_test_result" string="Test Result:" colspan="4" />
+                                    <field name="slack_test_result" colspan="4" widget="ace" options="{'mode': 'python'}" nolabel="1" />
+                                    -->
+                                </group>                                
+                                
+                            </page>
                             <page string="Debug" groups="inouk_message_queue.group_debug">
                                 
                             </page>

@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import requests
+import base64
 
 from odoo import models, fields, api
 import odoo
@@ -36,9 +37,15 @@ class IMQQueue(models.Model):
     region = fields.Char()
     key = fields.Char()
     secret = fields.Char()
-    slack_webhook_url = fields.Char("Slack webhook URL")
     description = fields.Text()
     test_result = fields.Text()
+
+    slack_team = fields.Char()
+    slack_access_token = fields.Char()
+    slack_webhook_channel = fields.Char()
+    slack_webhook_url = fields.Char("Slack webhook URL")
+    slack_webhook_config_url = fields.Char()
+    slack_oauth_access_response = fields.Text()
 
     @api.multi
     @api.depends('name')
@@ -58,6 +65,30 @@ class IMQQueue(models.Model):
         return super(IMQQueue, self).copy(default)    
 
 
+    # TODO: Move to a mixin and update message.py which share the same code
+    @api.multi
+    def get_formview_id(self, access_uid=None):
+        self.ensure_one()
+        return self.env.ref('inouk_message_queue.imq_queue__form_view').id
+
+    @api.multi
+    def get_default_action(self, access_uid=None):
+        self.ensure_one()
+        return self.env.ref('inouk_message_queue.imq_queue__act_window')
+
+    def get_form_url(self):
+        self.ensure_one()
+        web_base_url = self.env['ir.config_parameter'].get_param('web.base.url')
+        action_dict = self.get_formview_action()
+        action_dict['action_id'] = self.get_default_action().id
+        action_dict['web_base_url'] = web_base_url
+        # target:
+        # https://xsid-dev.inouk.ovh/web?debug#id=1&action=257&model=imq.test_launcher&view_type=form&menu_id=140
+        url_str = "{web_base_url}/web#id={res_id}&action={action_id}&model="\
+                  "{res_model}&view_type={view_type}".format(**action_dict)
+        _logger.debug("URL for %s = > %q", self, url_str)
+        return url_str
+
     @api.multi
     def btn_send_simple_message(self):
         """ Sends a simple message"""
@@ -72,6 +103,36 @@ class IMQQueue(models.Model):
         )
         result_str = json.dumps(result, sort_keys=True, indent=4)
         self.test_result = result_str
+
+    @api.multi
+    def btn_add_to_slack(self):
+        """ Launch Slack oauth."""
+        self.ensure_one()
+        icp_model = self.env['ir.config_parameter'] 
+
+        base_url = icp_model.get_param('web.base.url')
+        SLACK_APP_CLIENT_ID = icp_model.get_param('imq.SLACK_APP_CLIENT_ID')
+        SLACK_OAUTH_CALLBACK = icp_model.get_param('imq.SLACK_OAUTH_CALLBACK')  # Cloudflare worker
+
+        imq_slack_oauth_ctrl = "%s/imq/v1/socb" % base_url  # socb = Slack Oauth Call-Back
+        state_param_b = bytearray("%s/%s" % (imq_slack_oauth_ctrl, self.name), 'utf-8')
+        state_param_b = base64.urlsafe_b64encode(state_param_b)
+        state_param_str = state_param_b.decode('utf-8')
+        
+        # eg. https://slack.com/oauth/v2/authorize?client_id=5006003237.928870046194&scope=incoming-webhook
+        slack_auth_uri = "https://slack.com/oauth/v2/authorize?client_id=%s&scope=incoming-webhook"\
+                         "&redirect_uri=%s&state=%s" % (
+                             SLACK_APP_CLIENT_ID, 
+                             SLACK_OAUTH_CALLBACK, 
+                             state_param_str,)
+
+        _logger.debug("slack_auth_uri=%s", slack_auth_uri)
+        return {
+            "type": "ir.actions.act_url",
+            "url": slack_auth_uri,
+            "target": "self",
+        }
+
 
     @api.multi
     def btn_test_slack_notifications(self):

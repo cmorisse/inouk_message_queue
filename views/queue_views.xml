@@ -15,6 +15,16 @@
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
+                            <button class="oe_stat_button" 
+                                    icon="fa-bell" 
+                                    help="The Slack channel that will be used by this queue. Use the Slack tab to change it.">
+                                <div class="o_field_widget o_stat_info">
+                                    Slack 
+                                    <span class="o_stat_value">    
+                                        <field name="slack_webhook_channel" widget="statinfo" nolabel="1" class="mr4"/>
+                                    </span>
+                                </div>
+                            </button>
                         </div>
                         <div class="oe_title">
                             <h1><field name="name"/></h1>
@@ -47,21 +57,33 @@
                                 </group>                                
                             </page>
                             <page string="Slack">
-                                <div colspan="4" >IMQ can send several kinds of notifications related to message processing in queue.<br/> For that you must follow instructions here to create an &quot;Incoming Webhook&quot;: https://api.slack.com/messaging/webhooks <br/>
-                                Once it's done, copy your hook in the field below, then click on the Test Slack notification below. <br/>
-                                You should get a message in the Slack channel linked to the webhook.
+                                <div colspan="4" >IMQ can send several kinds of notifications related to message processing in queue.<br/> 
+                                Use the button below to define the workspace and channel in which IMQ will send the notifications. <br/>
+                                Once it's done, use the "Test Slack Notification" to check your setup. <br/>
+                                The kind of notifications sent for each message on a per "Message Processor" basis (See the "Message Processor" Form).<br/>
                                 </div>
+                                <button type="object" name="btn_add_to_slack" >
+                                    <img alt="Bind to Slack" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcset="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x" />
+                                </button>
                                 <group col="4" colspan="4">
-                                    <field name="slack_webhook_url" colspan="4" />
-                                    <button type="object" name="btn_test_slack_notifications" string="Test Slack notifications" class="oe_highlight" />
                                     <!--
                                     <label for="slack_test_result" string="Test Result:" colspan="4" />
                                     <field name="slack_test_result" colspan="4" widget="ace" options="{'mode': 'python'}" nolabel="1" />
                                     -->
+                                    <field name="slack_team" colspan="4" />
+                                    <field name="slack_webhook_channel" colspan="4" />
+                                    <button type="object" name="btn_test_slack_notifications" string="Test Slack notifications" class="oe_highlight" />
+
                                 </group>                                
                                 
                             </page>
                             <page string="Debug" groups="inouk_message_queue.group_debug">
+                                <group string="Slack" col="4" colspan="4">
+                                    <field name="slack_access_token" colspan="4" />
+                                    <field name="slack_webhook_url" colspan="4" />
+                                    <field name="slack_webhook_config_url" colspan="4" />
+                                    <field name="slack_oauth_access_response" colspan="4" />
+                                </group>                                
                                 
                             </page>
                         </notebook>

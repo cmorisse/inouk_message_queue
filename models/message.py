@@ -109,6 +109,7 @@ class IMQMessage(models.Model):
             "Message ID must be unique per Queue.")
     ]
 
+    # TODO: Move to a mixin and update queue.py which share the same code
     @api.multi
     def get_formview_id(self, access_uid=None):
         self.ensure_one()

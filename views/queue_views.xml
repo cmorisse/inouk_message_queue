@@ -59,8 +59,8 @@
                             <page string="Slack">
                                 <div colspan="4" >IMQ can send several kinds of notifications related to message processing in queue.<br/> 
                                 Use the button below to define the workspace and channel in which IMQ will send the notifications. <br/>
-                                Once it's done, use the "Test Slack Notification" to check your setup. <br/>
-                                The kind of notifications sent for each message on a per "Message Processor" basis (See the "Message Processor" Form).<br/>
+                                Once it's done, use the "Test Slack Notification" button below to check your setup. <br/>
+                                The kind of notifications sent for each message can be defined on a per "Message Processor" basis (in the "Message Processor" Form).<br/>
                                 </div>
                                 <button type="object" name="btn_add_to_slack" >
                                     <img alt="Bind to Slack" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcset="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x" />

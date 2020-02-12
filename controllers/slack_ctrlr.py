@@ -53,9 +53,6 @@ class IMQSlackControllerV2(Controller):
             "slack_webhook_config_url": payload["incoming_webhook"]["configuration_url"],
             "slack_oauth_access_response": json.dumps(payload, indent=4)
         })
-        #customer_dict = payload['entityId']
-        #if payload.get('itemLists_group'):
-        #    pass
         queue_url = request.env['imq.queue'].sudo().search([('name','=',queue_name)]).get_form_url()
         return queue_url
 

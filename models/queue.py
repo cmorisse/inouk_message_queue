@@ -139,7 +139,15 @@ class IMQQueue(models.Model):
         """ Sends a Slack test notifications."""
         self.ensure_one()
         self.send_slack_notification(":bear:")
-        self.send_slack_notification("Queue: *%s* is ready to send notifications." % self.name)
+        message = "Queue: *%s* is ready to send notifications." % self.name
+        self.send_slack_notification(message)
+
+        # Channel does not send notification to user (pop)
+        #channel_id = self.env['mail.channel'].search([('id', '=', 3)])
+        #notification = ('<div class="sale.order"><a href="#" class="o_redirect" data-oe-id="%s">#%s</a></div>') % (rec.id, rec.name,)
+        #channel_id.message_post(body=message, subtype='mail.mt_comment')
+
+
         return
 
     @api.multi

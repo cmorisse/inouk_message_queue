@@ -426,10 +426,16 @@ class IMQWorker(models.Model):
         # retrieve queue or exit
         queue_model = self.env['imq.queue']
         queue_obj = queue_model.search([
-            ('name', '=', queue_name)]
-        ) if queue_name else None
+            ('name', '=', queue_name),
+            '|',
+                ('active', '=', True),
+                ('active', '=', False)
+        ]) if queue_name else None
         if not queue_obj:
             _logger.error("Queue '%s' does not exists. Exiting.", queue_name)
+            return
+        if not queue_obj.active:
+            _logger.warning("Queue '%s' is not active. Exiting.", queue_name)
             return
         
         processing_start_timestamp = datetime.datetime.now()

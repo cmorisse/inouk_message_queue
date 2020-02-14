@@ -34,6 +34,7 @@ class IMQQueue(models.Model):
     name = fields.Char(size=20, index=True, uniq=True, required=True)
     sqs_name = fields.Char(compute='_compute_sqs_name')
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
+    active = fields.Boolean(default=True)
     region = fields.Char()
     key = fields.Char()
     secret = fields.Char()

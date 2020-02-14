@@ -16,7 +16,7 @@
                     <sheet>
                         <div class="oe_button_box" name="button_box">
                             <button name="toggle_active" type="object" class="oe_stat_button" icon="fa-plug">
-                                <field name="active" widget="boolean_button"/>
+                                <field name="active" widget="boolean_button" help="Switch Off a queue to stop it's processing by all workers." />
                             </button>
 
                             <button class="oe_stat_button" 

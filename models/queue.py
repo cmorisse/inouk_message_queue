@@ -2,8 +2,10 @@ import pickle
 import datetime
 import json
 import logging
-import requests
 import base64
+
+import requests
+import slackdown
 
 from odoo import models, fields, api
 import odoo
@@ -47,6 +49,8 @@ class IMQQueue(models.Model):
     slack_webhook_url = fields.Char("Slack webhook URL")
     slack_webhook_config_url = fields.Char()
     slack_oauth_access_response = fields.Text()
+
+    use_odoo_notifications = fields.Boolean()
 
     @api.multi
     @api.depends('name')
@@ -110,8 +114,7 @@ class IMQQueue(models.Model):
         """ Launch Slack oauth."""
         self.ensure_one()
         icp_model = self.env['ir.config_parameter'] 
-
-        base_url = icp_model.get_param('web.base.url')
+        base_url = icp_model.sudo().get_param('web.base.url')
         SLACK_APP_CLIENT_ID = icp_model.get_param('imq.SLACK_APP_CLIENT_ID')
         SLACK_OAUTH_CALLBACK = icp_model.get_param('imq.SLACK_OAUTH_CALLBACK')  # Cloudflare worker
 
@@ -134,7 +137,6 @@ class IMQQueue(models.Model):
             "target": "self",
         }
 
-
     @api.multi
     def btn_test_slack_notifications(self):
         """ Sends a Slack test notifications."""
@@ -142,14 +144,59 @@ class IMQQueue(models.Model):
         self.send_slack_notification(":bear:")
         message = "Queue: *%s* is ready to send notifications." % self.name
         self.send_slack_notification(message)
-
-        # Channel does not send notification to user (pop)
-        #channel_id = self.env['mail.channel'].search([('id', '=', 3)])
-        #notification = ('<div class="sale.order"><a href="#" class="o_redirect" data-oe-id="%s">#%s</a></div>') % (rec.id, rec.name,)
-        #channel_id.message_post(body=message, subtype='mail.mt_comment')
-
-
         return
+    
+    @api.multi
+    def btn_test_odoo_notifications(self):
+        """ Sends an Odoo test notifications."""
+        self.ensure_one()
+        self.send_odoo_notification(":bear:")
+        message = "Queue: *%s* is ready to send notifications." % self.name
+        return self.send_odoo_notification(message)
+
+
+    def render_slack_to_fontawesome_part1(self, message):
+        r_message = message.replace(':white_check_mark:', 'XXXWHITECHECKMARKXXX')
+        r_message = r_message.replace(':bear:', 'XXXBEARXXX')
+        r_message = r_message.replace(':bangbang:', 'XXXBANGBANGXXX')
+        r_message = r_message.replace(':warning:', 'XXXWARNINGXXX')
+        r_message = r_message.replace(':x:', 'XXXXXXX')
+        return r_message
+
+    def render_slack_to_fontawesome_part2(self, message):
+        r_message = message.replace('XXXWHITECHECKMARKXXX', '<i class="fa fa-check-square"></i>')
+        r_message = r_message.replace('XXXBEARXXX', '<i class="fa fa-paw"></i>')
+        r_message = r_message.replace('XXXBANGBANGXXX', '<i class="fa fa-exclamation"></i>')
+        r_message = r_message.replace('XXXWARNINGXXX', '<i class="fa fa-exclamation-triangle"></i>')
+        r_message = r_message.replace('XXXXXXX', '<i class="fa fa-times-circle"></i>')
+        return r_message
+
+
+    def send_odoo_notification(self, message=None, raw=None, obj=None):
+        """ Send message to Odoo #IMQ channels of all queues in record set. 
+        :param message: when formatted, must use slack markdown
+        """
+        icp_model = self.env['ir.config_parameter'] 
+        imqbot_partner_obj = self.env.ref('inouk_message_queue.partner_imq')
+        for record in self:
+            if record.use_odoo_notifications:
+                if obj:
+                    notification_text = message.format(
+                        object_link="*<%s|%s>*" % (obj.get_form_url(), obj.name)
+                    )
+                    payload = notification_text
+                else:
+                    payload = message
+                if message:
+                    body_html = self.render_slack_to_fontawesome_part1(payload)
+                    body_html = slackdown.render(body_html)
+                    body_html = self.render_slack_to_fontawesome_part2(body_html)
+                elif raw:
+                    body_html = raw
+                channel_obj = self.env.ref('inouk_message_queue.imq_mail_channel')
+                channel_obj.message_post(body=body_html, 
+                                         author_id=imqbot_partner_obj.id, 
+                                         subtype='mail.mt_comment')
 
     @api.multi
     def send_slack_notification(self, message, obj=None):
@@ -180,4 +227,5 @@ class IMQQueue(models.Model):
     def send_notification(self, message, obj=None):
         """ Send message to all 'channels' (slack, sms) of all queues in recordset """
         self.send_slack_notification(message, obj=obj)
+        self.send_odoo_notification(message, obj=obj)
             

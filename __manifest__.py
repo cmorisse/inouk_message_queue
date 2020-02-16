@@ -41,6 +41,7 @@ able to consume Messages.""",
         'security/ir_rule.xml',
 
         # Configuration data
+        'data/mail_channel.xml',
         'data/ir_cron_worker.xml',
         'data/ir_config_parameter.xml',        
         'data/imq_queue.xml',

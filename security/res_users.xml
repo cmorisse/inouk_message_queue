@@ -2,7 +2,7 @@
 <openerp>
     <data noupdate="0">
         <record id="inouk_message_queue.partner_imq" model="res.partner" >
-            <field name="name">IMQ Workers User</field>
+            <field name="name">IMQbot</field>
             <field name="customer" eval="False"/>
         </record>
 

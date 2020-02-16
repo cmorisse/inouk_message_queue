@@ -1,0 +1,13 @@
+<?xml version="1.0" ?>
+<openerp>
+    <data noupdate="0">
+        <record id="imq_mail_channel" model="mail.channel">
+            <field name="name">IMQ</field>
+            <field name="channel_type">chat</field>
+            <field name="description">IMQ Processing notifications</field>
+            <field name="group_ids" eval="[(4, ref('base.group_user'))]"/>
+            <field name="public">public</field>
+
+        </record>
+    </data>
+</openerp>

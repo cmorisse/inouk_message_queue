@@ -15,7 +15,7 @@ from .message_processor import IMQ_MESSAGE_PROCESSOR_TYPES, IMQ_MESSAGE_PROCESSO
 
 """Stores all odoo's processed messages for user inspection."""
 
-_logger = logging.getLogger("IMQ")
+_logger = logging.getLogger("IMQ.message")
 
 IMQ_MESSAGE_STATES = [
     ('new', "New"),
@@ -130,7 +130,7 @@ class IMQMessage(models.Model):
         # https://xsid-dev.inouk.ovh/web?debug#id=1&action=257&model=imq.test_launcher&view_type=form&menu_id=140
         url_str = "{web_base_url}/web#id={res_id}&action={action_id}&model="\
                   "{res_model}&view_type={view_type}".format(**action_dict)
-        _logger.critical(url_str)
+        _logger.debug("get_form_url(%s) => %s", self,  url_str)
         return url_str
 
     @api.multi

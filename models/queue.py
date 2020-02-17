@@ -14,7 +14,7 @@ from odoo.tools.translate import _
 
 from ..api import send_message
 
-_logger = logging.getLogger(__name__)
+_logger = logging.getLogger('IMQ.queue')
 
 QUEUE_PROVIDERS = [
     ('aws_sqs', "AWS SQS"),
@@ -215,7 +215,7 @@ class IMQQueue(models.Model):
                 result = requests.post(record.slack_webhook_url, 
                                        data=json.dumps(payload), 
                                        headers=headers)
-                _logger.info("requests.post(%s, data=%s, headers=%s) => %s", 
+                _logger.debug("requests.post(%s, data=%s, headers=%s) => %s", 
                     record.slack_webhook_url, 
                     json.dumps(payload), 
                     headers, 

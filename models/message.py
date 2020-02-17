@@ -122,7 +122,7 @@ class IMQMessage(models.Model):
 
     def get_form_url(self):
         self.ensure_one()
-        web_base_url = self.env['ir.config_parameter'].get_param('web.base.url')
+        web_base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
         action_dict = self.get_formview_action()
         action_dict['action_id'] = self.get_default_action().id
         action_dict['web_base_url'] = web_base_url

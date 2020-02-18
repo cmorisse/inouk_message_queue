@@ -181,8 +181,9 @@ class IMQQueue(models.Model):
         for record in self:
             if record.use_odoo_notifications:
                 if obj:
-                    notification_text = message.format(
-                        object_link="*<%s|%s>*" % (obj.get_form_url(), obj.name)
+                    notification_text = message.replace(
+                        '{object_link}', 
+                        "*<%s|%s>*" % (obj.get_form_url(), obj.name,)
                     )
                     payload = notification_text
                 else:
@@ -204,8 +205,9 @@ class IMQQueue(models.Model):
         for record in self:
             if record.slack_webhook_url:
                 if obj:
-                    notification_text = message.format(
-                        object_link="*<%s|%s>*" % (obj.get_form_url(), obj.name)
+                    notification_text = message.replace(
+                        '{object_link}', 
+                        "*<%s|%s>*" % (obj.get_form_url(), obj.name,)
                     )
                     payload = { "text": notification_text }
                 else:

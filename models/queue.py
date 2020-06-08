@@ -20,6 +20,11 @@ QUEUE_PROVIDERS = [
     ('aws_sqs', "AWS SQS"),
 ]
 
+QUEUE_TYPES = [
+    ('std', "Standard"),
+    ('fifo', "FIFO"),
+]
+
 class IMQQueue(models.Model):
     _name = 'imq.queue'
     _description = "IMQ - Queue"
@@ -36,12 +41,23 @@ class IMQQueue(models.Model):
     name = fields.Char(size=20, index=True, uniq=True, required=True)
     sqs_name = fields.Char(compute='_compute_sqs_name')
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
+    q_type = fields.Selection(QUEUE_TYPES, default='std', required=True)
     active = fields.Boolean(default=True)
     region = fields.Char()
     key = fields.Char()
     secret = fields.Char()
     description = fields.Text()
     test_result = fields.Text()
+    test_message_group = fields.Char(
+        "Message Group",
+        help="With FIFO Queues, message ordering is warranty for all messages "
+             "having the same message_group."
+    )
+    test_message_deduplication_id = fields.Char(
+        "Message Deduplication Id",
+        help="On FIFO Queues when 'Content-Based Deduplication' is not set, a "
+             "'MessageDeduplicationId' must be passed which each sent message."
+    )
 
     slack_team = fields.Char()
     slack_access_token = fields.Char()
@@ -56,9 +72,10 @@ class IMQQueue(models.Model):
     @api.depends('name')
     def _compute_sqs_name(self):
         for record in self:
-            record.sqs_name = "{}_{}".format(
+            record.sqs_name = "{}_{}{}".format(
                 record.name,
-                record.env.cr.dbname
+                record.env.cr.dbname,
+                ".fifo" if record.q_type=='fifo' else ''
             )
 
     @api.multi
@@ -101,10 +118,11 @@ class IMQQueue(models.Model):
         result = send_message(
             self.env,
             self.name,
-            "TestMessage",
+            "TestMessage",  # Selector
             None,  # payload
-            None,  # MessageGroup
-            "This is a test Message name",
+            self.test_message_group or None,  # message_group
+            self.test_message_deduplication_id or None,  # message_deduplication_id
+            "This is a test Message name",  # message_name
         )
         result_str = json.dumps(result, sort_keys=True, indent=4)
         self.test_result = result_str

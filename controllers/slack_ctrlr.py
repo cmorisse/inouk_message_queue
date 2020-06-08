@@ -30,7 +30,7 @@ class IMQSlackControllerV2(Controller):
             if base_url_root[-1] != '/': 
                 base_url_root += '/'
             return base_url_root
-        raise XSAPIException("Missing 'web.base_url' system parameter.")
+        raise Exception("Missing 'web.base_url' system parameter.")
 
     @route('/imq/v1/socb/<string:queue_name>', methods=['POST'], type='json', auth='none', csrf=False, save_session=False)
     def slack_oauth_callback(self, queue_name=None):

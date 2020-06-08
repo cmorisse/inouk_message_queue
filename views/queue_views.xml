@@ -41,6 +41,7 @@
                         <group>
                             <group>
                                 <field name="provider" />
+                                <field name="q_type" />
                                 <field name="region"  />
                             </group>
                             <group>
@@ -54,8 +55,10 @@
                                 <field name="description" />
                             </page>
                             <page string="Test" >
-                                <group col="4" colspan="4">
-                                    <button type="object" name="btn_send_simple_message" string="Send Simple Message" class="oe_highlight" />
+                                <group col="4" colspan="4" class="ik_lw200" >
+                                    <field name="test_message_group" />
+                                    <field name="test_message_deduplication_id" />
+                                    <button type="object" name="btn_send_simple_message" string="Send Simple Message" class="oe_highlight" colspan="2" />
                                     <label for="test_result" string="Test Result:" colspan="4" />
                                     <field name="test_result" colspan="4" widget="ace" options="{'mode': 'python'}" nolabel="1" />
                                 </group>                                

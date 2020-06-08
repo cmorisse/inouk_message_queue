@@ -235,8 +235,8 @@ def enqueue(runnable, *args, **kwargs):
         del kwargs['_imq_is_method']
 
     # detect whether logging is requested
-    function_signature = inspect.getargspec(runnable)
-    logging_activated = function_signature.args.count('_imq_logger') == 1
+    function_signature = inspect.getfullargspec(runnable)
+    logging_activated = '_imq_logger' in function_signature.args
 
     parent_message_id = kwargs.get('_imq_parent_message_id', None)
     if '_imq_parent_message_id' in kwargs:
@@ -405,7 +405,7 @@ def processor_method(queue_name='default', processor_visibility_timeout=0):
 
 
 def send_message(env, queue, selector, payload, message_group=None, 
-                 message_name=None):
+                 message_deduplication_id=None, message_name=None):
     """ Sending a simple message to AWS SQS queue.
     :param env: A valid Odoo env
     :param queue: Queue name prefix of the queue to use or queue obj
@@ -419,15 +419,20 @@ def send_message(env, queue, selector, payload, message_group=None,
 
     if message_name is None:
         name = selector
-        
+    
+    if queue_obj.q_type == 'fifo' and not message_group:
+        raise IMQError(
+            "Missing required 'message_group' parameter to send message to FIFO queue:'%s'."
+            % queue_obj.sqs_name
+        )
+
     sqs_resource = boto3.resource(
         'sqs',
         region_name=queue_obj.region,  # os.environ.get('IMQ_SQS_REGION')
         aws_access_key_id=queue_obj.key,  # ex os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
         aws_secret_access_key=queue_obj.secret  # ex os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
     )
-    sqs_queue_name = "%s_%s" % (queue_obj.name, env.cr.dbname,)
-    sqs_queue = sqs_resource.get_queue_by_name(QueueName=sqs_queue_name)
+    sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_obj.sqs_name)
     message_body_values = {
         'type': 'simple',
         'selector': selector,
@@ -444,6 +449,9 @@ def send_message(env, queue, selector, payload, message_group=None,
     }
     if message_group:
         send_message_kwargs['MessageGroupId'] = message_group
+        if message_deduplication_id:
+            send_message_kwargs['MessageDeduplicationId'] = message_deduplication_id
+
     response = sqs_queue.send_message(**send_message_kwargs)
     _logger.debug("response={resp}".format(resp=response))
     return response

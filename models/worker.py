@@ -304,7 +304,7 @@ class IMQWorker(models.Model):
                     message_obj
                 )
 
-        except (IMQRetryableError, 
+        except (IMQRetryableError,
                 psycopg2.extensions.TransactionRollbackError,
                 psycopg2.IntegrityError
         ) as imq_rerr:
@@ -336,6 +336,21 @@ class IMQWorker(models.Model):
                 # Task will retry after visibility timeout
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
+
+        except (
+            psycopg2.errors.InFailedSqlTransaction,
+            psycopg2.errors.SerializationFailure,
+            psycopg2.OperationalError
+        ) as imq_rerr:
+            raised = imq_rerr
+            exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
+            returned_value = traceback.format_exception(exc_type, 
+                                                        exc_value, 
+                                                        exc_traceback)
+            returned_value = "\n".join(returned_value)
+            _logger.error("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxd")
+            _logger.error(returned_value)
+            return {"state": "psycopg2_Error"}
             
         except Exception as exc:
             raised = exc
@@ -410,7 +425,7 @@ class IMQWorker(models.Model):
 
         queue_name = queue_name or 'default'
         _logger.debug("process_message_queue(queue_name=%s, worker_name=%s, "
-                     "worker_param=%s)", 
+                     "worker_param=%s)",
                      queue_name, worker_name, worker_param)
         _logger.debug("    %s-%s pid/thread = %s/%x", 
                       queue_name, worker_name,
@@ -437,10 +452,9 @@ class IMQWorker(models.Model):
         if not queue_obj.active:
             _logger.warning("Queue '%s' is not active. Exiting.", queue_name)
             return
-        
-        processing_start_timestamp = datetime.datetime.now()
-        while True: 
 
+        processing_start_timestamp = datetime.datetime.now()
+        while True:
             # Clear all ORM cache for Environment
             self.invalidate_cache()
 
@@ -458,7 +472,7 @@ class IMQWorker(models.Model):
                 message_obj.env.cr.commit()
 
                 self.change_message_visibility(message_obj, sqs_message)
-                processor_obj =  message_obj.processor_id
+                processor_obj = message_obj.processor_id
                 if processor_obj:
                     self.start_log_capture(message_obj,
                                            processing_obj,
@@ -467,13 +481,15 @@ class IMQWorker(models.Model):
                     if message_obj.capture_console:
                         self.start_stream_capture(message_obj, processing_obj)
                     result_dict = self.process_message(sqs_message,
-                                                       message_obj, 
+                                                       message_obj,
                                                        worker_param)
+                    if result_dict['state'] == '"psycopg2_Error"':
+                        return  # we abort 
                     self.stop_log_capture()
                     if message_obj.capture_console:
                         self.stop_stream_capture()
-    
-                else:  
+
+                else:
                     result_dict = {
                         'state': 'failed',
                         'result': "No processor defined for message. Will retry in"
@@ -511,8 +527,9 @@ class IMQWorker(models.Model):
 
     
     def start_log_capture(
-        self, message_obj, processing_obj, log_level=None, log_format="%(asctime)s %(name)s %(levelname)s %(message)s"
-    ):
+            self, message_obj, processing_obj, log_level=None, 
+            log_format="%(asctime)s %(name)s %(levelname)s %(message)s"
+        ):
         """Start capturing log output to a string buffer.
 
         See. http://docs.python.org/release/2.6/library/logging.html

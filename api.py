@@ -360,7 +360,7 @@ def processor(queue_name='default', processor_visibility_timeout=0):
     def real_decorator(decorated_function):
         def async_task(*args, **kwargs):
             kwargs['_imq_queue_name'] = kwargs.get('_imq_queue_name', 
-                                                    queue_name)
+                                                   queue_name)
             kwargs['_imq_processor_visibility_timeout'] = processor_visibility_timeout
             return enqueue(decorated_function, *args, **kwargs)
         def message(*args, **kwargs):

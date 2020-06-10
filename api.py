@@ -362,7 +362,7 @@ def enqueue(runnable, *args, **kwargs):
     response = sqs_queue.send_message(**send_message_kwargs)
     _logger.debug("SQS::send_message response={resp}".format(resp=response))
     return response
-    
+
 
 def processor(queue_name='default', processor_visibility_timeout=0):
     """ Decorator that allows to enqueue a pure function (not method) call.

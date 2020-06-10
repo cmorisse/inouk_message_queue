@@ -42,14 +42,10 @@ class IMQWorker(models.Model):
         :param queue_obj: required openerp.Model of the queue to query.
         :return: a SQS message object 
         """
-        
-        _logger.debug("Queue[%s] querying next message to process.", 
-                      queue_obj.name)
-                      
+
+        _logger.debug("Queue[%s] querying next message to process.", queue_obj.name)
+
         queue_name_prefix = queue_obj.name
-        queue_obj = self.env['imq.queue'].search([('name', '=', queue_name_prefix)])
-        if not queue_obj:
-            raise UserError("Unknown queue:'%s' !!!" % queue_name_prefix)
 
         sqs_resource = boto3.resource(
             'sqs',
@@ -58,14 +54,13 @@ class IMQWorker(models.Model):
             aws_secret_access_key=queue_obj.secret,   # os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
         )
 
-        queue_name = "%s_%s" % (queue_name_prefix, self.env.cr.dbname,)
-        sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_name)
+        sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_obj.sqs_name)
 
         start_time = datetime.datetime.now()
         while (datetime.datetime.now() - start_time).seconds < 60:
             messages = sqs_queue.receive_messages(
-                AttributeNames=[ 'All' ],
-                MessageAttributeNames=[ 'All' ],
+                AttributeNames=['All'],
+                MessageAttributeNames=['All'],
                 MaxNumberOfMessages=1,
                 WaitTimeSeconds=20,
             )
@@ -175,7 +170,7 @@ class IMQWorker(models.Model):
             d["hours"], rem = divmod(tdelta.seconds, 3600)
             d["minutes"], d["seconds"] = divmod(rem, 60)            
             return fmt.format(**d)        
-        
+
         _logger.debug("Processing message with id=%s (%s)", 
                       message_obj.queue_message_id, 
                       message_obj.name)
@@ -210,9 +205,8 @@ class IMQWorker(models.Model):
                 if message_obj.logging_activated and msg_processor_obj.capture_log:
                     payload['kwargs']['_imq_logger'] = self.logger
                 if message_obj.capture_console:
-                    payload['kwargs']['_imq_stream'] = self._imq_stream 
-                    
-    
+                    payload['kwargs']['_imq_stream'] = self._imq_stream
+
                 if message_obj.processor_id.is_method:
                     _logger.debug("Executing 'method'.")
                     returned_value = getattr(
@@ -231,7 +225,7 @@ class IMQWorker(models.Model):
                         message_obj.processor_id.function
                     )(*payload['args'], **payload['kwargs'])
 
-            else:
+            else:  # message_type == 'simple'
                 if(msg_processor_obj.module and message_obj.processor_id.function):
                     payload = json.loads(message_obj.payload)
                     function_module = importlib.import_module(
@@ -254,7 +248,8 @@ class IMQWorker(models.Model):
                     raise Exception(error_message)
             end_timestamp = datetime.datetime.now()
             duration_str = strfdelta(end_timestamp-start_timestamp, "{minutes}min{seconds}s")
-            _logger.debug("message %s processed (duration=%s).", sqs_message.message_id, duration_str)
+            _logger.debug("message %s processed (duration=%s).", sqs_message.message_id, 
+                          duration_str)
             if run_env.has_todo():
                 run_env.recompute()
             sqs_message.delete()  # Delete message from Cloud Queue
@@ -264,7 +259,8 @@ class IMQWorker(models.Model):
 
             if msg_processor_obj.notify_message_processing_end:
                 message_obj.queue_id.send_notification(
-                    ":white_check_mark: {object_link} processing done without error (duration=%s)." % duration_str, 
+                    ":white_check_mark: {object_link} processing done without error (duration=%s)."\
+                        % duration_str,
                     message_obj
                 )
 
@@ -288,8 +284,8 @@ class IMQWorker(models.Model):
         except IMQTerminateException as imq_err:
             raised = imq_err
             exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
-            returned_value = traceback.format_exception(exc_type, 
-                                                        exc_value, 
+            returned_value = traceback.format_exception(exc_type,
+                                                        exc_value,
                                                         exc_traceback)
             returned_value = "\n".join(returned_value)
             state = 'terminated'
@@ -300,13 +296,14 @@ class IMQWorker(models.Model):
 
             if msg_processor_obj.notify_message_processing_terminate:
                 message_obj.queue_id.send_notification(
-                    ":bangbang: Processing of {object_link} terminated (*IMQTerminateException* raised).", 
+                    ":bangbang: Processing of {object_link} terminated (*IMQTerminateException* raised).",
                     message_obj
                 )
 
-        except (IMQRetryableError,
-                psycopg2.extensions.TransactionRollbackError,
-                psycopg2.IntegrityError
+        except (
+            IMQRetryableError,
+            psycopg2.extensions.TransactionRollbackError,
+            psycopg2.IntegrityError
         ) as imq_rerr:
             raised = imq_rerr
             exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
@@ -338,17 +335,16 @@ class IMQWorker(models.Model):
             run_env.clear()  # invalidates and purges todos
 
         except (
-            psycopg2.errors.InFailedSqlTransaction,
-            psycopg2.errors.SerializationFailure,
-            psycopg2.OperationalError
-        ) as imq_rerr:
+                psycopg2.errors.InFailedSqlTransaction,
+                psycopg2.errors.SerializationFailure,
+                psycopg2.OperationalError
+            ) as imq_rerr:
             raised = imq_rerr
             exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
             returned_value = traceback.format_exception(exc_type, 
                                                         exc_value, 
                                                         exc_traceback)
             returned_value = "\n".join(returned_value)
-            _logger.error("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxd")
             _logger.error(returned_value)
             return {"state": "psycopg2_Error"}
             
@@ -401,17 +397,16 @@ class IMQWorker(models.Model):
         """ Update message visibility with timeout defined in processor
         if any
         """
-        m_timeout = message_obj.processor_id.visibility_timeout or 60
-        if m_timeout:
-            assert  message_obj.attempt>0, "Internal Error: attempt <= 0"
+        if message_obj.processor_id.force_visibility_timeout:
+            m_timeout = message_obj.processor_id.visibility_timeout
             sqs_message.change_visibility(VisibilityTimeout=m_timeout)
 
     @api.model
     def process_message_queue(self, queue_name, worker_name=None, worker_param=None):
-        """ This is the IMQ Worker entry_point. This method is called regularly 
-        by odoo.ir_cron to process message from the queue identified by 
+        """ This is the IMQ Worker entry_point. This method is called regularly
+        by odoo.ir_cron to process message from the queue identified by
         `queue_name`.
-        For each message, creates an `imq.message` object then run code 
+        For each message, creates an `imq.message` object then run code
         defined in related processor.
         """
         host_name = socket.gethostname()
@@ -425,11 +420,11 @@ class IMQWorker(models.Model):
 
         queue_name = queue_name or 'default'
         _logger.debug("process_message_queue(queue_name=%s, worker_name=%s, "
-                     "worker_param=%s)",
-                     queue_name, worker_name, worker_param)
+                      "worker_param=%s)",
+                      queue_name, worker_name, worker_param)
         _logger.debug("    %s-%s pid/thread = %s/%x", 
                       queue_name, worker_name,
-                      os.getpid(), 
+                      os.getpid(),
                       threading.current_thread().ident,)
         _logger.debug("    %s-%s threading.current_thread().dbname=%s", 
                       queue_name, worker_name,
@@ -440,11 +435,8 @@ class IMQWorker(models.Model):
 
         # retrieve queue or exit
         queue_model = self.env['imq.queue']
-        queue_obj = queue_model.search([
+        queue_obj = queue_model.with_context(active_test=False).search([
             ('name', '=', queue_name),
-            '|',
-                ('active', '=', True),
-                ('active', '=', False)
         ]) if queue_name else None
         if not queue_obj:
             _logger.error("Queue '%s' does not exists. Exiting.", queue_name)
@@ -460,7 +452,7 @@ class IMQWorker(models.Model):
 
             # query SQS for message
             sqs_message = self.get_message(queue_obj)
-            
+
             # store message in log for user monitoring
             start_timestamp = datetime.datetime.now()
             if sqs_message:
@@ -484,7 +476,7 @@ class IMQWorker(models.Model):
                                                        message_obj,
                                                        worker_param)
                     if result_dict['state'] == '"psycopg2_Error"':
-                        return  # we abort 
+                        return  # To Abort
                     self.stop_log_capture()
                     if message_obj.capture_console:
                         self.stop_stream_capture()
@@ -502,7 +494,7 @@ class IMQWorker(models.Model):
                 message_obj.write(result_dict)
                 processing_obj.write(result_dict)
 
-                # TODO: Add a parameter to control deletion which is 
+                # TODO: Add a parameter to control deletion which is
                 # unnecessary if queue has a Dead Letter Queue mechanism
                 if result_dict['state'] != 'done' and message_obj.attempt >= message_obj.max_number_of_attempts:
                     _logger.debug("Queue[%s] deleting message %s after %s "
@@ -515,13 +507,13 @@ class IMQWorker(models.Model):
             # Store message log modifications
             self.env.cr.commit()
             _logger.debug("message/cron cursor:%s committed." % self.env.cr)
-            
+
             processing_duration = (
                 datetime.datetime.now() - processing_start_timestamp).seconds
             if processing_duration >= IMQ_SLEEP_INTERVAL:
                 _logger.debug("Queue[%s] process_message_queue() exiting after "
-                              "%ss processing time.", 
-                              queue_obj.name, 
+                              "%ss processing time.",
+                              queue_obj.name,
                               processing_duration)
                 return
 

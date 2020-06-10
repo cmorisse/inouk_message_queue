@@ -55,8 +55,8 @@
                             </page>
                             <page string="SQS Parameters">
                                 <group>
-                                    <group>
-                                        <field name="use_visibility_timeout"/>
+                                    <group class="ik_lw210" >
+                                        <field name="force_visibility_timeout"/>
                                         <field name="visibility_timeout"/>
                                     </group>
                                     <group>
@@ -98,7 +98,7 @@
                     <field name="log_level"/>
                     <field name="log_format"/>
                     <field name="is_method"/>
-                    <field name="use_visibility_timeout"/>
+                    <field name="force_visibility_timeout"/>
                     <field name="visibility_timeout"/>
                 </tree>
             </field>

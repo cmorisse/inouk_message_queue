@@ -372,14 +372,18 @@ def processor(queue_name='default', processor_visibility_timeout=0):
     if not isinstance(queue_name, str):
         raise Exception("Missing @processor's queue_name mandatory parameter.")
     def real_decorator(decorated_function):
-        def message(*args, **kwargs):
+        def async_task(*args, **kwargs):
             kwargs['_imq_queue_name'] = kwargs.get('_imq_queue_name', 
-                                                    queue_name)
+                                                   queue_name)
             kwargs['_imq_processor_visibility_timeout'] = processor_visibility_timeout
             return enqueue(decorated_function, *args, **kwargs)
+        def message(*args, **kwargs):
+            _logger.warning(".delay() is deprecated use .message() instead.")
+            return async_task(*args, **kwargs)
         def delay(*args, **kwargs):
             _logger.warning(".delay() is deprecated use .message() instead.")
-            return message(*args, **kwargs)
+            return async_task(*args, **kwargs)
+        decorated_function.async_task = async_task
         decorated_function.message = message
         decorated_function.delay = delay
         return decorated_function

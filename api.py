@@ -241,14 +241,18 @@ def enqueue(runnable, *args, **kwargs):
     parent_message_id = kwargs.get('_imq_parent_message_id', None)
     if '_imq_parent_message_id' in kwargs:
         del kwargs['_imq_parent_message_id']
-    
+
     target_children_count = kwargs.get('_imq_target_children_count', None)
     if '_imq_target_children_count' in kwargs:
         del kwargs['_imq_target_children_count']
-    
+
     message_group = kwargs.get('_imq_message_group', None)
     if '_imq_message_group' in kwargs:
         del kwargs['_imq_message_group']
+
+    message_deduplication_id = kwargs.get('_imq_message_deduplication_id', None)
+    if '_imq_message_deduplication_id' in kwargs:
+        del kwargs['_imq_message_deduplication_id']
 
     message_name = extract_message_name(runnable, args, kwargs)
     if '_imq_message_name' in kwargs:
@@ -259,7 +263,11 @@ def enqueue(runnable, *args, **kwargs):
     if not queue_obj:
         raise UserError("Unknown queue:'%s' !!!" % queue_name_prefix)
 
-    queue_name = "%s_%s" % (queue_name_prefix, env.cr.dbname,)
+    queue_name = "%s_%s%s" % (
+        queue_name_prefix, 
+        env.cr.dbname,
+        '.fifo' if queue_obj.q_type == 'fifo' else ''
+    )
     if '_imq_queue_name' in kwargs:
         del kwargs['_imq_queue_name']  # We pass all "_imq" params via context
 
@@ -270,14 +278,15 @@ def enqueue(runnable, *args, **kwargs):
         processor_context = {}
         user_id = env.ref('inouk_message_queue.user_imq')
     processor_context['_imq_message_group'] = message_group
+    processor_context['_imq_message_deduplication_id'] = message_deduplication_id
     processor_context['_imq_message_name'] = message_name
     processor_context['_imq_parent_message_id'] = parent_message_id
     processor_context['_imq_target_children_count'] = target_children_count
 
     # We serialize payload differently based on is_method
     if is_method:
-        self=args[0]
-        args=args[1:]
+        self = args[0]
+        args = args[1:]
         module_name = self._name
         function_name = runnable.__name__
     else:
@@ -288,12 +297,12 @@ def enqueue(runnable, *args, **kwargs):
     # TODO: ensure _imq_logger is a named parameter and raise if not
 
     processor_visibility_timeout = kwargs.get('_imq_processor_visibility_timeout', 0)
-    if '_imq_processor_visibility_timeout' in kwargs: 
+    if '_imq_processor_visibility_timeout' in kwargs:
         del kwargs['_imq_processor_visibility_timeout']
 
-    processor_obj = find_or_create_processor(env, 
-                                             function_name, 
-                                             module_name, 
+    processor_obj = find_or_create_processor(env,
+                                             function_name,
+                                             module_name,
                                              is_method,
                                              logging_activated,
                                              processor_visibility_timeout)
@@ -301,7 +310,7 @@ def enqueue(runnable, *args, **kwargs):
     run_synchronously = kwargs.get('_imq_run_synchronously', False)
     if '_imq_run_synchronously' in kwargs:
         del kwargs['_imq_run_synchronously']
-    
+
     if run_synchronously:
         return runnable(*args, **kwargs)
 
@@ -316,7 +325,7 @@ def enqueue(runnable, *args, **kwargs):
         aws_access_key_id=queue_obj.key,  # os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
         aws_secret_access_key=queue_obj.secret,  # os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
     )
-    
+
     sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_name)
     message_body_values = {
         'type': 'rpc',
@@ -337,14 +346,19 @@ def enqueue(runnable, *args, **kwargs):
             },
             'code': {
                 'DataType': 'String',
-                'StringValue': "%s(%s,%s)" % (runnable.__name__,
-                                              [arg for arg in args],
-                                              ["%s=%s" % (arg_name, arg_val) for arg_name, arg_val, in kwargs.items()],)
+                'StringValue': "%s(%s,%s)" % (
+                    runnable.__name__,
+                    [arg for arg in args],
+                    ["%s=%s" % (arg_name, arg_val) for arg_name, arg_val, in kwargs.items()],
+                )
             }
         }
     }
     if message_group:
         send_message_kwargs['MessageGroupId'] = message_group
+        if message_deduplication_id:
+            send_message_kwargs['MessageDeduplicationId'] = message_deduplication_id
+
     response = sqs_queue.send_message(**send_message_kwargs)
     _logger.debug("SQS::send_message response={resp}".format(resp=response))
     return response

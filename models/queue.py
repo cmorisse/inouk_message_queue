@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import base64
+import uuid
 
 import requests
 import slackdown
@@ -28,26 +29,25 @@ QUEUE_TYPES = [
 class IMQQueue(models.Model):
     _name = 'imq.queue'
     _description = "IMQ - Queue"
-    _order= 'name'
-    _sql_constraints = [
-        (
-            'name_queue_uniq', 
-            'UNIQUE(name)', 
-            _("Queue name must be unique among all queue providers.")
-        )
-    ]
+    _order = 'name'
     
     # fields
     name = fields.Char(size=20, index=True, uniq=True, required=True)
-    sqs_name = fields.Char(compute='_compute_sqs_name')
+    sqs_name = fields.Char(compute='_compute_sqs_name', store=True)
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
-    q_type = fields.Selection(QUEUE_TYPES, default='std', required=True)
+    q_type = fields.Selection(QUEUE_TYPES, string="Queue Type", default='std', required=True)
     active = fields.Boolean(default=True)
     region = fields.Char()
     key = fields.Char()
     secret = fields.Char()
     description = fields.Text()
     test_result = fields.Text()
+    test_message_selector = fields.Char(
+        "Message Selector",
+        default="TestMessage",
+        help="Selector is used by IMQ to figure out the processor that will "
+             "process a message."
+    )
     test_message_group = fields.Char(
         "Message Group",
         help="With FIFO Queues, message ordering is warranty for all messages "
@@ -58,6 +58,13 @@ class IMQQueue(models.Model):
         help="On FIFO Queues when 'Content-Based Deduplication' is not set, a "
              "'MessageDeduplicationId' must be passed which each sent message."
     )
+    _sql_constraints = [
+        (
+            'name_queue_uniq', 
+            'UNIQUE(name)', 
+            _("Queue name must be unique among all queue providers.")
+        )
+    ]
 
     slack_team = fields.Char()
     slack_access_token = fields.Char()
@@ -69,7 +76,7 @@ class IMQQueue(models.Model):
     use_odoo_notifications = fields.Boolean()
 
     @api.multi
-    @api.depends('name')
+    @api.depends('name', 'q_type')
     def _compute_sqs_name(self):
         for record in self:
             record.sqs_name = "{}_{}{}".format(
@@ -85,7 +92,6 @@ class IMQQueue(models.Model):
         new_name = chosen_name or _('%s (copy)') % self.name
         default = dict(default or {}, name=new_name)
         return super(IMQQueue, self).copy(default)    
-
 
     # TODO: Move to a mixin and update message.py which share the same code
     @api.multi
@@ -111,6 +117,17 @@ class IMQQueue(models.Model):
         _logger.debug("URL for %s = > %q", self, url_str)
         return url_str
 
+    @api.model
+    def generate_message_group(self, prefix=None, provider='aws_sqs', q_type='fifo'):
+        """ Generate a random 'message_group' compatible with queue provider and type
+        """
+        #if self.provider in ('aws_sqs') and self.q_type in ('fifo'):
+        # 128 chars max for AWS SQS Fifo Queue
+        mgid = str(uuid.uuid4())
+        if prefix:
+            return "%s-%s" % (prefix[:127-len(mgid)], mgid)
+        return mgid
+
     @api.multi
     def btn_send_simple_message(self):
         """ Sends a simple message"""
@@ -118,11 +135,11 @@ class IMQQueue(models.Model):
         result = send_message(
             self.env,
             self.name,
-            "TestMessage",  # Selector
+            self.test_message_selector,  # Selector
             None,  # payload
-            self.test_message_group or None,  # message_group
-            self.test_message_deduplication_id or None,  # message_deduplication_id
-            "This is a test Message name",  # message_name
+            message_group=self.test_message_group or None,
+            message_deduplication_id=self.test_message_deduplication_id or None,
+            message_name="This is a test Message name",  # message_name
         )
         result_str = json.dumps(result, sort_keys=True, indent=4)
         self.test_result = result_str
@@ -188,7 +205,6 @@ class IMQQueue(models.Model):
         r_message = r_message.replace('XXXWARNINGXXX', '<i class="fa fa-exclamation-triangle"></i>')
         r_message = r_message.replace('XXXXXXX', '<i class="fa fa-times-circle"></i>')
         return r_message
-
 
     def send_odoo_notification(self, message=None, raw=None, obj=None):
         """ Send message to Odoo #IMQ channels of all queues in record set. 

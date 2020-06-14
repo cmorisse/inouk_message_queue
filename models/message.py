@@ -165,7 +165,7 @@ class IMQMessage(models.Model):
             sqs_resource = boto3.resource(
                 'sqs',
                 region_name=record.queue_id.region,
-                aws_access_key_id=record.queue_id.key, 
+                aws_access_key_id=record.queue_id.key,
                 aws_secret_access_key=record.queue_id.secret,
             )
         
@@ -185,7 +185,7 @@ class IMQMessage(models.Model):
                 'MessageBody': json.dumps(message_body_values),
                 # We want SQS to wait 10s before IMQ Workers can read this message.
                 # We need this time to commit the message id change.
-                'DelaySeconds': 10,  
+                #'DelaySeconds': 5,  # do not run.
                 'MessageAttributes': {
                     'name': {
                         'DataType': 'String',
@@ -200,7 +200,7 @@ class IMQMessage(models.Model):
             if record.group:
                 send_message_kwargs['MessageGroupId'] = record.group
             response = sqs_queue.send_message(**send_message_kwargs)
-            _logger.debug("response={resp}".format(resp=response))
+            _logger.debug("response=%s", response)
             queue_message_id_history = record.queue_message_id_history or ''
             queue_message_id_history = "%s %s\n" % (
                 datetime.datetime.now(),

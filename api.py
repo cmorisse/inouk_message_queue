@@ -372,18 +372,18 @@ def processor(queue_name='default', processor_visibility_timeout=0):
     if not isinstance(queue_name, str):
         raise Exception("Missing @processor's queue_name mandatory parameter.")
     def real_decorator(decorated_function):
-        def async_task(*args, **kwargs):
+        def run_async(*args, **kwargs):
             kwargs['_imq_queue_name'] = kwargs.get('_imq_queue_name', 
                                                    queue_name)
             kwargs['_imq_processor_visibility_timeout'] = processor_visibility_timeout
             return enqueue(decorated_function, *args, **kwargs)
         def message(*args, **kwargs):
             _logger.warning(".delay() is deprecated use .message() instead.")
-            return async_task(*args, **kwargs)
+            return run_async(*args, **kwargs)
         def delay(*args, **kwargs):
             _logger.warning(".delay() is deprecated use .message() instead.")
-            return async_task(*args, **kwargs)
-        decorated_function.async_task = async_task
+            return run_async(*args, **kwargs)
+        decorated_function.run_async = run_async
         decorated_function.message = message
         decorated_function.delay = delay
         return decorated_function
@@ -403,7 +403,7 @@ def processor_method(queue_name='default', processor_visibility_timeout=0):
         raise Exception("Missing @processor_method's queue_name mandatory "
                         "parameter.")
     def real_method_decorator(decorated_method):
-        def message(*args, **kwargs):
+        def run_async(*args, **kwargs):
             assert args and isinstance(args[0], odoo.models.Model), \
                 _("First parameter of functions decorated with "
                   "@processor_method decorator is mandatory and must always be "
@@ -413,9 +413,13 @@ def processor_method(queue_name='default', processor_visibility_timeout=0):
             kwargs['_imq_processor_visibility_timeout'] = processor_visibility_timeout
             kwargs['_imq_is_method'] = True
             return enqueue(decorated_method, *args, **kwargs)
+        def message(*args, **kwargs):
+            _logger.warning(".delay() is deprecated use .message() instead.")
+            return run_async(*args, **kwargs)
         def delay(*args, **kwargs):
             _logger.warning(".delay() is deprecated use .message() instead.")
-            return message(*args, **kwargs)
+            return run_async(*args, **kwargs)
+        decorated_method.run_async = run_async
         decorated_method.message = message
         decorated_method.delay = delay
         return decorated_method

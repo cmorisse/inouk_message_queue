@@ -68,7 +68,7 @@ class IMQMessageProcessor(models.Model):
     log_format = fields.Char(default="%(asctime)s %(name)s %(levelname)s %(message)s")
     force_visibility_timeout = fields.Boolean(
         string="Force Visibility Timeout",
-        help="When checked, 'visibility_timeout' value is used to control visibility of messages"
+        help="When checked, 'Visibility Timeout' value is used to control visibility of messages "
              "related to this processor. When unchecked, message visibility in defined using AWS "
              "SQS Queue parameters",
         default=False)

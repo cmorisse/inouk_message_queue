@@ -210,7 +210,7 @@ class IMQWorker(models.Model):
                 if message_obj.processor_id.is_method:
                     _logger.debug("Executing 'method'.")
                     returned_value = getattr(
-                        payload['self'], 
+                        payload['self'],
                         msg_processor_obj.function
                     )(*payload['args'], **payload['kwargs'])
 

@@ -1,4 +1,5 @@
-import os, threading
+import os
+import threading
 import sys
 import traceback
 from io import StringIO
@@ -25,7 +26,7 @@ from ..api import unwrap_odoo_model, IMQError, IMQRetryableError, IMQTerminateEx
 from .message_processor import MAX_ATTEMPTS
 
 # Must be equal to cron workers interval_number and interval_type
-IMQ_SLEEP_INTERVAL = 60  
+IMQ_SLEEP_INTERVAL = 50 
 
 
 _logger = logging.getLogger('IMQWorker')
@@ -36,15 +37,12 @@ class IMQWorker(models.Model):
     _name = 'imq.worker'
     _description = "IMQ - Worker"
 
-    def get_message(self, queue_obj):
+    def get_message(self, queue_obj, wait_time=10):
         """Query SQS for next message to process.
 
         :param queue_obj: required openerp.Model of the queue to query.
         :return: a SQS message object 
         """
-
-        _logger.debug("Queue[%s] querying next message to process.", queue_obj.name)
-
         queue_name_prefix = queue_obj.name
 
         sqs_resource = boto3.resource(
@@ -57,18 +55,29 @@ class IMQWorker(models.Model):
         sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_obj.sqs_name)
 
         start_time = datetime.datetime.now()
-        while (datetime.datetime.now() - start_time).seconds < 60:
+        while (datetime.datetime.now() - start_time).seconds < IMQ_SLEEP_INTERVAL:
+            _logger.debug(
+                "[Q=%s,pid=%s,threadid=%s] Querying next message to process (wait_time=%s).",
+                queue_obj.name,
+                os.getpid(),
+                threading.current_thread().ident,
+                wait_time
+            )
             messages = sqs_queue.receive_messages(
                 AttributeNames=['All'],
                 MessageAttributeNames=['All'],
                 MaxNumberOfMessages=1,
-                WaitTimeSeconds=20,
+                WaitTimeSeconds=10,
             )
             if messages:
                 message = messages[0]
-                _logger.info("Queue[%s] got message: %s", 
-                             queue_name_prefix, 
-                             message)
+                _logger.debug(
+                    "[Q=%s,pid=%s,threadid=%s] Got message: %s.",
+                    queue_obj.name,
+                    os.getpid(),
+                    threading.current_thread().ident,
+                    message
+                )
                 return message
         return None
 
@@ -77,18 +86,18 @@ class IMQWorker(models.Model):
         :returns: 'imq.message' model or None
         """
         message_model = self.env['imq.message']
-        
+
         queue_message_id = sqs_message.message_id
         body = jsonpickle.decode(sqs_message.body)
         message_selector = body.get('selector', None)
         message_module = body.get('module_name', None)
         message_function = body.get('function_name', None)
-        user_id = body.get('user_id', 
+        user_id = body.get('user_id',
                            self.env.ref('inouk_message_queue.user_imq').id)
-        
+
         message_attributes = sqs_message.message_attributes or {}
         name = message_attributes.get(
-            'name', 
+            'name',
             {'StringValue':'Undefined'}
         )['StringValue']
         code = message_attributes.get(
@@ -410,27 +419,28 @@ class IMQWorker(models.Model):
         defined in related processor.
         """
         host_name = socket.gethostname()
+        queue_name = queue_name or 'default'
         stopped_workers_nodes = self.env["ir.config_parameter"].sudo().get_param("imq.STOP_WORKERS", "").split(',')
+
         if host_name in stopped_workers_nodes or '*' in stopped_workers_nodes:
-            _logger.info("Leaving process_message_queue(queue_name=%s, worker_name=%s, "
-                         "worker_param=%s) as host_name:%s is present in system "
-                         "parameter 'imq.STOP_WORKERS'.",
-                         queue_name, worker_name, worker_param, host_name)
+            _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] leaving process_message_queue() since host_name:%s is present in system "
+                          "parameter 'imq.STOP_WORKERS'.",
+                          queue_name,
+                          worker_name,
+                          worker_param,
+                          os.getpid(),
+                          threading.current_thread().ident,
+                          host_name)
+
             return
 
-        queue_name = queue_name or 'default'
-        _logger.debug("process_message_queue(queue_name=%s, worker_name=%s, "
-                      "worker_param=%s)",
-                      queue_name, worker_name, worker_param)
-        _logger.debug("    %s-%s pid/thread = %s/%x", 
-                      queue_name, worker_name,
+        _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] Entering process_message_queue() with threading.current_thread().dbname=%s,processing_cursor:%s",
+                      queue_name, 
+                      worker_name,
+                      worker_param,
                       os.getpid(),
-                      threading.current_thread().ident,)
-        _logger.debug("    %s-%s threading.current_thread().dbname=%s", 
-                      queue_name, worker_name,
-                      threading.current_thread().dbname)
-        _logger.debug("    %s-%s Processing cursor: %s", 
-                      queue_name, worker_name, 
+                      threading.current_thread().ident,
+                      threading.current_thread().dbname,
                       self.env.cr)
 
         # retrieve queue or exit
@@ -506,18 +516,37 @@ class IMQWorker(models.Model):
 
             # Store message log modifications
             self.env.cr.commit()
-            _logger.debug("message/cron cursor:%s committed." % self.env.cr)
+            _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] Processing cursor:%s committed.",
+                          queue_name,
+                          worker_name,
+                          worker_param,
+                          os.getpid(),
+                          threading.current_thread().ident,
+                          self.env.cr)
 
             processing_duration = (
                 datetime.datetime.now() - processing_start_timestamp).seconds
-            if processing_duration >= IMQ_SLEEP_INTERVAL:
-                _logger.debug("Queue[%s] process_message_queue() exiting after "
-                              "%ss processing time.",
-                              queue_obj.name,
-                              processing_duration)
-                return
 
-    
+            #if processing_duration >= IMQ_SLEEP_INTERVAL:
+            if True:
+                _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] process_message_queue() exiting after "
+                              "%ss processing time.",
+                              queue_name,
+                              worker_name,
+                              worker_param,
+                              os.getpid(),
+                              threading.current_thread().ident,
+                              processing_duration)
+            return
+
+            _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] processing_duration=%s, looping",
+                          queue_name,
+                          worker_name,
+                          worker_param,
+                          os.getpid(),
+                          threading.current_thread().ident,
+                          processing_duration)
+
     def start_log_capture(
             self, message_obj, processing_obj, log_level=None, 
             log_format="%(asctime)s %(name)s %(levelname)s %(message)s"

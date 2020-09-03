@@ -26,7 +26,7 @@ from ..api import unwrap_odoo_model, IMQError, IMQRetryableError, IMQTerminateEx
 from .message_processor import MAX_ATTEMPTS
 
 # Must be equal to cron workers interval_number and interval_type
-IMQ_SLEEP_INTERVAL = 50 
+IMQ_SLEEP_INTERVAL = 20 
 
 
 _logger = logging.getLogger('IMQWorker')
@@ -527,8 +527,7 @@ class IMQWorker(models.Model):
             processing_duration = (
                 datetime.datetime.now() - processing_start_timestamp).seconds
 
-            #if processing_duration >= IMQ_SLEEP_INTERVAL:
-            if True:
+            if processing_duration >= IMQ_SLEEP_INTERVAL:
                 _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] process_message_queue() exiting after "
                               "%ss processing time.",
                               queue_name,
@@ -537,7 +536,7 @@ class IMQWorker(models.Model):
                               os.getpid(),
                               threading.current_thread().ident,
                               processing_duration)
-            return
+                return
 
             _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] processing_duration=%s, looping",
                           queue_name,

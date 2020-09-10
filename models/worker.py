@@ -528,8 +528,8 @@ class IMQWorker(models.Model):
                 datetime.datetime.now() - processing_start_timestamp).seconds
 
             if processing_duration >= IMQ_SLEEP_INTERVAL:
-                _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] process_message_queue() exiting after "
-                              "%ss processing time.",
+                _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] process_message_queue() exiting"
+                              " after %ss processing time.",
                               queue_name,
                               worker_name,
                               worker_param,

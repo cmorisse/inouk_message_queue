@@ -1,4 +1,3 @@
-# coding: utf-8
 import os
 import sys
 import inspect
@@ -440,7 +439,7 @@ def send_message(env, queue, selector, payload, message_group=None,
         queue_obj = queue
 
     if message_name is None:
-        name = selector
+        message_name = selector
     
     if queue_obj.q_type == 'fifo' and not message_group:
         raise IMQError(

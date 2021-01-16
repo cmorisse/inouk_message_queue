@@ -3,7 +3,7 @@
     <data noupdate="0">
         <record id="inouk_message_queue.partner_imq" model="res.partner" >
             <field name="name">IMQbot</field>
-            <field name="customer" eval="False"/>
+            <!--field name="customer" eval="False"/-->
         </record>
 
         <record id="inouk_message_queue.user_imq" model="res.users">

@@ -1,4 +1,4 @@
-<openerp>
+<odoo>
     <data>
 
         <!-- Tree view -->
@@ -73,9 +73,8 @@
             <field name="name">Launch Test messages</field>
             <field name="res_model">imq.test_launcher</field>
             <field name="view_mode">tree,form</field>
-            <field name="view_type">form</field>
         </record>
     </data>
-</openerp>
+</odoo>
 
 

@@ -18,18 +18,22 @@
                     <group string="Group by...">
                         <filter name="group_by_message_id"
                                 string="Message"
+                                domain="[]"
                                 context="{'group_by': 'message_id'}"
                                 help="Group logs by Message"/>
                         <filter name="group_by_processing_id"
                                 string="Execution"
+                                domain="[]"
                                 context="{'group_by': 'processing_id'}"
                                 help="Group logs by Processing"/>
                         <filter name="group_by_logger_name"
-                                string="Logger name"
+                                string="Logger name" 
+                                domain="[]"
                                 context="{'group_by': 'logger_name'}"
                                 help="Group logs by Logger name"/>
                         <filter name="group_by_log_level"
                                 string="Log level"
+                                domain="[]"
                                 context="{'group_by': 'log_level'}"
                                 help="Group logs by logging log_level."/>
                     </group>
@@ -43,7 +47,7 @@
             <field name="model">imq.message_processing_log</field>
             <field name="priority" eval="15"/>
             <field name="arch" type="xml">
-                <tree colors="teal:log_level=='10';green:log_level=='20';fuchsia:log_level=='30';red:log_level=='40';purple:log_level=='50'">
+                <tree>
                     <field name="create_date"/>
                     <field name="message_id" />
                     <field name="processing_id"/>
@@ -97,7 +101,6 @@
             <field name="name">Logs</field>
             <field name="res_model">imq.message_processing_log</field>
             <field name="view_mode">tree,form</field>
-            <field name="view_type">form</field>
         </record>
     </data>
 

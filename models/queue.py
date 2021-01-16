@@ -75,7 +75,7 @@ class IMQQueue(models.Model):
 
     use_odoo_notifications = fields.Boolean()
 
-    @api.multi
+    
     @api.depends('name', 'q_type')
     def _compute_sqs_name(self):
         for record in self:
@@ -85,7 +85,7 @@ class IMQQueue(models.Model):
                 ".fifo" if record.q_type=='fifo' else ''
             )
 
-    @api.multi
+    
     def copy(self, default=None):
         self.ensure_one()
         chosen_name = default.get('name') if default else ''
@@ -94,12 +94,12 @@ class IMQQueue(models.Model):
         return super(IMQQueue, self).copy(default)    
 
     # TODO: Move to a mixin and update message.py which share the same code
-    @api.multi
+    
     def get_formview_id(self, access_uid=None):
         self.ensure_one()
         return self.env.ref('inouk_message_queue.imq_queue__form_view').id
 
-    @api.multi
+    
     def get_default_action(self, access_uid=None):
         self.ensure_one()
         return self.env.ref('inouk_message_queue.imq_queue__act_window')
@@ -128,7 +128,7 @@ class IMQQueue(models.Model):
             return "%s-%s" % (prefix[:127-len(mgid)], mgid)
         return mgid
 
-    @api.multi
+    
     def btn_send_simple_message(self):
         """ Sends a simple message"""
         self.ensure_one()
@@ -144,7 +144,7 @@ class IMQQueue(models.Model):
         result_str = json.dumps(result, sort_keys=True, indent=4)
         self.test_result = result_str
 
-    @api.multi
+    
     def btn_add_to_slack(self):
         """ Launch Slack oauth."""
         self.ensure_one()
@@ -172,7 +172,7 @@ class IMQQueue(models.Model):
             "target": "self",
         }
 
-    @api.multi
+    
     def btn_test_slack_notifications(self):
         """ Sends a Slack test notifications."""
         self.ensure_one()
@@ -181,7 +181,7 @@ class IMQQueue(models.Model):
         self.send_slack_notification(message)
         return
     
-    @api.multi
+    
     def btn_test_odoo_notifications(self):
         """ Sends an Odoo test notifications."""
         self.ensure_one()
@@ -233,7 +233,7 @@ class IMQQueue(models.Model):
                                          author_id=imqbot_partner_obj.id, 
                                          subtype='mail.mt_comment')
 
-    @api.multi
+    
     def send_slack_notification(self, message, obj=None):
         """ Send message to slack channels of all queues in record set """
         for record in self:
@@ -259,7 +259,7 @@ class IMQQueue(models.Model):
                 )
                 _logger.info("result.text => %s", result.text)
 
-    @api.multi
+    
     def send_notification(self, message, obj=None):
         """ Send message to all 'channels' (slack, sms) of all queues in recordset """
         self.send_slack_notification(message, obj=obj)

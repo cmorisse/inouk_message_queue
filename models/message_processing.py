@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import pickle
 import datetime
-from openerp import models, fields, api
-import openerp
+
+import odoo
+from odoo import models, fields, api
 from odoo.exceptions import UserError
-from openerp.tools.translate import _
+from odoo.tools.translate import _
 
 
 from .message import IMQ_MESSAGE_STATES
@@ -61,7 +62,7 @@ class IMQMessageProcessing(models.Model):
     # statistics
     processing_time = fields.Float(compute='_calc_processing_time', store=True)
 
-    @api.multi
+    
     @api.depends('start_time','end_time')
     def _calc_processing_time(self):
         for record in self:
@@ -72,7 +73,7 @@ class IMQMessageProcessing(models.Model):
             else:
                 record.processing_time = None
 
-    @api.multi
+    
     def refresh(self):
         pass
 

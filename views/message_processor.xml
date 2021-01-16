@@ -1,4 +1,4 @@
-<openerp>
+<odoo>
     <data>
 
         <!--
@@ -108,11 +108,10 @@
             <field name="name">Message Processors</field>
             <field name="res_model">imq.message_processor</field>
             <field name="view_mode">tree,form</field>
-            <field name="view_type">form</field>
             <field name="help">Manage Message processors</field>
         </record>
     </data>
 
-</openerp>
+</odoo>
 
 

@@ -1,4 +1,4 @@
-<openerp>
+<odoo>
     <data>
         <!--
             Message Processing (Statistics)
@@ -22,18 +22,23 @@
                     <group string="Group by...">
                         <filter name="group_by_queue_id"
                                 string="Queue"
+                                domain="[]"
                                 context="{'group_by': 'queue_id'}"/>
                         <filter name="group_by_processor"
                                 string="Processor"
+                                domain="[]"
                                 context="{'group_by': 'processor_id'}"/>
                         <filter name="group_by_message_id"
                                 string="Message"
+                                domain="[]"
                                 context="{'group_by': 'message_id'}"/>
                         <filter name="group_by_state"
                                 string="State"
+                                domain="[]"
                                 context="{'group_by': 'state'}"/>
                         <filter name="group_by_user_id"
                                 string="User"
+                                domain="[]"
                                 context="{'group_by': 'user_id'}"/>
                     </group>
 
@@ -137,10 +142,9 @@
             <field name="name">Messages processings</field>
             <field name="res_model">imq.message_processing</field>
             <field name="view_mode">tree,form</field>
-            <field name="view_type">form</field>
             <field name="help">Review all messages processings</field>
         </record>
     </data>
 
-</openerp>
+</odoo>
 

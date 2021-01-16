@@ -110,12 +110,10 @@ class IMQMessage(models.Model):
     ]
 
     # TODO: Move to a mixin and update queue.py which share the same code
-    @api.multi
     def get_formview_id(self, access_uid=None):
         self.ensure_one()
         return self.env.ref('inouk_message_queue.imq_message__form_view').id
 
-    @api.multi
     def get_default_action(self, access_uid=None):
         self.ensure_one()
         return self.env.ref('inouk_message_queue.imq_message__act_window')
@@ -133,7 +131,6 @@ class IMQMessage(models.Model):
         _logger.debug("get_form_url(%s) => %s", self,  url_str)
         return url_str
 
-    @api.multi
     def set_work_progress(self, current=None, target=None):
         if not current and not target:
             return
@@ -145,19 +142,16 @@ class IMQMessage(models.Model):
         self.write(values)
         self.env.cr.commit()
         return
-
-    @api.multi
+    
     @api.depends('attempt','max_number_of_attempts')
     def _calc_attempt_vs_max_as_text(self):
         for record in self:
             record.attempt_as_text = "%s / %s" % (record.attempt, 
                                                   record.max_number_of_attempts)
-
-    @api.multi
+    
     def refresh(self):
         pass
-
-    @api.multi
+    
     def do_retry_processing(self):
         for record in self:
             if record.state == 'new':
@@ -214,12 +208,10 @@ class IMQMessage(models.Model):
                 update_dict['queue_message_id'] = response['MessageId']
             record.write(update_dict)
         return        
-
-    @api.multi
+    
     def do_archive(self):
         self.write({'state': 'archived'})
-
-    @api.multi
+    
     def create_processing_object(self):
         self.ensure_one()
         new_processing_obj = self.env['imq.message_processing'].sudo().create({

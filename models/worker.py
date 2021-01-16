@@ -17,9 +17,9 @@ import psycopg2
 import time
 import boto3
 
-import openerp
-from openerp import _, api, fields, models
-from openerp.api import Environment
+import odoo
+from odoo import _, api, fields, models
+from odoo.api import Environment
 from odoo.exceptions import MissingError, UserError
 #from odoo.addons.inouk_message_queue.api import unwrap_odoo_model
 from ..api import unwrap_odoo_model, IMQError, IMQRetryableError, IMQTerminateException
@@ -36,6 +36,8 @@ class IMQWorker(models.Model):
     """Processes messages in imq.queue"""
     _name = 'imq.worker'
     _description = "IMQ - Worker"
+    
+    __logger = None
 
     def get_message(self, queue_obj, wait_time=10):
         """Query SQS for next message to process.
@@ -563,15 +565,15 @@ class IMQWorker(models.Model):
         :return: nothing
         """
         logger_name = "IMQ_message_%s" % message_obj.id
-        self.logger = logging.getLogger(logger_name)
+        self.__logger = logging.getLogger(logger_name)
         if log_level:
-            self.logger.setLevel(int(log_level))
+            self.__logger.setLevel(int(log_level))
 
         self.log_handler = IMQLogHandler(message_obj, processing_obj)
 
         formatter = logging.Formatter(log_format)
         self.log_handler.setFormatter(formatter)
-        self.logger.addHandler(self.log_handler)
+        self.__logger.addHandler(self.log_handler)
 
     def stop_log_capture(self):
         """ Stop capturing log output.

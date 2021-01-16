@@ -51,7 +51,7 @@ class IMQTestLauncher(models.Model):
     processing_duration_s = fields.Integer("Task Duration in seconds")
     param = fields.Char()
 
-    @api.multi
+    
     def launch(self):
         """ Launchs a task straight or asynchonously depending on debug_mode """
         self.ensure_one()
@@ -60,7 +60,7 @@ class IMQTestLauncher(models.Model):
         else:
             self.launch_result = a_task.message(self, self.param)
 
-    @api.multi
+    
     def send_simple_message(self):
         """ Sends a simple message"""
         self.ensure_one()

@@ -42,8 +42,14 @@ class IMQMessageProcessor(models.Model):
     name = fields.Char(compute='_calc_name', store=True, readonly=True)
     type = fields.Selection(IMQ_MESSAGE_PROCESSOR_TYPES, required=True)
     selector = fields.Char(help="Message selector for 'simple' message")
-    module = fields.Char(help="Name of module that contains the function.")
-    function = fields.Char(help="Name of function called by processor.")
+    module = fields.Char(
+        help="Name of module that contains the function. Eg. for Simple message"
+             "test you can use builtin"
+             "odoo.addons.inouk_message_queue.models.test_launcher"
+    )
+    function = fields.Char(
+        help="Name of function called by processor. Eg. SimpleMessage_processor"
+    )
     max_attempt = fields.Integer(default=MAX_ATTEMPTS)
     is_method = fields.Boolean(default=False,
                                help="Checked if function is a method, unchecked if it is"

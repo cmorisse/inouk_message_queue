@@ -84,8 +84,15 @@ def a_task(an_object, a_param, _imq_logger=None):
     f_logger = _imq_logger or _logger
 
     # This is a time consuming task ...
-    f_logger.info("a_task sleeping for %ss", an_object.processing_duration_s)
-    time.sleep(an_object.processing_duration_s)
+
+    f_logger.info(
+        "Test: %s will work for for %ss", 
+        an_object.name, 
+        an_object.processing_duration_s
+    )
+    for i in range(an_object.processing_duration_s):
+        f_logger.info("   %s iteration # %s", an_object.name, i)
+        time.sleep(1)
 
     print("Processing atask with param=%s" % an_object.param)
     f_logger.debug("Processing atask with param=%s", an_object.param)
@@ -111,14 +118,23 @@ def a_task(an_object, a_param, _imq_logger=None):
     return an_object.process_result  # is stored in queue
 
 
-def simple_processor(env, payload, _imq_logger=None):
+def SimpleMessage_processor(env, payload, _imq_logger=None):
+    """ Example simple message processor. 
+    Simple message processor are pure functions (not methods).
+    :param env: an Odoo api.Environment
+    :param payload: Optional dict sent by message sender
+    :param _imq_logger: logger supplied by IMQ. whose output is captured.
+    """
     f_logger = _imq_logger or _logger
-
+    if payload is None:
+        payload = {}
     f_logger.info("Hello")
     f_logger.info("payload=%s", payload)
     f_logger.debug("And with DEBUG level => payload=%s", payload)
-
+    time.sleep(5)
     if payload.get("should_raise_error"):
         raise UserError("Error raised during simple message processing")
 
     return "processor returned string"  # is stored in queue
+
+

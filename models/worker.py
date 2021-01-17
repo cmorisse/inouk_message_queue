@@ -25,14 +25,16 @@ from odoo.exceptions import MissingError, UserError
 from ..api import unwrap_odoo_model, IMQError, IMQRetryableError, IMQTerminateException
 from .message_processor import MAX_ATTEMPTS
 
+
 # Must be equal to cron workers interval_number and interval_type
 IMQ_SLEEP_INTERVAL = 20 
+TLS = threading.local()
 
 
 _logger = logging.getLogger('IMQWorker')
 
 
-class IMQWorker(models.Model):
+class IMQWorker(models.AbstractModel):
     """Processes messages in imq.queue"""
     _name = 'imq.worker'
     _description = "IMQ - Worker"
@@ -214,9 +216,9 @@ class IMQWorker(models.Model):
                 )
 
                 if message_obj.logging_activated and msg_processor_obj.capture_log:
-                    payload['kwargs']['_imq_logger'] = self.logger
+                    payload['kwargs']['_imq_logger'] = TLS._logger
                 if message_obj.capture_console:
-                    payload['kwargs']['_imq_stream'] = self._imq_stream
+                    payload['kwargs']['_imq_stream'] = TLS._imq_stream
 
                 if message_obj.processor_id.is_method:
                     _logger.debug("Executing 'method'.")
@@ -231,6 +233,7 @@ class IMQWorker(models.Model):
                         message_obj.processor_id.module, 
                         package=None
                     )
+                    message_obj.flush()
                     returned_value = getattr(
                         function_module, 
                         message_obj.processor_id.function
@@ -244,8 +247,11 @@ class IMQWorker(models.Model):
                         package=None
                     )
                     kwargs = {
-                        '_imq_logger': self.logger
+                        '_imq_logger': TLS._logger
                     }
+                    if message_obj.capture_console:
+                        payload['kwargs']['_imq_stream'] = TLS._imq_stream                    
+                    message_obj.flush()
                     returned_value = getattr(
                         function_module, 
                         msg_processor_obj.function
@@ -261,12 +267,14 @@ class IMQWorker(models.Model):
             duration_str = strfdelta(end_timestamp-start_timestamp, "{minutes}min{seconds}s")
             _logger.debug("message %s processed (duration=%s).", sqs_message.message_id, 
                           duration_str)
-            if run_env.has_todo():
-                run_env.recompute()
-            sqs_message.delete()  # Delete message from Cloud Queue
+
             run_cursor.commit()
-            state = 'done'
             _logger.debug("run_cursor:%s committed.", run_cursor)
+
+            message_obj.invalidate_cache()
+
+            sqs_message.delete()  # Delete message from Cloud Queue
+            state = 'done'
 
             if msg_processor_obj.notify_message_processing_end:
                 message_obj.queue_id.send_notification(
@@ -345,11 +353,7 @@ class IMQWorker(models.Model):
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
 
-        except (
-                psycopg2.errors.InFailedSqlTransaction,
-                psycopg2.errors.SerializationFailure,
-                psycopg2.OperationalError
-            ) as imq_rerr:
+        except (psycopg2.OperationalError) as imq_rerr:
             raised = imq_rerr
             exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
             returned_value = traceback.format_exception(exc_type, 
@@ -565,32 +569,32 @@ class IMQWorker(models.Model):
         :return: nothing
         """
         logger_name = "IMQ_message_%s" % message_obj.id
-        self.__logger = logging.getLogger(logger_name)
+        TLS._logger = logging.getLogger(logger_name)
         if log_level:
-            self.__logger.setLevel(int(log_level))
+            TLS._logger.setLevel(int(log_level))
 
-        self.log_handler = IMQLogHandler(message_obj, processing_obj)
+        TLS._log_handler = IMQLogHandler(message_obj, processing_obj)
 
         formatter = logging.Formatter(log_format)
-        self.log_handler.setFormatter(formatter)
-        self.__logger.addHandler(self.log_handler)
+        TLS._log_handler.setFormatter(formatter)
+        TLS._logger.addHandler(TLS._log_handler)
 
     def stop_log_capture(self):
         """ Stop capturing log output.
         """
-        self.log_handler.flush()
+        TLS._log_handler.flush()
 
     def start_stream_capture(self, message_obj, processing_obj):
         """Start capturing log output to a string buffer.
         :return: nothing
         """
-        self._imq_stream = MpyStringIO(message_obj, processing_obj)
+        TLS._imq_stream = MpyStringIO(message_obj, processing_obj)
 
     def stop_stream_capture(self):
         """ Stop capturing streams output.
         """
-        self._imq_stream.stop_capture()
-        self._imq_stream = None
+        TLS._imq_stream.stop_capture()
+        TLS._imq_stream = None
 
 
 class IMQLogHandler(logging.Handler):

@@ -32,7 +32,7 @@ class IMQQueue(models.Model):
     _order = 'name'
     
     # fields
-    name = fields.Char(size=20, index=True, uniq=True, required=True)
+    name = fields.Char(size=20, index=True, required=True)
     sqs_name = fields.Char(compute='_compute_sqs_name', store=True)
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
     q_type = fields.Selection(QUEUE_TYPES, string="Queue Type", default='std', required=True)

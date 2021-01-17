@@ -137,7 +137,7 @@ def find_or_create_queue(env, queue_name):
     queue_obj = env['imq.queue']
     queue = queue_obj.search([('name', '=', queue_name)])
     if not queue:
-        return queue_obj.sudo(env.ref('inouk_message_queue.user_imq')).create({
+        return queue_obj.with_user(env.ref('inouk_message_queue.user_imq')).create({
             'name': queue_name,
             'log_level': '20',
         })
@@ -161,7 +161,7 @@ def find_or_create_processor(caller_env, function_name, module_name, is_method=F
                 ('function', '=', function_name),
             ])
             if not processor_obj:
-                processor_obj = processor_model.sudo(USER_IMQ_ID).create({
+                processor_obj = processor_model.with_user(USER_IMQ_ID).create({
                     'type': 'rpc',
                     'module': module_name,
                     'function': function_name,
@@ -377,10 +377,10 @@ def processor(queue_name='default', processor_visibility_timeout=0):
             kwargs['_imq_processor_visibility_timeout'] = processor_visibility_timeout
             return enqueue(decorated_function, *args, **kwargs)
         def message(*args, **kwargs):
-            _logger.warning(".delay() is deprecated use .message() instead.")
+            _logger.warning(".message() is deprecated use .run_async() instead.")
             return run_async(*args, **kwargs)
         def delay(*args, **kwargs):
-            _logger.warning(".delay() is deprecated use .message() instead.")
+            _logger.warning(".delay() is deprecated use .run_async() instead.")
             return run_async(*args, **kwargs)
         decorated_function.run_async = run_async
         decorated_function.message = message
@@ -413,10 +413,10 @@ def processor_method(queue_name='default', processor_visibility_timeout=0):
             kwargs['_imq_is_method'] = True
             return enqueue(decorated_method, *args, **kwargs)
         def message(*args, **kwargs):
-            _logger.warning(".delay() is deprecated use .message() instead.")
+            _logger.warning(".message() is deprecated use .run_async() instead.")
             return run_async(*args, **kwargs)
         def delay(*args, **kwargs):
-            _logger.warning(".delay() is deprecated use .message() instead.")
+            _logger.warning(".delay() is deprecated use .run_async() instead.")
             return run_async(*args, **kwargs)
         decorated_method.run_async = run_async
         decorated_method.message = message

@@ -27,7 +27,7 @@ from .message_processor import MAX_ATTEMPTS
 
 
 # Must be equal to cron workers interval_number and interval_type
-IMQ_SLEEP_INTERVAL = 20 
+IMQ_SLEEP_INTERVAL = 10 
 TLS = threading.local()
 
 
@@ -437,7 +437,6 @@ class IMQWorker(models.AbstractModel):
                           os.getpid(),
                           threading.current_thread().ident,
                           host_name)
-
             return
 
         _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] Entering process_message_queue() with threading.current_thread().dbname=%s,processing_cursor:%s",

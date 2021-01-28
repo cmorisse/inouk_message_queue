@@ -123,7 +123,6 @@ def extract_message_name(processor, args, kwargs):
 
     return "Un-named Processor"
 
-
 def find_or_create_queue(env, queue_name):
     """Find or create an imq.queue from name.
     :param env: an ORM environment
@@ -167,6 +166,7 @@ def find_or_create_processor(caller_env, function_name, module_name, is_method=F
                     'function': function_name,
                     'is_method': is_method,
                     'logging_activated': logging_activated,
+                    'force_visibility_timeout': processor_visibility_timeout > 0,
                     'visibility_timeout': processor_visibility_timeout
                 })
                 if not processor_obj:

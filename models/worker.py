@@ -27,7 +27,7 @@ from .message_processor import MAX_ATTEMPTS
 
 
 # Must be equal to cron workers interval_number and interval_type
-IMQ_SLEEP_INTERVAL = 10 
+IMQ_SLEEP_INTERVAL = 20 
 TLS = threading.local()
 
 

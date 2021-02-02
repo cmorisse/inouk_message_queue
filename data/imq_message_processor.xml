@@ -1,0 +1,14 @@
+<?xml version="1.0" ?>
+<odoo>
+    <data noupdate="0">
+        <record id="imq_processor_testmessage" model="imq.message_processor">
+            <field name="name">TestMessage</field>
+            <field name="type">simple</field>
+            <field name="selector">TestMessage</field>
+            <field name="module">odoo.addons.inouk_message_queue.models.test_launcher</field>
+            <field name="function">SimpleMessage_processor</field>
+            <field name="logging_activated" eval="True" />
+            <field name="capture_log" eval="True" />
+        </record>
+    </data>
+</odoo>

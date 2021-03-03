@@ -13,6 +13,8 @@ import odoo
 from odoo.exceptions import except_orm
 from odoo.tools.translate import _
 
+import boto3
+
 from ..api import send_message
 
 _logger = logging.getLogger('IMQ.queue')
@@ -264,4 +266,28 @@ class IMQQueue(models.Model):
         """ Send message to all 'channels' (slack, sms) of all queues in recordset """
         self.send_slack_notification(message, obj=obj)
         self.send_odoo_notification(message, obj=obj)
-            
+    
+    def aws_sqs__create_queue(self):
+        self.ensure_one()
+        sqs_resource = boto3.resource(
+            'sqs',
+            region_name=self.region,
+            aws_access_key_id=self.key,
+            aws_secret_access_key=self.secret
+        )        
+        q_attr_dict = {
+            "DelaySeconds": "1",
+            "ReceiveMessageWaitTimeSeconds": "20",
+        }
+
+        if self.q_type=='fifo':
+            q_attr_dict.update({
+                "FifoQueue": "true",
+                "ContentBasedDeduplication": "true"
+            })
+
+        q_obj = sqs_resource.create_queue(
+            QueueName=self.sqs_name,
+            Attributes=q_attr_dict
+        )
+        self.test_result = q_obj

@@ -38,7 +38,10 @@ class IMQQueue(models.Model):
     sqs_name = fields.Char(compute='_compute_sqs_name', store=True)
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
     q_type = fields.Selection(QUEUE_TYPES, string="Queue Type", default='std', required=True)
-    active = fields.Boolean(default=True)
+    active = fields.Boolean(
+        default=True,
+        help="Inactive queues are not processed by workers."
+    )
     region = fields.Char()
     key = fields.Char()
     secret = fields.Char()

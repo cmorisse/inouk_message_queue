@@ -142,18 +142,22 @@ def find_or_create_queue(env, queue_name):
         })
     return queue
 
-def find_or_create_processor(caller_env, function_name, module_name, is_method=False, 
+def find_or_create_processor(caller_env:api.Environment, function_name, module_name, is_method=False, 
                              logging_activated=False, processor_visibility_timeout=0):
     """Find or create an imq.message_processor from module and python function 
     names (for messages of type 'rpc')
+
     :return: an imq.message_processor or raise an Error
     """
     USER_IMQ_ID = caller_env.ref('inouk_message_queue.user_imq').id
     try:
-        with caller_env.registry.cursor() as cr:
-            #env = api.Environment(cr, SUPERUSER_ID, {})
-            env = api.Environment(cr, USER_IMQ_ID, {})
-            processor_model = env['imq.message_processor']                    
+        # With v13 we are now longer able to use a new environment 
+        # as old one content is reset.
+        #with api.Environment.manage(), caller_env.registry.cursor() as cr:
+            #new_env = api.Environment(cr, USER_IMQ_ID, {})
+        #with caller_env.registry.cursor() as new_cr:
+                        
+            processor_model = caller_env['imq.message_processor']                    
             processor_obj = processor_model.search([
                 ('type', '=', 'rpc'),
                 ('module', '=', module_name),

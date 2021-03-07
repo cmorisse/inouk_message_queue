@@ -201,7 +201,18 @@ class IMQWorker(models.AbstractModel):
         start_timestamp = datetime.datetime.now()
         raised = None
         try:
-            # create an environment dedicated to function execution
+            # create a new environment dedicated to function execution
+            # So we gather all information stored in messageenv
+            _uid = message_obj.user_id.id
+            _message_type = message_obj.message_type
+            _payload = message_obj.payload
+            _logging_activated = message_obj.logging_activated
+            _capture_console = message_obj.capture_console
+            _capture_log = msg_processor_obj.capture_log
+            _is_method = msg_processor_obj.is_method
+            _module = msg_processor_obj.module
+            _function = msg_processor_obj.function
+            
             run_cursor = self.env.registry.cursor()
             _logger.debug("run_cursor: %s created.", run_cursor)
             run_env = Environment(run_cursor,
@@ -220,7 +231,7 @@ class IMQWorker(models.AbstractModel):
                 if message_obj.capture_console:
                     payload['kwargs']['_imq_stream'] = TLS._imq_stream
 
-                if message_obj.processor_id.is_method:
+                if msg_processor_obj.is_method:
                     _logger.debug("Executing 'method'.")
                     returned_value = getattr(
                         payload['self'],
@@ -236,14 +247,14 @@ class IMQWorker(models.AbstractModel):
                     message_obj.flush()
                     returned_value = getattr(
                         function_module, 
-                        message_obj.processor_id.function
+                        msg_processor_obj.function
                     )(*payload['args'], **payload['kwargs'])
 
             else:  # message_type == 'simple'
-                if(msg_processor_obj.module and message_obj.processor_id.function):
+                if(msg_processor_obj.module and msg_processor_obj.function):
                     payload = json.loads(message_obj.payload)
                     function_module = importlib.import_module(
-                        message_obj.processor_id.module, 
+                        msg_processor_obj.module, 
                         package=None
                     )
                     kwargs = {
@@ -587,12 +598,20 @@ class IMQWorker(models.AbstractModel):
         """Start capturing log output to a string buffer.
         :return: nothing
         """
-        TLS._imq_stream = MpyStringIO(message_obj, processing_obj)
+        TLS.log_cursor = self.env.registry.cursor()
+        TLS.log_cursor.autocommit(True)
+        TLS._imq_stream = MpyStringIO(
+            message_obj.id, 
+            processing_obj.id, 
+            message_obj.user_id.id,
+            TLS.log_cursor
+        )
 
     def stop_stream_capture(self):
         """ Stop capturing streams output.
         """
         TLS._imq_stream.stop_capture()
+        TLS.log_cursor.close()
         TLS._imq_stream = None
 
 
@@ -626,13 +645,12 @@ class IMQLogHandler(logging.Handler):
 
 
 class MpyStringIO(StringIO):
-
-    def __init__(self, message_obj, processing_obj):
-        _logger.info("MpyStringIO(%s, %s)", message_obj, processing_obj)
-        self._env = message_obj.env
-        self._message_id = message_obj.id
-        self._processing_id = processing_obj.id
-        self._log_model = message_obj.env['imq.message_processing_log']
+    def __init__(self, message_id, processing_id, uid, log_cr):
+        _logger.info("MpyStringIO(%s, %s, %s, %s)", message_id, processing_id, uid, log_cr)
+        self._message_id = message_id
+        self._processing_id = processing_id
+        self._log_cr = log_cr
+        self._uid = uid
         self._mpy_buffer = ''
         super(MpyStringIO, self).__init__()
         
@@ -649,15 +667,33 @@ class MpyStringIO(StringIO):
             new_buffer = s
             output_str = ''
 
-        self._log_model.create({
-            'message_id': self._message_id,
-            'active_message_id': self._message_id,
-            'processing_id': self._processing_id,
-            'logger_name': "Console",
-            'log_level': None,
-            'log_message': "%s%s" % (self._mpy_buffer, output_str)
-        })
-        self._env.cr.commit()
+        # self._log_model.create({
+        #     'message_id': self._message_id,
+        #     'active_message_id': self._message_id,
+        #     'processing_id': self._processing_id,
+        #     'logger_name': "Console",
+        #     'log_level': None,
+        #     'log_message': "%s%s" % (self._mpy_buffer, output_str)
+        # })
+        _now = datetime.datetime.now()
+        self._log_cr.execute(
+            """INSERT INTO imq_message_processing_log ( 
+                    processing_id, message_id, active_message_id, logger_name, log_level, log_message, 
+                    create_uid, create_date, write_uid, write_date
+                ) VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s );""",
+                (
+                    self._processing_id,
+                    self._message_id,
+                    self._message_id,
+                    "Console",
+                    None,
+                    "%s%s" % (self._mpy_buffer, output_str),
+                    self._uid,
+                    _now,
+                    self._uid,
+                    _now,
+                )
+        )
         #print(">>>>>>>>>>>>>>>>>>>>>>>>")
         #print("%s%s" % (self._mpy_buffer, output_str))
         #print("<<<<<<<<<<<<<<<<<<<<<<<<")
@@ -666,14 +702,33 @@ class MpyStringIO(StringIO):
     def stop_capture(self):
         self.flush()
         if self._mpy_buffer:
-            self._log_model.sudo().create({
-                'message_id': self._message_id,
-                'active_message_id': self._message_id,
-                'processing_id': self._processing_id,
-                'logger_name': "Console",
-                'log_level': None,
-                'log_message': "%s" % (self._mpy_buffer)
-            })
-            self._env.cr.commit()
+            # self._log_model.sudo().create({
+            #     'message_id': self._message_id,
+            #     'active_message_id': self._message_id,
+            #     'processing_id': self._processing_id,
+            #     'logger_name': "Console",
+            #     'log_level': None,
+            #     'log_message': "%s" % (self._mpy_buffer)
+            # })
+            # self._env.cr.commit()
+            _now = datetime.datetime.now()
+            self._log_cr.execute(
+                """INSERT INTO imq_message_processing_log ( 
+                        processing_id, message_id, active_message_id, logger_name, log_level, log_message, 
+                        create_uid, create_date, write_uid, write_date
+                    ) VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s );""",
+                    (
+                        self._processing_id,
+                        self._message_id,
+                        self._message_id,
+                        "Console",
+                        None,
+                        "%s" % (self._mpy_buffer),
+                        self._uid,
+                        _now,
+                        self._uid,
+                        _now,
+                    )
+            )
         self._mpy_buffer = None
 

@@ -8,10 +8,11 @@ import uuid
 import requests
 import slackdown
 
-from odoo import models, fields, api
 import odoo
+from odoo import models, fields, api
 from odoo.exceptions import except_orm
 from odoo.tools.translate import _
+from odoo.tools.safe_eval import safe_eval
 
 import boto3
 
@@ -34,10 +35,22 @@ class IMQQueue(models.Model):
     _order = 'name'
     
     # fields
-    name = fields.Char(size=20, index=True, required=True)
-    sqs_name = fields.Char(compute='_compute_sqs_name', store=True)
-    provider = fields.Selection(QUEUE_PROVIDERS, required=True)
+    name = fields.Char(size=40, index=True, required=True)
+    sqs_name = fields.Char(compute='compute__sqs_name', store=True)
     q_type = fields.Selection(QUEUE_TYPES, string="Queue Type", default='std', required=True)
+    database_bound_q = fields.Boolean("Database Bound Queue", default=True)
+
+    @api.depends('name', 'q_type', 'database_bound_q')
+    def compute__sqs_name(self):
+        for record in self:
+            record.sqs_name = "{}{}{}".format(
+                record.name,
+                '_%s' % record.env.cr.dbname if record.database_bound_q else '',
+                ".fifo" if record.q_type=='fifo' else ''
+            )
+
+
+    provider = fields.Selection(QUEUE_PROVIDERS, required=True)
     active = fields.Boolean(
         default=True,
         help="Inactive queues are not processed by workers."
@@ -46,6 +59,7 @@ class IMQQueue(models.Model):
     key = fields.Char()
     secret = fields.Char()
     description = fields.Text()
+    test_payload = fields.Text()
     test_result = fields.Text()
     test_message_selector = fields.Char(
         "Message Selector",
@@ -81,14 +95,6 @@ class IMQQueue(models.Model):
     use_odoo_notifications = fields.Boolean()
 
     
-    @api.depends('name', 'q_type')
-    def _compute_sqs_name(self):
-        for record in self:
-            record.sqs_name = "{}_{}{}".format(
-                record.name,
-                record.env.cr.dbname,
-                ".fifo" if record.q_type=='fifo' else ''
-            )
 
     
     def copy(self, default=None):
@@ -137,11 +143,12 @@ class IMQQueue(models.Model):
     def btn_send_simple_message(self):
         """ Sends a simple message"""
         self.ensure_one()
+        _payload = safe_eval(self.test_payload or '{}')
         result = send_message(
             self.env,
             self.name,
             self.test_message_selector,  # Selector
-            None,  # payload
+            _payload,  # payload
             message_group=self.test_message_group or None,
             message_deduplication_id=self.test_message_deduplication_id or None,
             message_name="This is a test Message name",  # message_name
@@ -236,6 +243,7 @@ class IMQQueue(models.Model):
                 channel_obj = self.env.ref('inouk_message_queue.imq_mail_channel')
                 channel_obj.message_post(body=body_html, 
                                          author_id=imqbot_partner_obj.id, 
+                                         message_type='notification',
                                          subtype='mail.mt_comment')
 
     

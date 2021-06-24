@@ -1,10 +1,8 @@
 <odoo>
     <data>
-        
         <!--
             Queue
         -->
-        
         <record id="imq_queue__form_view" model="ir.ui.view">
             <field name="name">imq.queue.form.view</field>
             <field name="model">imq.queue</field>
@@ -29,19 +27,19 @@
                         <div class="oe_title">
                             <h1><field name="name"/></h1>
                             <div class="o_row">
-                                <field name="sqs_name" 
-                                       readonly="1"  />
+                                <field name="sqs_name" readonly="1" force_save="1" />
                             </div>
                             
                         </div>
                         <group>
-                            <group>
+                            <group class="ik_lw190">
                                 <field name="provider" />
                                 <field name="q_type" />
                                 <field name="region"  />
                             </group>
-                            <group>
+                            <group class="ik_lw190">
                                 <field name="active" widget="boolean_toggle" />
+                                <field name="database_bound_q" widget="boolean_toggle" />
                                 <field name="key" />
                                 <field name="secret" password="True" />
                             </group>
@@ -57,6 +55,7 @@
                                     <newline/>
                                     <field name="test_message_group" />
                                     <field name="test_message_deduplication_id" />
+                                    <field name="test_payload" widget="ace" options="{'mode': 'python'}" colspan="4" />
                                     <button type="object" name="btn_send_simple_message" string="Send Simple Message" class="oe_highlight" colspan="2" />
                                     <label for="test_result" string="Test Result:" colspan="4" />
                                     <field name="test_result" colspan="4" widget="ace" options="{'mode': 'python'}" nolabel="1" />

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import datetime
 import jsonpickle
 import logging
@@ -97,6 +96,12 @@ class IMQMessageProcessor(models.Model):
             _("Processor must be unique !")
         )
     ]    
+    def copy(self, default=None):
+        self.ensure_one()
+        old_selector = default.get('selector') if default else ''
+        new_selector = old_selector or _('%s_copy') % self.selector
+        default = dict(default or {}, selector=new_selector)
+        return super().copy(default)    
 
     @api.model
     def upsert_processor_from_message(self, sqs_message):

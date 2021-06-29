@@ -36,7 +36,7 @@ class IMQQueue(models.Model):
     
     # fields
     name = fields.Char(size=40, index=True, required=True)
-    sqs_name = fields.Char("SQS Name", compute='_compute_sqs_name', store=True)
+    sqs_name = fields.Char("SQS Name", compute='compute_sqs_name', store=True)
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
     q_type = fields.Selection(QUEUE_TYPES, string="Queue Type", default='std', required=True)
     database_bound_q = fields.Boolean("Database Bound Queue", default=True)

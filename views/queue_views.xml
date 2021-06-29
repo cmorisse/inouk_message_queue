@@ -51,6 +51,7 @@
                             </page>
                             <page string="Test" >
                                 <group col="4" colspan="4" class="ik_lw200" >
+                                    <field name="test_message_name" />
                                     <field name="test_message_selector" />
                                     <newline/>
                                     <field name="test_message_group" />

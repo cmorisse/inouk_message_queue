@@ -50,7 +50,6 @@ class IMQQueue(models.Model):
                 ".fifo" if record.q_type=='fifo' else ''
             )
 
-
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
     active = fields.Boolean(
         default=True,
@@ -60,6 +59,8 @@ class IMQQueue(models.Model):
     key = fields.Char()
     secret = fields.Char()
     description = fields.Text()
+
+    test_message_name = fields.Char(default="Test Message Name")
     test_payload = fields.Text()
     test_result = fields.Text()
     test_message_selector = fields.Char(
@@ -95,9 +96,6 @@ class IMQQueue(models.Model):
 
     use_odoo_notifications = fields.Boolean()
 
-    
-
-    
     def copy(self, default=None):
         self.ensure_one()
         chosen_name = default.get('name') if default else ''

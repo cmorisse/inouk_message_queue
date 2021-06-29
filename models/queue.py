@@ -42,7 +42,7 @@ class IMQQueue(models.Model):
     database_bound_q = fields.Boolean("Database Bound Queue", default=True)
 
     @api.depends('name', 'q_type', 'database_bound_q')
-    def compute__sqs_name(self):
+    def compute_sqs_name(self):
         for record in self:
             record.sqs_name = "{}{}{}".format(
                 record.name,

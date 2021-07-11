@@ -125,7 +125,7 @@
                 <tree decoration-muted="(not active)" >
                     <field name="name"/>
                     <field name="provider"/>
-                    <field name="database_bound_q" string="Bound?" obin/st  ptional="show" />
+                    <field name="database_bound_q" string="Bound?" optional="show" />
                     <field name="sqs_name" />
                     <field name="description"/>
                     <field name="active" />

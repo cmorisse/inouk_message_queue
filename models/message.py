@@ -244,11 +244,11 @@ class IMQMessage(models.Model):
         return new_processing_obj
 
     @api.model
-    def purge_message_history(self):
-        """ Purge messages a batch of x messages older that y hours
-        With:
-            - x is defined by system parameter: imq.MESSAGE_PURGE_BATCH_SIZE or 2000 by default.
-            - y is defined by system parameter: imq.MESSAGE_PURGE_OLDER_THAN_HOURS or 72 by default     
+    def purge_messages_history(self):
+        """ Purge imq.messages based on the the system parameter 'imq.messages_retention_period_in_hours'
+        When imq.messages_retention_period_in_hours is undefined, a default value of 720 hours (30 days) 
+        is used.
+        Purge is deactivated if system parameter imq.STOP_MESSAGES_PURGE exists.
         """
         icp_model = self.env["ir.config_parameter"].sudo()
         STOP_MESSAGES_PURGE = icp_model.get_param("imq.STOP_MESSAGES_PURGE", None)
@@ -256,31 +256,26 @@ class IMQMessage(models.Model):
             _logger.info("Messages Purge deactivated. System parameter imq.STOP_MESSAGES_PURGE is defined.")
             return
         
-        MESSAGE_PURGE_BATCH_SIZE = int(
-            icp_model.get_param("imq.MESSAGE_PURGE_BATCH_SIZE", '2000')
-        )        
-        MESSAGE_PURGE_OLDER_THAN_HOURS = int(
-            icp_model.get_param("imq.MESSAGE_PURGE_OLDER_THAN_HOURS", '72')
+        MESSAGES_RETENTION_PERIOD_IN_HOURS = int(
+            icp_model.get_param("imq.messages_retention_period_in_hours", '720')
         )        
         PURGE_QUERY = """
-DELETE FROM imq_message WHERE id IN (
-    SELECT id
-    FROM imq_message AS im
-    WHERE im.end_time < (NOW() - INTERVAL '%s hours')
-    AND state NOT IN ('failed', 'retry', 'reset', 'wip', 'archived')
-    LIMIT %s
-);""" % (MESSAGE_PURGE_OLDER_THAN_HOURS, MESSAGE_PURGE_BATCH_SIZE,)
+DELETE FROM imq_message 
+WHERE 
+    end_time < (NOW() - INTERVAL '%s hours')
+AND state NOT IN ('failed', 'retry', 'reset', 'wip', 'archived');""" % (
+    MESSAGES_RETENTION_PERIOD_IN_HOURS,
+)
 
-        _logger.info("Starting to delete %s messages older than %s hours",
-            MESSAGE_PURGE_BATCH_SIZE, 
-            MESSAGE_PURGE_OLDER_THAN_HOURS
-        )
+        _logger.info("Starting to delete messages older than %s hours",
+                     MESSAGES_RETENTION_PERIOD_IN_HOURS)
+
         start_ts = timeit.default_timer()
         self.env.cr.execute(PURGE_QUERY)
         self.env.cr.commit()
         end_ts = timeit.default_timer()
         _logger.info("Deleted %s messages older than %s hours in %.3fs.",
             self.env.cr.rowcount, 
-            MESSAGE_PURGE_OLDER_THAN_HOURS,
+            MESSAGES_RETENTION_PERIOD_IN_HOURS,
             end_ts-start_ts
         )    

@@ -9,6 +9,10 @@
             <field name="key">imq.STOP_MESSAGES_PURGE_disabled</field>
             <field name="value">Rename the key as imq.STOP_MESSAGES_PURGE to stop purge of messages. IMQ only checks for the key to exist so you don't need to modify this value.</field>
         </record>
+        <record id="icp__imq_messages_retention_period_in_hours" model="ir.config_parameter">
+            <field name="key">imq.messages_retention_period_in_hours</field>
+            <field name="value">720</field>
+        </record>
         <record id="icp__imq_slack_app_client_id" model="ir.config_parameter">
             <field name="key">imq.SLACK_APP_CLIENT_ID</field>
             <field name="value">5006003237.928870046194</field>

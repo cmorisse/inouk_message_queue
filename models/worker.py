@@ -651,10 +651,11 @@ class MpyStringIO(StringIO):
         self._log_cr = log_cr
         self._uid = uid
         self._mpy_buffer = ''
-        super(MpyStringIO, self).__init__()
+        super().__init__()
         
-    def write(self, s:str):
-        super(MpyStringIO, self).write(s)
+    def write(self, s):
+        _logger.debug("MpyStringIO.write(%s)", s)
+        super().write(s)
         if '\n' in s:
             if s.endswith('\n'):
                 new_buffer = ''
@@ -697,6 +698,10 @@ class MpyStringIO(StringIO):
         #print("%s%s" % (self._mpy_buffer, output_str))
         #print("<<<<<<<<<<<<<<<<<<<<<<<<")
         self._mpy_buffer = new_buffer
+
+    #from typing import List
+    #def writelines(self, __lines:List[str]) -> None:
+    #    return super().writelines(__lines)
 
     def stop_capture(self):
         self.flush()

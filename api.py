@@ -188,7 +188,6 @@ def find_or_create_processor(caller_env:api.Environment, function_name, module_n
         raise
 
     return processor_obj
-    
 
 def extract_env_from_params(runnable, args, kwargs):
     """extracts and odoo.api.env from parameters.

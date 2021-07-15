@@ -36,7 +36,7 @@ class IMQQueue(models.Model):
     
     # fields
     name = fields.Char(size=40, index=True, required=True)
-    sqs_name = fields.Char("SQS Name", compute='compute_sqs_name', store=False)
+    sqs_name = fields.Char("SQS Name", compute='compute_sqs_name', store=True)
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
     q_type = fields.Selection(QUEUE_TYPES, string="Queue Type", default='std', required=True)
     database_bound_q = fields.Boolean("Database Bound Queue", default=True)
@@ -96,6 +96,18 @@ class IMQQueue(models.Model):
 
     use_odoo_notifications = fields.Boolean()
 
+    admin_secret = fields.Char(
+        compute='_compute_admin_secret', 
+        help="This field returns sqs secret when user is a member of imq admin group."
+    )
+
+    def _compute_admin_secret(self):
+        for record in self:
+            if self.user_has_groups('inouk_message_queue.group_admin'):
+                record.admin_secret = self.secret
+            else:
+                record.admin_secret = None
+            
     def copy(self, default=None):
         self.ensure_one()
         chosen_name = default.get('name') if default else ''

@@ -40,7 +40,7 @@
                             <group class="ik_lw190">
                                 <field name="active" widget="boolean_toggle" />
                                 <field name="database_bound_q" widget="boolean_toggle" />
-                                <field name="key" />
+                                <field name="key" widget="CopyClipboardChar"/>
                                 <field name="secret" password="True" />
                             </group>
                         </group>
@@ -106,9 +106,10 @@
                                     <field name="slack_oauth_access_response" colspan="4" />
                                 </group>                                
                                 <group string="SQS" col="4" colspan="4">
-                                    <button type="object" name="aws_sqs__create_queue" string="Create Queue" class="btn-danger"/>
-                                </group>                                
-                                
+                                    <field name="key" widget="CopyClipboardChar" colspan="2"/>
+                                    <field name="admin_secret" widget="CopyClipboardChar" colspan="2"/>
+                                    <button type="object" name="aws_sqs__create_queue" string="Create Queue" class="btn-danger" colspan="4"/>
+                                </group>
                             </page>
                         </notebook>
                     </sheet>
@@ -125,7 +126,6 @@
                 <tree decoration-muted="(not active)" >
                     <field name="name"/>
                     <field name="provider"/>
-                    <field name="database_bound_q" string="Bound?" optional="show" />
                     <field name="sqs_name" />
                     <field name="description"/>
                     <field name="active" />
@@ -162,4 +162,5 @@
         </record>
     </data>
 </odoo>
+
 

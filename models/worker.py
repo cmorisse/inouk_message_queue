@@ -1,4 +1,5 @@
 import os
+import multiprocessing
 import threading
 import sys
 import traceback
@@ -41,7 +42,7 @@ class IMQWorker(models.AbstractModel):
     
     __logger = None
 
-    def get_message(self, queue_obj, wait_time=10):
+    def get_message_old(self, queue_obj, wait_time=10):
         """Query SQS for next message to process.
 
         :param queue_obj: required openerp.Model of the queue to query.
@@ -76,13 +77,65 @@ class IMQWorker(models.AbstractModel):
             if messages:
                 message = messages[0]
                 _logger.debug(
-                    "[Q=%s,pid=%s,threadid=%s] Got message: %s.",
-                    queue_obj.name,
+                    "[WorkerCron=%s,Q=%s,threadid=%s] Got message: %s.",
                     os.getpid(),
+                    queue_obj.name,
                     threading.current_thread().ident,
                     message
                 )
                 return message
+        return None
+
+    def get_message(self, queue_obj, wait_time=0):
+        """Query Q for next message to process.
+
+        :param queue_obj: required openerp.Model of the queue to query.
+        :return: a SQS message object 
+        """
+        queue_name_prefix = queue_obj.name
+
+        sqs_resource = boto3.resource(
+            'sqs',
+            region_name=queue_obj.region,   # os.environ.get('IMQ_SQS_REGION'),
+            aws_access_key_id=queue_obj.key,   # os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
+            aws_secret_access_key=queue_obj.secret,   # os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
+        )
+
+        sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_obj.sqs_name)
+
+        #start_time = datetime.datetime.now()
+        #while (datetime.datetime.now() - start_time).seconds < IMQ_SLEEP_INTERVAL:
+
+        _logger.debug(
+            "[WorkerCron=%s,Q='%s',threadid=%s] Querying next message to process (wait_time=%s).",
+            queue_obj.name,
+            os.getpid(),
+            threading.current_thread().ident,
+            wait_time
+        )
+        messages = sqs_queue.receive_messages(
+            AttributeNames=['All'],
+            MessageAttributeNames=['All'],
+            MaxNumberOfMessages=1,
+            WaitTimeSeconds=wait_time,
+        )
+        if messages:
+            try:
+                # We reset watchdog_time
+                multiprocessing.current_process().imq_watchdog_time = time.time()
+                _logger.debug("Reset imq_watchdog_time for WorkerCron=%s", multiprocessing.current_process().pid)
+                time.sleep(2)  # Wait for 1 second  in case we will be killed
+            except:
+                pass
+            message = messages[0]
+            _logger.debug(
+                "[WorkerCron=%s,Q=%s,threadid=%s] Got message: %s.",
+                os.getpid(),
+                queue_obj.name,
+                threading.current_thread().ident,
+                message
+            )
+            return message
         return None
 
     def store_sqs_message(self, queue_obj, sqs_message, start_timestamp=None):
@@ -439,21 +492,21 @@ class IMQWorker(models.AbstractModel):
         stopped_workers_nodes = self.env["ir.config_parameter"].sudo().get_param("imq.STOP_WORKERS", "").split(',')
 
         if host_name in stopped_workers_nodes or '*' in stopped_workers_nodes:
-            _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] leaving process_message_queue() since host_name:%s is present in system "
+            _logger.debug("[WorkerCron=%s,Q=%s,Wn=%s,Wp=%s,threadid=%s] leaving process_message_queue() since host_name:%s is present in system "
                           "parameter 'imq.STOP_WORKERS'.",
+                          os.getpid(),
                           queue_name,
                           worker_name,
                           worker_param,
-                          os.getpid(),
                           threading.current_thread().ident,
                           host_name)
             return
 
-        _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] Entering process_message_queue() with threading.current_thread().dbname=%s,processing_cursor:%s",
+        _logger.debug("[WorkerCron=%s,Q=%s,Wn=%s,Wp=%s,threadid=%s] Entering process_message_queue() with threading.current_thread().dbname=%s,processing_cursor:%s",
+                      os.getpid(),
                       queue_name, 
                       worker_name,
                       worker_param,
-                      os.getpid(),
                       threading.current_thread().ident,
                       threading.current_thread().dbname,
                       self.env.cr)
@@ -531,27 +584,28 @@ class IMQWorker(models.AbstractModel):
 
             # Store message log modifications
             self.env.cr.commit()
-            _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] Processing cursor:%s committed.",
+            _logger.debug("[WorkerCron=%s,Q=%s,Wn=%s,Wp=%s,threadid=%s] Processing cursor:%s committed.",
+                          os.getpid(),
                           queue_name,
                           worker_name,
                           worker_param,
-                          os.getpid(),
                           threading.current_thread().ident,
                           self.env.cr)
 
             processing_duration = (
                 datetime.datetime.now() - processing_start_timestamp).seconds
 
-            if processing_duration >= IMQ_SLEEP_INTERVAL:
-                _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] process_message_queue() exiting"
-                              " after %ss processing time.",
-                              queue_name,
-                              worker_name,
-                              worker_param,
-                              os.getpid(),
-                              threading.current_thread().ident,
-                              processing_duration)
-                return
+            #if processing_duration >= IMQ_SLEEP_INTERVAL:
+            # TODO: Rework
+            _logger.debug("[WorkerCron=%s,Q=%s,Wn=%s,Wp=%s,threadid=%s] process_message_queue() exiting"
+                            " after %ss processing time.",
+                            os.getpid(),
+                            queue_name,
+                            worker_name,
+                            worker_param,
+                            threading.current_thread().ident,
+                            processing_duration)
+            return
 
             _logger.debug("[Q=%s,Wn=%s,Wp=%s,pid=%s,threadid=%s] processing_duration=%s, looping",
                           queue_name,

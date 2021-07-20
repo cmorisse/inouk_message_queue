@@ -19,6 +19,7 @@ _logger = logging.getLogger("IMQ.message")
 
 IMQ_MESSAGE_STATES = [
     ('new', "New"),
+    ('pending', "Pending"),
     ('wip', "In progress"),
     ('retry', "Retry"),
     ('done', "Done"),
@@ -44,9 +45,7 @@ class IMQMessage(models.Model):
     processor_id = fields.Many2one('imq.message_processor', string="Processor")
     group = fields.Char(_("Group"), index=True, readonly=True)
     name = fields.Char()
-    message_type = fields.Selection(IMQ_MESSAGE_PROCESSOR_TYPES, 
-                                    related='processor_id.type', 
-                                    readonly=True)
+    message_type = fields.Selection(related='processor_id.type', readonly=True)
     queue_message_id = fields.Char("Queue Message Id",
                                     index=True,
                                     help="id of message on cloud queue.",

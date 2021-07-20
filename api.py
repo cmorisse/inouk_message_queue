@@ -14,6 +14,7 @@ from odoo import fields, api, SUPERUSER_ID
 from odoo.tools.translate import _
 from odoo.exceptions import MissingError, UserError
 
+from .api_sqs import send_message__aws_sqs
 
 _logger = logging.getLogger(__name__)
 
@@ -450,33 +451,20 @@ def send_message(env, queue, selector, payload, message_group=None,
             % queue_obj.sqs_name
         )
 
-    sqs_resource = boto3.resource(
-        'sqs',
-        region_name=queue_obj.region,  # os.environ.get('IMQ_SQS_REGION')
-        aws_access_key_id=queue_obj.key,  # ex os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
-        aws_secret_access_key=queue_obj.secret  # ex os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
-    )
-    sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_obj.sqs_name)
     message_body_values = {
         'type': 'simple',
         'selector': selector,
         'payload': payload,
     }
-    send_message_kwargs = {
-        'MessageBody': jsonpickle.encode(message_body_values),
-        'MessageAttributes': {
-            'name': {
-                'DataType': 'String',
-                'StringValue': message_name,
-            },
-        }
-    }
-    if message_group:
-        send_message_kwargs['MessageGroupId'] = message_group
-        if message_deduplication_id:
-            send_message_kwargs['MessageDeduplicationId'] = message_deduplication_id
 
-    response = sqs_queue.send_message(**send_message_kwargs)
+    _send_method_name = "send_message__%s" % queue_obj.provider
+    response = getattr(sys.modules[__name__], _send_method_name)(
+        queue_obj,
+        message_name,
+        message_body_values,
+        message_group=message_group,
+        message_deduplication_id=message_deduplication_id
+    )
     _logger.debug("response={resp}".format(resp=response))
     return response
 

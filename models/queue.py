@@ -22,6 +22,7 @@ _logger = logging.getLogger('IMQ.queue')
 
 QUEUE_PROVIDERS = [
     ('aws_sqs', "AWS SQS"),
+    ('pgsql', "Database"),
 ]
 
 QUEUE_TYPES = [
@@ -44,11 +45,14 @@ class IMQQueue(models.Model):
     @api.depends('name', 'q_type', 'database_bound_q')
     def compute_sqs_name(self):
         for record in self:
-            record.sqs_name = "{}{}{}".format(
-                record.name,
-                '_%s' % record.env.cr.dbname if record.database_bound_q else '',
-                ".fifo" if record.q_type=='fifo' else ''
-            )
+            if record.provider == 'aws_sqs':
+                record.sqs_name = "{}{}{}".format(
+                    record.name,
+                    '_%s' % record.env.cr.dbname if record.database_bound_q else '',
+                    ".fifo" if record.q_type=='fifo' else ''
+                )
+            else:
+                record.sqs_name = None
 
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
     active = fields.Boolean(
@@ -257,7 +261,6 @@ class IMQQueue(models.Model):
                                          message_type='notification',
                                          subtype='mail.mt_comment')
 
-    
     def send_slack_notification(self, message, obj=None):
         """ Send message to slack channels of all queues in record set """
         for record in self:
@@ -283,7 +286,6 @@ class IMQQueue(models.Model):
                 )
                 _logger.info("result.text => %s", result.text)
 
-    
     def send_notification(self, message, obj=None):
         """ Send message to all 'channels' (slack, sms) of all queues in recordset """
         self.send_slack_notification(message, obj=obj)

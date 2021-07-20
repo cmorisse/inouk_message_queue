@@ -54,6 +54,8 @@ able to consume Messages.""",
         'views/message_processor.xml',
         'views/message.xml',
         'views/test_launcher.xml',
+        'views/ir_cron_views.xml',
+
         
         # menus: after views and wizards
         'menu.xml',

@@ -18,4 +18,4 @@ def patch_ir_cron():
     _logger.warning("Added 'seconds' to ir_cron.py::_intervalTypes")
 
     server.SLEEP_INTERVAL = 20
-    _logger.warning("server.py::SLEEP_INTERVAL=20")
+    _logger.warning("server.py::SLEEP_INTERVAL=%s", server.SLEEP_INTERVAL)

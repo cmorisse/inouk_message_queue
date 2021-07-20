@@ -654,7 +654,11 @@ class MpyStringIO(StringIO):
         super().__init__()
         
     def write(self, s):
-        _logger.debug("MpyStringIO.write(%s)", s)
+        try:
+            _logger.debug("MpyStringIO.write(%s)", str(s))
+        except:
+            _logger.error("MpyStringIO.write - \"Failed to dump message.\"")
+
         super().write(s)
         if '\n' in s:
             if s.endswith('\n'):

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="imq_ir_cron__formview" model="ir.ui.view">
+        <field name="name">imq.ir_cron.formview.inherit</field>
+        <field name="model">ir.cron</field>
+        <field name="type">form</field>
+        <field name="inherit_id" ref="base.ir_cron_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='doall']" position="after">
+                <field name="imq_is_worker" />
+            </xpath>
+            <field name="interval_number" position="attributes">
+                <attribute name="attrs">{'invisible': [('imq_is_worker','=',True)]}</attribute>
+            </field>
+            <field name="interval_type" position="attributes">
+                <attribute name="attrs">{'invisible': [('imq_is_worker','=',True)]}</attribute>
+            </field>
+            <label for="interval_number" position="attributes">
+                <attribute name="attrs">{'invisible': [('imq_is_worker','=',True)]}</attribute>
+            </label>
+            <field name="nextcall" position="attributes">
+                <attribute name="force_save">1</attribute>
+                <attribute name="attrs">{'readonly': [('imq_is_worker','=',True)]}</attribute>
+            </field>
+            <!--xpath expr="//button[@name='method_direct_trigger']" position="attributes" >
+                <attribute name="context">{'_CN_PROCESS_NOW': cn_process_now}</attribute>                
+            </xpath-->
+
+        </field>
+    </record>
+</odoo>

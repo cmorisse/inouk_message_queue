@@ -15,7 +15,7 @@ class ir_cron(models.Model):
     """
     _inherit = "ir.cron"
     interval_type = fields.Selection(selection_add=[('seconds', 'Seconds')])
-    imq_is_worker = fields.Boolean("Is IMQWorker?")
+    imq_is_worker = fields.Boolean("Is IMQ Worker?")
 
     @api.onchange('imq_is_worker')
     def onchange__imq_is_worker(self):
@@ -23,6 +23,7 @@ class ir_cron(models.Model):
             self.nextcall = '1990-01-01 00:00:00'
             self.interval_type = 'seconds'
             self.interval_number = 1
+            self.doall = False
  
     @classmethod
     def _process_job(cls, job_cr, job, cron_cr):
@@ -49,7 +50,7 @@ class ir_cron(models.Model):
         :param cron_cr: cursor holding lock on the cron job row, to use to update the next exec date,
             must not be committed/rolled back!
         """
-        _logger.debug("Entering _imq_process_job()")
+        _logger.critical("Entering _imq_process_job()")
         with api.Environment.manage():
             try:
                 cron = api.Environment(

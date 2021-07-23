@@ -42,6 +42,14 @@ class IMQQueue(models.Model):
     q_type = fields.Selection(QUEUE_TYPES, string="Queue Type", default='std', required=True)
     database_bound_q = fields.Boolean("Database Bound Queue", default=True)
 
+    @api.onchange('provider')
+    def onchange_provider(self):
+        if self.provider or '' in ('pgsql'):
+            self.database_bound_q = True
+            self.key = None
+            self.secret = None
+            self.region = None
+
     @api.depends('name', 'q_type', 'database_bound_q')
     def compute_sqs_name(self):
         for record in self:

@@ -35,13 +35,13 @@
                             <group class="ik_lw190">
                                 <field name="provider" />
                                 <field name="q_type" />
-                                <field name="region"  />
+                                <field name="database_bound_q" widget="boolean_toggle" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}"/>
                             </group>
                             <group class="ik_lw190">
                                 <field name="active" widget="boolean_toggle" />
-                                <field name="database_bound_q" widget="boolean_toggle" />
-                                <field name="key" widget="CopyClipboardChar"/>
-                                <field name="secret" password="True" />
+                                <field name="key" attrs="{'readonly':[('provider','not in',['aws_sqs'])]}"/>
+                                <field name="secret" password="True" attrs="{'readonly':[('provider','not in',['aws_sqs'])]}"/>
+                                <field name="region" attrs="{'readonly':[('provider','not in',['aws_sqs'])]}" />
                             </group>
                         </group>
 
@@ -105,7 +105,7 @@
                                     <field name="slack_webhook_config_url" colspan="4" />
                                     <field name="slack_oauth_access_response" colspan="4" />
                                 </group>                                
-                                <group string="SQS" col="4" colspan="4">
+                                <group string="SQS" col="4" colspan="4" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}">
                                     <field name="key" widget="CopyClipboardChar" colspan="2"/>
                                     <field name="admin_secret" widget="CopyClipboardChar" colspan="2"/>
                                     <button type="object" name="aws_sqs__create_queue" string="Create Queue" class="btn-danger" colspan="4"/>

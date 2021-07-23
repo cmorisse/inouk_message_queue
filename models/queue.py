@@ -22,7 +22,7 @@ _logger = logging.getLogger('IMQ.queue')
 
 QUEUE_PROVIDERS = [
     ('aws_sqs', "AWS SQS"),
-    ('pgsql', "Database"),
+    ('pgsql', "PostgreSQL"),
 ]
 
 QUEUE_TYPES = [
@@ -125,7 +125,6 @@ class IMQQueue(models.Model):
         self.ensure_one()
         return self.env.ref('inouk_message_queue.imq_queue__form_view').id
 
-    
     def get_default_action(self, access_uid=None):
         self.ensure_one()
         return self.env.ref('inouk_message_queue.imq_queue__act_window')
@@ -147,14 +146,22 @@ class IMQQueue(models.Model):
     def generate_message_group(self, prefix=None, provider='aws_sqs', q_type='fifo'):
         """ Generate a random 'message_group' compatible with queue provider and type
         """
-        #if self.provider in ('aws_sqs') and self.q_type in ('fifo'):
-        # 128 chars max for AWS SQS Fifo Queue
+        MAX_LEN = 128
         mgid = str(uuid.uuid4())
-        if prefix:
-            return "%s-%s" % (prefix[:127-len(mgid)], mgid)
+        if self.provider == 'aws_sqs' and self.q_type in ('fifo'):
+            if prefix:
+                return "%s-%s" % (prefix[:127-len(mgid)], mgid)
+        elif self.provider == 'pgsql':
+            if prefix:
+                return "%s-%s" % (prefix, mgid)
         return mgid
 
-    
+    @api.model
+    def generate_message_id(self):
+        """ Generate a message id wich is a uuid """
+        msgid = str(uuid.uuid4())
+        return msgid
+
     def btn_send_simple_message(self):
         """ Sends a simple message"""
         self.ensure_one()

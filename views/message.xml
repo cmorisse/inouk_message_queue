@@ -12,6 +12,9 @@
                     <filter name="filter_new"
                             string="New"
                             domain="[('state','=', 'new')]" />
+                    <filter name="filter_pending"
+                            string="Pending"
+                            domain="[('state','=', 'pending')]" />
                     <filter name="filter_wip"
                             string="In progress"
                             domain="[('state','=', 'wip')]" />
@@ -34,7 +37,7 @@
                             string="Reset"
                             domain="[('state','=', 'reset')]" />
                     <separator/>
-                    <filter string="Today" name="filter_today" domain="[ ('start_time', '>', context_today().strftime('%%Y-%%m-%%d 00:00:00') ) ]"/>
+                    <filter string="Today" name="filter_today" domain="['|', ('start_time', '>', context_today().strftime('%%Y-%%m-%%d 00:00:00') ), ('enqueued_time', '>', context_today().strftime('%%Y-%%m-%%d 00:00:00') ) ]"/>
                     <filter string="Yesterday" name="filter_yesterday" domain="[ ('start_time', '>', (context_today() - datetime.timedelta(days=1)).strftime('%%Y-%%m-%%d 00:00:00')), ('start_time', '&lt;', context_today().strftime('%%Y-%%m-%%d 00:00:00')) ]"/>
                     <separator/>
                     <filter string="Retried" name="filter_retried" domain="[ ('attempt', '>', 1) ]"/>
@@ -101,6 +104,7 @@
                     <field name="group" optional="hide" />
                     <field name="queue_id"/>
                     <field name="processor_id"/>
+                    <field name="enqueued_time" optional="show"/>
                     <field name="start_time"/>
                     <field name="end_time"/>
                     <field name="attempt_as_text"/>

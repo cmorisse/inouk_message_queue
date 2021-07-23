@@ -15,6 +15,7 @@ from odoo.tools.translate import _
 from odoo.exceptions import MissingError, UserError
 
 from .api_sqs import send_message__aws_sqs
+from .api_pgsql import send_message__pgsql
 
 _logger = logging.getLogger(__name__)
 
@@ -213,6 +214,28 @@ def extract_env_from_params(runnable, args, kwargs):
     return env
 
 
+def _send_message(
+    queue_obj, message_name, message_body_values, message_group=None, 
+    message_deduplication_id=None, message_attributes=None
+):    
+    """ Low level driver method that sends message to a queue.
+    """
+    _send_method_name = "send_message__%s" % queue_obj.provider
+    response = getattr(sys.modules[__name__], _send_method_name)(
+        queue_obj,
+        message_name,
+        message_body_values,
+        message_group=message_group,
+        message_deduplication_id=message_deduplication_id,
+        message_attributes=message_attributes
+    )
+    _logger.debug("{method} => {resp}".format(
+        method=_send_method_name,
+        resp=response
+    ))
+    return response
+
+
 # See odoo/api.py ligne 789 to create an ORM env from scratch
 def enqueue(runnable, *args, **kwargs):
     """ enqueue function call by sending a message to AWS SQS queue
@@ -256,6 +279,9 @@ def enqueue(runnable, *args, **kwargs):
     message_deduplication_id = kwargs.get('_imq_message_deduplication_id', None)
     if '_imq_message_deduplication_id' in kwargs:
         del kwargs['_imq_message_deduplication_id']
+    
+    if message_group and not message_deduplication_id:
+        _logger.critical("TODO: Compute deduplication_id for message group")
 
     message_name = extract_message_name(runnable, args, kwargs)
     if '_imq_message_name' in kwargs:
@@ -266,11 +292,15 @@ def enqueue(runnable, *args, **kwargs):
     if not queue_obj:
         raise UserError("Unknown queue:'%s' !!!" % queue_name_prefix)
 
-    queue_name = "%s_%s%s" % (
-        queue_name_prefix, 
-        env.cr.dbname,
-        '.fifo' if queue_obj.q_type == 'fifo' else ''
-    )
+    if queue_obj.provider == 'aws_sqs':
+        queue_name = "%s_%s%s" % (
+            queue_name_prefix, 
+            env.cr.dbname,
+            '.fifo' if queue_obj.q_type == 'fifo' else ''
+        )
+    else:
+        queue_name = queue_name_prefix
+
     if '_imq_queue_name' in kwargs:
         del kwargs['_imq_queue_name']  # We pass all "_imq" params via context
 
@@ -322,14 +352,7 @@ def enqueue(runnable, *args, **kwargs):
         'args': wrap_odoo_model(args),
         'kwargs': wrap_odoo_model(kwargs),
     }
-    sqs_resource = boto3.resource(
-        'sqs',
-        region_name=queue_obj.region,   # os.environ.get('IMQ_SQS_REGION'),
-        aws_access_key_id=queue_obj.key,  # os.environ.get('IMQ_SQS_ACCESS_KEY_ID'),
-        aws_secret_access_key=queue_obj.secret,  # os.environ.get('IMQ_SQS_SECRET_ACCESS_KEY')
-    )
 
-    sqs_queue = sqs_resource.get_queue_by_name(QueueName=queue_name)
     message_body_values = {
         'type': 'rpc',
         'logging_activated': logging_activated,
@@ -340,30 +363,25 @@ def enqueue(runnable, *args, **kwargs):
         'payload': payload,
         'user_id': user_id,
     }
-    send_message_kwargs = {
-        'MessageBody': jsonpickle.encode(message_body_values),
-        'MessageAttributes': {
-            'name': {
-                'DataType': 'String',
-                'StringValue': message_name,
-            },
-            'code': {
-                'DataType': 'String',
-                'StringValue': "%s(%s,%s)" % (
-                    runnable.__name__,
-                    [arg for arg in args],
-                    ["%s=%s" % (arg_name, arg_val) for arg_name, arg_val, in kwargs.items()],
-                )
-            }
+
+    message_attributes = {
+        'code': {
+            'DataType': 'String',
+            'StringValue': "%s(%s,%s)" % (
+                runnable.__name__,
+                [arg for arg in args],
+                ["%s=%s" % (arg_name, arg_val) for arg_name, arg_val, in kwargs.items()],
+            )
         }
     }
-    if message_group:
-        send_message_kwargs['MessageGroupId'] = message_group
-        if message_deduplication_id:
-            send_message_kwargs['MessageDeduplicationId'] = message_deduplication_id
-
-    response = sqs_queue.send_message(**send_message_kwargs)
-    _logger.debug("SQS::send_message response={resp}".format(resp=response))
+    response = _send_message(
+        queue_obj, 
+        message_name, 
+        message_body_values, 
+        message_group=message_group, 
+        message_deduplication_id=message_deduplication_id, 
+        message_attributes=message_attributes
+    )
     return response
 
 
@@ -376,8 +394,7 @@ def processor(queue_name='default', processor_visibility_timeout=0):
         raise Exception("Missing @processor's queue_name mandatory parameter.")
     def real_decorator(decorated_function):
         def run_async(*args, **kwargs):
-            kwargs['_imq_queue_name'] = kwargs.get('_imq_queue_name', 
-                                                   queue_name)
+            kwargs['_imq_queue_name'] = kwargs.get('_imq_queue_name', queue_name)
             kwargs['_imq_processor_visibility_timeout'] = processor_visibility_timeout
             return enqueue(decorated_function, *args, **kwargs)
         def message(*args, **kwargs):
@@ -428,10 +445,11 @@ def processor_method(queue_name='default', processor_visibility_timeout=0):
         return decorated_method
     return real_method_decorator
 
-
-def send_message(env, queue, selector, payload, message_group=None, 
-                 message_deduplication_id=None, message_name=None):
-    """ Sending a simple message to AWS SQS queue.
+def send_message(
+    env, queue, selector, payload, message_group=None, message_deduplication_id=None, 
+    message_name=None, message_attributes=None
+):
+    """ Sends a Simple message to any Queue.
     :param env: A valid Odoo env
     :param queue: Queue name prefix of the queue to use or queue obj
     """
@@ -457,14 +475,13 @@ def send_message(env, queue, selector, payload, message_group=None,
         'payload': payload,
     }
 
-    _send_method_name = "send_message__%s" % queue_obj.provider
-    response = getattr(sys.modules[__name__], _send_method_name)(
-        queue_obj,
-        message_name,
-        message_body_values,
-        message_group=message_group,
-        message_deduplication_id=message_deduplication_id
+    response = _send_message(
+        queue_obj, 
+        message_name, 
+        message_body_values, 
+        message_group=message_group, 
+        message_deduplication_id=message_deduplication_id, 
+        message_attributes=message_attributes
     )
-    _logger.debug("response={resp}".format(resp=response))
     return response
 

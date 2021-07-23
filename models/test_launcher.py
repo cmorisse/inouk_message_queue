@@ -32,7 +32,7 @@ class IMQTestLauncher(models.Model):
     name = fields.Char()
     queue_name = fields.Char()
     debug_mode = fields.Boolean(
-        help="When checked, RCP code est executed synchronously."
+        help="When checked, RPC code is executed synchronously."
     )
     launch_result = fields.Text()
     process_result = fields.Text()
@@ -51,14 +51,13 @@ class IMQTestLauncher(models.Model):
     processing_duration_s = fields.Integer("Task Duration in seconds")
     param = fields.Char()
 
-    
     def launch(self):
         """ Launchs a task straight or asynchonously depending on debug_mode """
         self.ensure_one()
         if self.debug_mode:
             a_task(self, self.param)
         else:
-            self.launch_result = a_task.message(self, self.param)
+            self.launch_result = a_task.run_async(self, self.param, _imq_queue_name=self.queue_name)
 
     
     def send_simple_message(self):

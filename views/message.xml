@@ -158,23 +158,27 @@
                             <h1><field name="name"/></h1>
                         </div>
 
-                        <group colspan="4" col="4">
-                            <field name="queue_message_id" />
-                            <field name="parent_message_id" />
-                            
-                            <field name="processor_id" />
-                            <field name="target_children_count" />
-                            
-                            <field name="queue_id"/>
-                            <field name="group"/>
-                            <field name="user_id"/>
-                            <field name="enqueued_time"/>
-                            <field name="start_time"/>
-                            <field name="end_time"/>
-                            <newline/>
-                            <field name="attempt_as_text"/>
-                            <newline/>
-                            <field name="operator_comment" colspan="4"/>
+                        <group>
+                            <group>
+                                <field name="queue_message_id" />
+                                <field name="processor_id" />
+                                <field name="queue_id"/>
+                                <field name="user_id"/>
+                                <field name="attempt_as_text"/>
+                                <field name="enqueued_time"/>
+                            </group>
+                            <group class="ik_lw180">
+                                <field name="group"/>
+                                <field name="parent_message_id" />
+                                <field name="target_children_count" />
+                                <field name="planned_time" />
+                                <field name="start_time"/>
+                                <field name="end_time"/>
+                                <field name="visibility_time" attrs="{'invisible':[('queue_provider', 'not in', ['pgsql'])]}"/>
+                            </group>
+                            <group col="4" colspan="4" style="margin-top: -9px;">                          
+                                <field name="operator_comment" colspan="4"/>
+                            </group>
                         </group>
 
                         <notebook>
@@ -231,6 +235,14 @@
                                 </field>
                             </page>
                             <page string="Debug" groups="inouk_message_queue.group_debug">
+                                <group>
+                                    <group>
+                                        <field name="queue_provider"/>
+
+                                    </group>
+                                    <group>
+                                    </group>
+                                </group>
                             </page>
                             
                         </notebook>

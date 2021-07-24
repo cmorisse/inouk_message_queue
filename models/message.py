@@ -42,6 +42,7 @@ class IMQMessage(models.Model):
 
     # fields
     queue_id = fields.Many2one('imq.queue', _("Queue"))
+    queue_provider = fields.Selection(related='queue_id.provider', readonly=True)
     processor_id = fields.Many2one('imq.message_processor', string="Processor")
     group = fields.Char(_("Group"), index=True, readonly=True)
     name = fields.Char()
@@ -76,13 +77,18 @@ class IMQMessage(models.Model):
     attempt_as_text = fields.Char(_("Attempt / max"), 
                                   compute='_calc_attempt_vs_max_as_text')
 
-    enqueued_time = fields.Datetime(help=_("Timestamp when message has been "
-                                           "sent to queue."),
-                                    readonly=True)
+    planned_time = fields.Datetime(
+        help=_("When should this message be processed.")
+    )
+    enqueued_time = fields.Datetime(
+        help=_("Timestamp when message has been sent to queue."),
+        readonly=True
+    )
 
-    start_time = fields.Datetime(help=_("Time when processing has started on "
-                                        "this message"),
-                                 readonly=True)
+    start_time = fields.Datetime(
+        help=_("Time when processing has started on this message"),
+        readonly=True
+    )
     start_time_microseconds = fields.Integer()
     end_time = fields.Datetime(help=_("Processing end or failure time."),
                                readonly=True)
@@ -93,6 +99,10 @@ class IMQMessage(models.Model):
     capture_console = fields.Boolean(default=False)
     logging_activated = fields.Boolean(readonly=True, default=False)
     log_ids = fields.One2many('imq.message_processing_log', 'active_message_id')
+
+    visibility_time = fields.Datetime(
+        help="When this message will become visible again."
+    )
 
     state = fields.Selection(IMQ_MESSAGE_STATES, default='new')
 

@@ -41,7 +41,11 @@ class IMQQueue(models.Model):
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
     q_type = fields.Selection(QUEUE_TYPES, string="Queue Type", default='std', required=True)
     database_bound_q = fields.Boolean("Database Bound Queue", default=True)
-
+    visibility_timeout = fields.Integer(
+        help="Number of seconds a message will stay invisible once delivered. Once expired message "
+             "will become visible again and may be consumed by workers.",
+        default=30
+    )
     @api.onchange('provider')
     def onchange_provider(self):
         if self.provider or '' in ('pgsql'):
@@ -153,6 +157,19 @@ class IMQQueue(models.Model):
     @api.model
     def generate_message_group(self, prefix=None, provider='aws_sqs', q_type='fifo'):
         """ Generate a random 'message_group' compatible with queue provider and type
+        """
+        MAX_LEN = 128
+        mgid = str(uuid.uuid4())
+        if self.provider == 'aws_sqs' and self.q_type in ('fifo'):
+            if prefix:
+                return "%s-%s" % (prefix[:127-len(mgid)], mgid)
+        elif self.provider == 'pgsql':
+            if prefix:
+                return "%s-%s" % (prefix, mgid)
+        return mgid
+
+    def get_message_group(self, prefix=None):
+        """ Generate a random 'message_group' compatible with current queue.
         """
         MAX_LEN = 128
         mgid = str(uuid.uuid4())

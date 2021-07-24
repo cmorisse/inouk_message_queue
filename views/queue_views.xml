@@ -39,9 +39,10 @@
                             </group>
                             <group class="ik_lw190">
                                 <field name="active" widget="boolean_toggle" />
-                                <field name="key" attrs="{'readonly':[('provider','not in',['aws_sqs'])]}"/>
-                                <field name="secret" password="True" attrs="{'readonly':[('provider','not in',['aws_sqs'])]}"/>
-                                <field name="region" attrs="{'readonly':[('provider','not in',['aws_sqs'])]}" />
+                                <field name="key" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}"/>
+                                <field name="secret" password="True" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}"/>
+                                <field name="region" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}" />
+                                <field name="visibility_timeout" attrs="{'invisible':[('provider','not in',['pgsql'])]}" />
                             </group>
                         </group>
 

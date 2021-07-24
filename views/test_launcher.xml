@@ -25,6 +25,12 @@
             <field name="arch" type="xml">
                 <form>
                     <header>
+                        <button string="Send Async RPC Call" type="object" class="btn-warning" 
+                                attrs="{'invisible':[('type','=','simple')]}"
+                                name="send_rpc_message"/>
+                        <button string="Send Simple Message" type="object" class="btn-warning" 
+                                attrs="{'invisible':[('type','=','rpc')]}"
+                                name="send_simple_message"/>
                     </header>
                     <sheet>
                         <div class="oe_title">
@@ -33,33 +39,59 @@
                             </h1>
                         </div>
                         <group>
-                            <field name="type"/>
-                            <field name="queue_name"/>
-                            <field name="debug_mode"/>
-                            <field name="message_group"/>
-                            <field name="launch_result"/>
-                            <field name="process_result"/>
+                            <group>
+                                <field name="type"/>
+                                <field name="message_group" />
+                            </group>
+                            <group>
+                                <field name="queue_id" required="True"/>
+                                <field name="queue_type" />
+
+                            </group>
                             
                         </group>
                         <notebook>
+                            <page string="result" >
+                                <group>
+                                    <field name="launch_result"/>
+                                    <field name="process_result"/>
+                                </group>
+                                
+                            </page>
                             <page string="RPC" attrs="{'invisible':[('type','!=','rpc')]}">
                                 <group>
-                                    <field name="processing_duration_s"/>
-                                    <field name="param"/>
-                                    <field name="should_raise_exception"/>
-                                    <field name="should_raise_imqerror"/>
-                                    <field name="should_raise_imqterminateexception"/>
-                                    <field name="should_raise_imqretryableerror"/>
-                                    <button string="Launch" type="object" class="btn-warning" name="launch"/>
+                                    <group class="ik_lw190">
+                                        <field name="rpc_test_method" />
+                                        <field name="processing_duration_s"/>
+                                        <field name="param"/>
+                                    </group>
+                                    <group class="ik_lw240">
+                                        <field name="should_raise_exception"/>
+                                        <field name="should_raise_imqerror"/>
+                                        <field name="should_raise_imqterminateexception"/>
+                                        <field name="should_raise_imqretryableerror"/>
+                                    </group>
                                     
                                 </group>
                                 
                             </page>
                             <page string="Simple" attrs="{'invisible':[('type','!=','simple')]}">
+                                <group col="4" colspan="4">
+
+                                    <field name="selector" colspan="4"/>
+                                    <field name="payload" colspan="4"/>
+                                    <div colspan="4" class="oe_grey">Payload must be a valid json object. If payload is a dict with a key: "should_raise_error". 
+                                    TestMessage processor will raise an Exception.
+                                    </div>
+                                </group>                                
+                            </page>
+                            <page string="Debug">
                                 <group>
-                                    <field name="selector"/>
-                                    <field name="payload"/>
-                                    <button string="Send Message" type="object" name="send_simple_message"/>
+                                    <group>
+                                        <field name="debug_mode" />
+                                    </group>                                
+                                    <group>
+                                    </group>                                
                                 </group>                                
                             </page>
                             

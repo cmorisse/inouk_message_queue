@@ -5,6 +5,7 @@ import types
 import threading
 import datetime
 import logging
+import json
 import jsonpickle
 import boto3
 
@@ -26,14 +27,22 @@ def send_message__pgsql(
     """
     odoo_env = queue_obj.env
     message_model = odoo_env['imq.message']
+    _raw_message_body = json.dumps(message_body_values,
+                                   sort_keys=True,
+                                   indent=4)
     message_values = {
         "name": message_name,
         "queue_id": queue_obj.id,
         "group": queue_obj.generate_message_group(),
         "queue_message_id": queue_obj.generate_message_id(),
         "user_id": odoo_env.user.id,
-        "raw_message_body": message_body_values,
+        "raw_message_body": _raw_message_body,
         "enqueued_time": fields.Datetime.now(),
+        "code": message_attributes.get("code", None),
+        "context": jsonpickle.encode(message_body_values.get('context', {})),
+        "payload": jsonpickle.encode(message_body_values.get('payload', {})),
+
+        "attempt": 0,
         "state": "pending"
     }
     message_obj = message_model.create(message_values)

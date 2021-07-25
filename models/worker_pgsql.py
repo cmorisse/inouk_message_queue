@@ -80,70 +80,37 @@ class IMQWorkerSQS(models.AbstractModel):
             self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_std)
             _row = self.env.cr.fetchone()
             _msg_id = _row and _row[0] or None
-            return _msg_id
+            _logger.critical("Uncomment commit() in get_message()")
+            #self.env.cr.commit()
 
         elif queue_obj.q_type == 'fifo':
-            pass
+            raise Exception("get_message__pgsql() not implemented for Queue type:'%s'" % queue_obj.type)
         else:
-            raise Exception("Unsupported Queue type:'%s'" % queue_obj.type)
+            raise Exception("Unsupported Queue type:'%s' for get_message__pgsql()" % queue_obj.type)
+
+        if _msg_id:
+            return self.env['imq.message'].browse(_msg_id)
         return None
 
-    def store_message__pgsql(self, queue_obj, sqs_message, start_timestamp=None):
+    def store_message__pgsql(self, queue_obj, message, start_timestamp=None):
         """ Stores SQS message in `imq.message`
         :returns: 'imq.message' model or None
         """
-        message_model = self.env['imq.message']
+        # For pgsql message already exists in db
+        message_obj = message
 
-        queue_message_id = sqs_message.message_id
-        body = jsonpickle.decode(sqs_message.body)
-        message_selector = body.get('selector', None)
-        message_module = body.get('module_name', None)
-        message_function = body.get('function_name', None)
-        user_id = body.get('user_id',
-                           self.env.ref('inouk_message_queue.user_imq').id)
-
-        message_attributes = sqs_message.message_attributes or {}
-        name = message_attributes.get(
-            'name',
-            {'StringValue':'Undefined'}
-        )['StringValue']
-        code = message_attributes.get(
-            'code', 
-            {'StringValue':'n/a'}
-        )['StringValue']
+        body = jsonpickle.decode(message.raw_message_body)
 
         # search for processor
         processor_obj = self.env['imq.message_processor'].upsert_processor_from_message(sqs_message)
-
-        _logger.debug("Searching for message with queue_message_id='%s'", queue_message_id)
-        message_obj = message_model.search(
-            [('queue_message_id', '=', queue_message_id)]
-        )
-        _logger.debug("Found '%s' with queue_message_id=%s", message_obj or 'No Message', queue_message_id)
     
-        epoch_s = int(
-            sqs_message.attributes['ApproximateFirstReceiveTimestamp']
-        ) / 1000
-        context = body.get('context', {})
         message_values_dict = {
             'state': 'wip',
-            'queue_message_id': sqs_message.message_id,
-            'name': name,
-            'code': code,
-            'enqueued_time': datetime.datetime.utcfromtimestamp(epoch_s),
             'start_time': start_timestamp,
             'start_time_microseconds': start_timestamp and start_timestamp.microsecond,
-            'queue_id': queue_obj.id,
-            'group': sqs_message.attributes.get('MessageGroupId', None),
-            'user_id': user_id,
-            'context': jsonpickle.encode(body.get('context', {})),
-            'payload': jsonpickle.encode(body.get('payload', {})),
-            'raw_message_body': json.dumps(
-                json.loads(sqs_message.body),
-                sort_keys=True,
-                indent=4
-            ),
         }
+
+        context = body.get('context', {})
         # Add only id present
         if '_imq_parent_message_id' in context:
             message_values_dict['parent_message_id'] = context['_imq_parent_message_id']
@@ -165,11 +132,7 @@ class IMQWorkerSQS(models.AbstractModel):
                 'max_number_of_attempts': MAX_ATTEMPTS
             })
 
-        if message_obj:  #update
-            message_obj.write(message_values_dict)
-        else:  #create
-            message_values_dict['attempt'] = 0
-            message_obj = message_model.create(message_values_dict)
+        message_obj.write(message_values_dict)
         return message_obj
 
 

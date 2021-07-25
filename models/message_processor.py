@@ -111,6 +111,7 @@ class IMQMessageProcessor(models.Model):
         """
         body = jsonpickle.decode(sqs_message.body)
         message_type = body.get('type', None)
+        message_selector = body.get('selector', None)
         message_module = body.get('module_name', None)
         message_function = body.get('function_name', None)
         
@@ -135,7 +136,6 @@ class IMQMessageProcessor(models.Model):
             return processor_obj
             
         elif message_type == 'simple':
-            message_selector = body.get('selector', None)
             if message_selector is None:
                 # TODO raise Error "Received 'simple' message without selector"
                 raise Exception("Received 'simple' type message without selector.")

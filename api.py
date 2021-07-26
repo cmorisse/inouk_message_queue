@@ -221,12 +221,20 @@ def _send_message(
     """ Low level driver method that sends message to a queue.
     """
     _send_method_name = "send_message__%s" % queue_obj.provider
+    
+    # compute hash for body
+    if queue_obj.q_type == 'fifo' and message_deduplication_id is None:
+        _body_str = jsonpickle.encode(message_body_values, indent=0)
+        _msg_dedup_id = hashlib.sha256(_body_str.encode('utf-8')).hexdigest()
+    else:
+        _msg_dedup_id = message_deduplication_id
+
     response = getattr(sys.modules[__name__], _send_method_name)(
         queue_obj,
         message_name,
         message_body_values,
         message_group=message_group,
-        message_deduplication_id=message_deduplication_id,
+        message_deduplication_id=_msg_dedup_id,
         message_attributes=message_attributes
     )
     _logger.debug("{method} => {resp}".format(

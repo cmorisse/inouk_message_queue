@@ -34,7 +34,7 @@ class ir_cron(models.Model):
         :param cron_cr: cursor holding lock on the cron job row, to use to update the next exec date,
             must not be committed/rolled back!
         """
-        _logger.critical("xxxxxxxxxxxxxxxxxxxxxxxxxxxx yeaaaaaaaaaaaaaaaaaaaaahhhh")
+        _logger.debug("Entering imq::ir.cron._process_job()")
         if not job.get('imq_is_worker'):
             super()._process_job(job_cr, job, cron_cr)
             return

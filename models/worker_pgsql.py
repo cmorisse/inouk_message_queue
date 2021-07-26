@@ -56,7 +56,7 @@ WHERE id = %s;
 """
 
 
-PGSQL_RESET_VISIBLITY_TIMEOUT = """
+PGSQL_RESET_VISIBLITY_TIMEOUT_SQL = """
 UPDATE imq_message
 SET state='pending', visibility_time=NULL
 WHERE
@@ -80,8 +80,7 @@ class IMQWorkerSQS(models.AbstractModel):
             self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_std)
             _row = self.env.cr.fetchone()
             _msg_id = _row and _row[0] or None
-            _logger.critical("Uncomment commit() in get_message()")
-            #self.env.cr.commit()
+            self.env.cr.commit()
 
         elif queue_obj.q_type == 'fifo':
             raise Exception("get_message__pgsql() not implemented for Queue type:'%s'" % queue_obj.type)
@@ -98,11 +97,10 @@ class IMQWorkerSQS(models.AbstractModel):
         """
         # For pgsql message already exists in db
         message_obj = message
-
         body = jsonpickle.decode(message.raw_message_body)
 
         # search for processor
-        processor_obj = self.env['imq.message_processor'].upsert_processor_from_message(sqs_message)
+        processor_obj = self.env['imq.message_processor'].upsert_processor_from_message(body)
     
         message_values_dict = {
             'state': 'wip',
@@ -118,24 +116,30 @@ class IMQWorkerSQS(models.AbstractModel):
             message_values_dict['target_children_count'] = context['_imq_target_children_count']
 
         if processor_obj:
+            if processor_obj.force_visibility_timeout:
+                _visibility_time = datetime.datetime.now() + datetime.timedelta(seconds=queue_obj.visibility_timeout)
+            else:
+                _visibility_time = datetime.datetime.now() + datetime.timedelta(seconds=processor_obj.visibility_timeout)
+
             message_values_dict.update({
                 'processor_id': processor_obj.id,
                 'logging_activated': processor_obj.logging_activated,
                 'capture_console': processor_obj.capture_console,
                 'max_number_of_attempts': processor_obj.max_attempt,
+                'visibility_time': _visibility_time
             })
         else:
+            _visibility_time = datetime.datetime.now() + datetime.timedelta(seconds=queue_obj.visibility_timeout)
             message_values_dict.update({
                 'processor_id': None,
                 'logging_activated': False,
                 'capture_console': False,
-                'max_number_of_attempts': MAX_ATTEMPTS
+                'max_number_of_attempts': MAX_ATTEMPTS,
+                'visibility_time': _visibility_time
             })
 
         message_obj.write(message_values_dict)
         return message_obj
-
-
 
     def change_message_visibility__pgsql(self, message_obj, _message):
         """ Update message visibility with timeout defined in processor. """
@@ -146,3 +150,18 @@ class IMQWorkerSQS(models.AbstractModel):
                 "visibility_time": _visibility_time
             })
 
+    def terminate_message__pgsql(self, queue_obj, sqs_message):
+        """ On pgsql we do nothing for now. Later we may move the message and his
+        history on another storage.
+        """
+        return True
+
+    @api.model
+    def process_pgsql_messqges_visibility_timeout_daemon(self):
+        """ Reset state of messages that are 'wip' while visibility_time is 
+        over to 'pending' 
+        """
+        self.env.cr.execute(PGSQL_RESET_VISIBLITY_TIMEOUT_SQL)
+        _rc = self.env.cr.rowcount
+        _logger.info("Visibility Timeout reset on %s messages.", _rc)
+        return

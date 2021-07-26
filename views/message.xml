@@ -241,6 +241,7 @@
 
                                     </group>
                                     <group>
+                                        <field name="processing_id"/>
                                     </group>
                                 </group>
                             </page>

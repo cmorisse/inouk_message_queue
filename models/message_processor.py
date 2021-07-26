@@ -104,16 +104,15 @@ class IMQMessageProcessor(models.Model):
         return super().copy(default)    
 
     @api.model
-    def upsert_processor_from_message(self, sqs_message):
-        """Find or create an imq.message_processor from an sqs message
-        :param sqs_message: a received sqs_message
-        :type sqs_message: odoo.api.Environment
+    def upsert_processor_from_message(self, message_body:dict):
+        """Find or create an imq.message_processor from a received message 
+        body.
+        :param message_body: Body of received message.
         """
-        body = jsonpickle.decode(sqs_message.body)
-        message_type = body.get('type', None)
-        message_selector = body.get('selector', None)
-        message_module = body.get('module_name', None)
-        message_function = body.get('function_name', None)
+        message_type = message_body.get('type', None)
+        message_selector = message_body.get('selector', None)
+        message_module = message_body.get('module_name', None)
+        message_function = message_body.get('function_name', None)
         
         if message_type == 'rpc':
             if message_module is None:

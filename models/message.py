@@ -34,6 +34,12 @@ IMQ_MESSAGE_TYPES = [
 ]
 
 
+PURGE_MESSAGE_HISTORY_SQL = """
+    DELETE FROM imq_message 
+    WHERE 
+        end_time < (NOW() - INTERVAL '%s hours')
+    AND state NOT IN ('failed', 'retry', 'reset', 'wip', 'archived');"""
+
 class IMQMessage(models.Model):
     _name = 'imq.message'
     _description = "IMQ - Message"
@@ -161,62 +167,13 @@ class IMQMessage(models.Model):
         pass
     
     def do_retry_processing(self):
-        for record in self:
-            if record.state == 'new':
-                continue
-            sqs_resource = boto3.resource(
-                'sqs',
-                region_name=record.queue_id.region,
-                aws_access_key_id=record.queue_id.key,
-                aws_secret_access_key=record.queue_id.secret,
-            )
-        
-            sqs_queue = sqs_resource.get_queue_by_name(QueueName=record.queue_id.sqs_name)
-            message_body_values = {
-                'type': 'rpc',
-                'logging_activated': record.logging_activated,
-                'capture_console': record.capture_console,
-                'module_name': record.processor_id.module,
-                'function_name': record.processor_id.function,
-                'is_method': record.processor_id.is_method,
-                'context': json.loads(record.context),
-                'payload': json.loads(record.payload),
-                'user_id': record.user_id.id,
-            }
-            send_message_kwargs = {
-                'MessageBody': json.dumps(message_body_values),
-                # We want SQS to wait 10s before IMQ Workers can read this message.
-                # We need this time to commit the message id change.
-                #'DelaySeconds': 5,  # do not run.
-                'MessageAttributes': {
-                    'name': {
-                        'DataType': 'String',
-                        'StringValue': record.name,
-                    },
-                    'code': {
-                        'DataType': 'String',
-                        'StringValue': "%s" % (record.code),
-                    }
-                }
-            }
-            if record.group:
-                send_message_kwargs['MessageGroupId'] = record.group
-            response = sqs_queue.send_message(**send_message_kwargs)
-            _logger.debug("response=%s", response)
-            queue_message_id_history = record.queue_message_id_history or ''
-            queue_message_id_history = "%s %s\n" % (
-                datetime.datetime.now(),
-                record.queue_message_id,
-            ) + queue_message_id_history
-            update_dict = {
-                'queue_message_id_history': queue_message_id_history,
-                'state': 'retry'
-            } 
-            if response:
-                update_dict['queue_message_id'] = response['MessageId']
-            record.write(update_dict)
-        return        
-    
+        """Interactive method which call Q specific method to retry processing 
+        of a message record set.
+        """
+        _method_name = "do_retry_processing__%s" % self.queue_id.provider
+        _method = getattr(self, _method_name)
+        _method()
+
     def do_archive(self):
         self.write({'state': 'archived'})
     
@@ -267,19 +224,13 @@ class IMQMessage(models.Model):
         MESSAGES_RETENTION_PERIOD_IN_HOURS = int(
             icp_model.get_param("imq.messages_retention_period_in_hours", '720')
         )        
-        PURGE_QUERY = """
-DELETE FROM imq_message 
-WHERE 
-    end_time < (NOW() - INTERVAL '%s hours')
-AND state NOT IN ('failed', 'retry', 'reset', 'wip', 'archived');""" % (
-    MESSAGES_RETENTION_PERIOD_IN_HOURS,
-)
 
         _logger.info("Starting to delete messages older than %s hours",
                      MESSAGES_RETENTION_PERIOD_IN_HOURS)
 
         start_ts = timeit.default_timer()
-        self.env.cr.execute(PURGE_QUERY)
+        self.env.cr.execute(PURGE_MESSAGE_HISTORY_SQL, 
+                            (MESSAGES_RETENTION_PERIOD_IN_HOURS,))
         self.env.cr.commit()
         end_ts = timeit.default_timer()
         _logger.info("Deleted %s messages older than %s hours in %.3fs.",

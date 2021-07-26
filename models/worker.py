@@ -70,7 +70,6 @@ class IMQWorker(models.AbstractModel):
         _result = _terminate_message_method(queue_obj, message)
         return _result
 
-
     def process_message(self, message_obj, message, worker_param):
         """ Processes a message.
         :param message_obj:

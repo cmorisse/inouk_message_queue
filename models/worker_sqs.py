@@ -104,7 +104,7 @@ class IMQWorkerSQS(models.AbstractModel):
         )['StringValue']
 
         # search for processor
-        processor_obj = self.env['imq.message_processor'].upsert_processor_from_message(sqs_message)
+        processor_obj = self.env['imq.message_processor'].upsert_processor_from_message(body)
 
         _logger.debug("Searching for message with queue_message_id='%s'", queue_message_id)
         message_obj = message_model.search(

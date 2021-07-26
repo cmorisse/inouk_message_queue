@@ -7,7 +7,6 @@ import datetime
 import logging
 import json
 import jsonpickle
-import boto3
 
 
 import odoo
@@ -27,13 +26,16 @@ def send_message__pgsql(
     """
     odoo_env = queue_obj.env
     message_model = odoo_env['imq.message']
-    _raw_message_body = json.dumps(message_body_values,
-                                   sort_keys=True,
+    if message_attributes is None: message_attributes = {}
+    if message_group is None: message_group = queue_obj.generate_message_group()
+
+    _body = jsonpickle.encode(message_body_values)
+    _raw_message_body = json.dumps(json.loads(_body),
                                    indent=4)
     message_values = {
         "name": message_name,
         "queue_id": queue_obj.id,
-        "group": queue_obj.generate_message_group(),
+        "group": message_group,
         "queue_message_id": queue_obj.generate_message_id(),
         "user_id": odoo_env.user.id,
         "raw_message_body": _raw_message_body,
@@ -41,7 +43,6 @@ def send_message__pgsql(
         "code": message_attributes.get("code", None),
         "context": jsonpickle.encode(message_body_values.get('context', {})),
         "payload": jsonpickle.encode(message_body_values.get('payload', {})),
-
         "attempt": 0,
         "state": "pending"
     }

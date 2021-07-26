@@ -1,4 +1,6 @@
 from . import message
+from . import message_sqs
+from . import message_pgsql
 from . import message_processor
 from . import message_processing
 from . import queue

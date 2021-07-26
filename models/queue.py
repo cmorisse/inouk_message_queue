@@ -43,7 +43,8 @@ class IMQQueue(models.Model):
     database_bound_q = fields.Boolean("Database Bound Queue", default=True)
     visibility_timeout = fields.Integer(
         help="Number of seconds a message will stay invisible once delivered. Once expired message "
-             "will become visible again and may be consumed by workers.",
+             "will become visible again and may be consumed by workers. (Don't use 0 as it may leads"
+             " to unpredictable results.",
         default=30
     )
     @api.onchange('provider')

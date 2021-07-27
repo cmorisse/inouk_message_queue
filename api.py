@@ -5,6 +5,7 @@ import types
 import threading
 import datetime
 import logging
+import hashlib
 import jsonpickle
 import boto3
 
@@ -212,7 +213,6 @@ def extract_env_from_params(runnable, args, kwargs):
     if '_imq_ephemeral_env' in kwargs:
         del kwargs['_imq_ephemeral_env']
     return env
-
 
 def _send_message(
     queue_obj, message_name, message_body_values, message_group=None, 

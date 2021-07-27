@@ -216,7 +216,7 @@ def extract_env_from_params(runnable, args, kwargs):
 
 def _send_message(
     queue_obj, message_name, message_body_values, message_group=None, 
-    message_deduplication_id=None, message_attributes=None
+    message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=True
 ):    
     """ Low level driver method that sends message to a queue.
     """
@@ -235,7 +235,8 @@ def _send_message(
         message_body_values,
         message_group=message_group,
         message_deduplication_id=_msg_dedup_id,
-        message_attributes=message_attributes
+        message_attributes=message_attributes,
+        raise_on_duplicate=raise_on_duplicate
     )
     _logger.debug("{method} => {resp}".format(
         method=_send_method_name,

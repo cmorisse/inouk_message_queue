@@ -52,7 +52,7 @@ able to consume Messages.""",
         'views/message_processing_log.xml',
         'views/message_processing.xml',
         'views/message_processor.xml',
-        'views/message.xml',
+        'views/message_views.xml',
         'views/test_launcher.xml',
         'views/ir_cron_views.xml',
 

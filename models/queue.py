@@ -47,6 +47,11 @@ class IMQQueue(models.Model):
              " to unpredictable results.",
         default=30
     )
+    deduplication_interval_s = fields.Integer(
+        "Deduplication Interval",
+        default=300,
+        help="Time interval in seconds during which message duplicates are searched for FIFO queues."
+    )
     @api.onchange('provider')
     def onchange_provider(self):
         if self.provider or '' in ('pgsql'):

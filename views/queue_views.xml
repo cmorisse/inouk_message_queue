@@ -35,6 +35,7 @@
                             <group class="ik_lw190">
                                 <field name="provider" />
                                 <field name="q_type" />
+                                <field name="deduplication_interval_s" attrs="{'invisible':['|',('q_type','!=','fifo'),('provider','!=','pgsql')]}"/>
                                 <field name="database_bound_q" widget="boolean_toggle" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}"/>
                             </group>
                             <group class="ik_lw190">

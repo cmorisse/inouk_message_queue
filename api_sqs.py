@@ -20,11 +20,10 @@ _logger = logging.getLogger(__name__)
 
 def send_message__aws_sqs(
     queue_obj, message_name, message_body_values, message_group=None, 
-    message_deduplication_id=None, message_attributes=None
+    message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=True,
 ):
     """ Send a simple message to AWS SQS queue.
-    :param env: A valid Odoo env
-    :param queue: Queue name prefix of the queue to use or queue obj
+    :param raise_on_duplicate: is ignored with SQS
     """
     if message_attributes is None:
         message_attributes = {}

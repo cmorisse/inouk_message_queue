@@ -105,6 +105,7 @@
                     <field name="queue_id"/>
                     <field name="processor_id"/>
                     <field name="enqueued_time" optional="show"/>
+                    <field name="enqueued_time_microseconds" optional="show"/>
                     <field name="start_time"/>
                     <field name="end_time"/>
                     <field name="attempt_as_text"/>
@@ -169,6 +170,7 @@
                             </group>
                             <group class="ik_lw180">
                                 <field name="group"/>
+                                <field name="message_deduplication_id"/>
                                 <field name="parent_message_id" />
                                 <field name="target_children_count" />
                                 <field name="planned_time" />

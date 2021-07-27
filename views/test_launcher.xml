@@ -31,6 +31,9 @@
                         <button string="Send Simple Message" type="object" class="btn-warning" 
                                 attrs="{'invisible':[('type','=','rpc')]}"
                                 name="send_simple_message"/>
+                        <button string="Launch FIFO Task Group" type="object" class="btn-warning" 
+                                attrs="{'invisible':[('queue_type','!=','fifo')]}"
+                                name="launch_fifo_test"/>
                     </header>
                     <sheet>
                         <div class="oe_title">

@@ -49,7 +49,39 @@ WHERE id = (
 )
 RETURNING id;"""
 
-PGSQL_RESET_MESSQGE_SQL_std = """
+PGSQL_GET_MESSAGE_SQL_fifo = """
+UPDATE imq_message
+SET
+    state = 'wip',
+    start_time = now()
+WHERE id = (
+    WITH sq1 AS (
+        -- SELECT *
+        SELECT MAX(enqueued_time::varchar || '.' || enqueued_time_microseconds::varchar) AS latest
+        FROM imq_message
+        WHERE "group" = 'gt01'
+          AND state IN ('done', 'terminated', 'archived')
+    ),
+         sq2 AS (
+             SELECT id,
+                    state,
+                    imq_m.enqueued_time::varchar || '.' ||
+                    imq_m.enqueued_time_microseconds::varchar AS enqueued_time_micros
+             FROM imq_message AS imq_m,
+                  sq1
+             WHERE imq_m.enqueued_time::varchar || '.' || imq_m.enqueued_time_microseconds::varchar > sq1.latest
+             ORDER BY imq_m.enqueued_time::varchar || '.' || imq_m.enqueued_time_microseconds::varchar
+             LIMIT 1
+         )
+    SELECT id
+    FROM sq2
+    WHERE state = 'pending'
+        FOR UPDATE SKIP LOCKED
+) RETURNING id;"""
+
+
+
+PGSQL_RESET_MESSAGE_SQL_std = """
 UPDATE imq_message
 SET state = 'pending', start_time = NULL
 WHERE id = %s;
@@ -83,9 +115,13 @@ class IMQWorkerSQS(models.AbstractModel):
             self.env.cr.commit()
 
         elif queue_obj.q_type == 'fifo':
-            raise Exception("get_message__pgsql() not implemented for Queue type:'%s'" % queue_obj.type)
+            self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_fifo)
+            _row = self.env.cr.fetchone()
+            _msg_id = _row and _row[0] or None
+            self.env.cr.commit()
+#            raise Exception("get_message__pgsql() not implemented for Queue type:'%s'" % queue_obj.q_type)
         else:
-            raise Exception("Unsupported Queue type:'%s' for get_message__pgsql()" % queue_obj.type)
+            raise Exception("Unsupported Queue type:'%s' for get_message__pgsql()" % queue_obj.q_type)
 
         if _msg_id:
             return self.env['imq.message'].browse(_msg_id)

@@ -53,9 +53,15 @@ class IMQMessage(models.Model):
     name = fields.Char()
     message_type = fields.Selection(related='processor_id.type', readonly=True)
     queue_message_id = fields.Char("Queue Message Id",
-                                    index=True,
-                                    help="id of message on cloud queue.",
+                                   index=True,
+                                   help="id of message on cloud queue.",
                                    readonly=True)
+    message_deduplication_id = fields.Char(
+        "Message Dedup. Id",
+        index=True,
+        help="Message hash used to uniquely identify message and avoid duplicates.",
+        readonly=True
+    )
     parent_message_id = fields.Char("Parent Message Id", 
                                     help="id of parent message on cloud queue.",
                                     readonly=True,
@@ -89,6 +95,7 @@ class IMQMessage(models.Model):
         help=_("Timestamp when message has been sent to queue."),
         readonly=True
     )
+    enqueued_time_microseconds = fields.Integer()
 
     start_time = fields.Datetime(
         help=_("Time when processing has started on this message"),

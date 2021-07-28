@@ -59,7 +59,8 @@ WHERE id = (
         -- SELECT *
         SELECT MAX(enqueued_time::varchar || '.' || enqueued_time_microseconds::varchar) AS latest
         FROM imq_message
-        WHERE "group" = 'gt01'
+        WHERE 
+              "group" = 'gt01'
           AND state IN ('done', 'terminated', 'archived')
     ),
          sq2 AS (
@@ -76,7 +77,7 @@ WHERE id = (
     SELECT id
     FROM sq2
     WHERE state = 'pending'
-        FOR UPDATE SKIP LOCKED
+    FOR UPDATE SKIP LOCKED
 ) RETURNING id;"""
 
 
@@ -177,7 +178,7 @@ class IMQWorkerSQS(models.AbstractModel):
         message_obj.write(message_values_dict)
         return message_obj
 
-    def change_message_visibility__pgsql(self, message_obj, _message):
+    def change_message_visibility__pgsql(self, queue_obj, message_obj, _message):
         """ Update message visibility with timeout defined in processor. """
         if message_obj.processor_id.force_visibility_timeout:
             m_timeout = message_obj.processor_id.visibility_timeout

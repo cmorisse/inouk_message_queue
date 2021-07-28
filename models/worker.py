@@ -347,7 +347,7 @@ class IMQWorker(models.AbstractModel):
             'state': state
         }
 
-    def change_message_visibility(self, message_obj, _message):
+    def change_message_visibility(self, queue_obj, message_obj, _message):
         """ Update message visibility with timeout defined in processor
         :param message_obj: local imq.message for _message
         :param _message: The Q message object (sqs_messqge, ...)
@@ -355,7 +355,7 @@ class IMQWorker(models.AbstractModel):
         if message_obj.processor_id.force_visibility_timeout:
             _change_message_visibility_method_name = "change_message_visibility__%s" % message_obj.queue_provider
             _change_message_visibility_method = getattr(self, _change_message_visibility_method_name)
-            _change_message_visibility_method(message_obj, _message)
+            _change_message_visibility_method(queue_obj, message_obj, _message)
 
     @api.model
     def process_message_queue(self, queue_name, worker_name=None, worker_param=None):
@@ -418,7 +418,7 @@ class IMQWorker(models.AbstractModel):
             processing_obj = message_obj.create_processing_object()
             message_obj.env.cr.commit() 
 
-            self.change_message_visibility(message_obj, _message)
+            self.change_message_visibility(queue_obj, message_obj, _message)
 
             processor_obj = message_obj.processor_id
             if processor_obj:

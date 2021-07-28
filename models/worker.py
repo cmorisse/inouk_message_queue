@@ -581,7 +581,7 @@ class MpyStringIO(StringIO):
         super().__init__()
         
     def write(self, s):
-        _logger.debug("MpyStringIO.write(%s)", s)
+        _logger.debug("MpyStringIO.write(%s)", repr(s))
         super().write(s)
         if '\n' in s:
             if s.endswith('\n'):

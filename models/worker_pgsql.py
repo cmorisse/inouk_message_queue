@@ -55,30 +55,27 @@ SET
     state = 'wip',
     start_time = now()
 WHERE id = (
-    WITH sq1 AS (
-        -- SELECT *
-        SELECT MAX(enqueued_time::varchar || '.' || enqueued_time_microseconds::varchar) AS latest
-        FROM imq_message
-        WHERE 
-              "group" = 'gt01'
-          AND state IN ('done', 'terminated', 'archived')
-    ),
-         sq2 AS (
-             SELECT id,
-                    state,
-                    imq_m.enqueued_time::varchar || '.' ||
-                    imq_m.enqueued_time_microseconds::varchar AS enqueued_time_micros
-             FROM imq_message AS imq_m,
-                  sq1
-             WHERE imq_m.enqueued_time::varchar || '.' || imq_m.enqueued_time_microseconds::varchar > sq1.latest
-             ORDER BY imq_m.enqueued_time::varchar || '.' || imq_m.enqueued_time_microseconds::varchar
-             LIMIT 1
-         )
     SELECT id
-    FROM sq2
-    WHERE state = 'pending'
+    FROM imq_message
+    WHERE id IN (
+        SELECT im1.id
+            --, (im1.enqueued_time::varchar || '.' || im1.enqueued_time_microseconds::varchar) AS enqueued_ts
+            --, (im2.enqueued_time::varchar || '.' || im2.enqueued_time_microseconds::varchar) AS previous_enqueued_ts
+            --, im2.state                                                                      AS previous_state
+        FROM imq_message AS im1
+            LEFT JOIN imq_message AS im2 ON (
+                im1."group" = im2."group"
+                AND im2.create_date <= im1.create_date
+                AND im2.id < im1.id
+            )
+        WHERE im1.state = 'pending'
+        AND (im2.state IN ('done', 'terminated', 'archived') OR im2.state IS NULL)
+    )
+    LIMIT 1
     FOR UPDATE SKIP LOCKED
-) RETURNING id;"""
+) RETURNING id;
+COMMIT;
+"""
 
 
 

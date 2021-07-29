@@ -42,7 +42,8 @@ WHERE id = (
     SELECT id
     FROM imq_message
     WHERE 
-            state='pending'
+            queue_id = %s
+        AND state='pending'
         AND ( planned_time IS NULL OR planned_time > NOW() )
     ORDER BY enqueued_time  
     FOR UPDATE SKIP LOCKED LIMIT 1
@@ -55,29 +56,24 @@ SET
     state = 'wip',
     start_time = now()
 WHERE id = (
-    SELECT id
-    FROM imq_message
-    WHERE id IN (
-        SELECT im1.id
-            --, (im1.enqueued_time::varchar || '.' || im1.enqueued_time_microseconds::varchar) AS enqueued_ts
-            --, (im2.enqueued_time::varchar || '.' || im2.enqueued_time_microseconds::varchar) AS previous_enqueued_ts
-            --, im2.state                                                                      AS previous_state
-        FROM imq_message AS im1
-            LEFT JOIN imq_message AS im2 ON (
-                im1."group" = im2."group"
-                AND im2.create_date <= im1.create_date
-                AND im2.id < im1.id
-            )
-        WHERE im1.state = 'pending'
-        AND (im2.state IN ('done', 'terminated', 'archived') OR im2.state IS NULL)
+    WITH sq1 AS (
+        SELECT
+        im.id,
+        im.name,
+        im.state,
+        -- Previous row
+        LAG(im.state) OVER ( PARTITION BY im."group" ORDER BY im.id ) AS prev_state,
+        LAG(im.id) OVER ( PARTITION BY im."group" ORDER BY im.id ) AS prev_id
+        FROM imq_message AS im
+        WHERE im.queue_id = %s
+        GROUP BY im."group", im.id, im.name, im.state
     )
-    LIMIT 1
+    SELECT id FROM sq1
+    WHERE sq1.state = 'pending' AND (sq1.prev_state IN ('done', 'terminated', 'archived') OR sq1.prev_state IS NULL )
     FOR UPDATE SKIP LOCKED
+    LIMIT 1
 ) RETURNING id;
-COMMIT;
 """
-
-
 
 PGSQL_RESET_MESSAGE_SQL_std = """
 UPDATE imq_message
@@ -106,20 +102,22 @@ class IMQWorkerSQS(models.AbstractModel):
         :param wait_time: number of seconds to block on queue. Must be 0 with ir.cron IMQ Worker
         :return: a SQS message object or None
         """
-        if queue_obj.q_type == 'std':
-            self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_std)
-            _row = self.env.cr.fetchone()
-            _msg_id = _row and _row[0] or None
-            self.env.cr.commit()
+        _db_cnx = odoo.sql_db.db_connect(self.env.cr.dbname)
+        with _db_cnx.cursor() as cr:
+            cr.autocommit = True
+            if queue_obj.q_type == 'std':
+                self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_std, (queue_obj.id,))
+                _row = self.env.cr.fetchone()
+                cr.commit()
+                _msg_id = _row and _row[0] or None
 
-        elif queue_obj.q_type == 'fifo':
-            self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_fifo)
-            _row = self.env.cr.fetchone()
-            _msg_id = _row and _row[0] or None
-            self.env.cr.commit()
-#            raise Exception("get_message__pgsql() not implemented for Queue type:'%s'" % queue_obj.q_type)
-        else:
-            raise Exception("Unsupported Queue type:'%s' for get_message__pgsql()" % queue_obj.q_type)
+            elif queue_obj.q_type == 'fifo':
+                self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_fifo, (queue_obj.id,))
+                _row = self.env.cr.fetchone()
+                cr.commit()
+                _msg_id = _row and _row[0] or None
+            else:
+                raise Exception("Unsupported Queue type:'%s' for get_message__pgsql()" % queue_obj.q_type)
 
         if _msg_id:
             return self.env['imq.message'].browse(_msg_id)

@@ -24,7 +24,7 @@ class IMQMessageSQS(models.Model):
             if record.state == 'new':
                 _logger.error("Message Retry ignored. Messages in state 'new' can't be retried.")
                 continue
-            if record.type != 'rpc':
+            if record.message_type != 'rpc':
                 _logger.error("Message Retry ignored. Only RPC messages can be retried.")
                 continue
             sqs_resource = boto3.resource(
@@ -47,7 +47,7 @@ class IMQMessageSQS(models.Model):
                 'user_id': record.user_id.id,
             }
             send_message_kwargs = {
-                'MessageBody': json.dumps(message_body_values),
+                'MessageBody': jsonpickle.encode(message_body_values),
                 # We want SQS to wait 10s before IMQ Workers can read this message.
                 # We need this time to commit the message id change.
                 #'DelaySeconds': 5,  # do not run.

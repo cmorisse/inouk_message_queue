@@ -289,9 +289,6 @@ def enqueue(runnable, *args, **kwargs):
     if '_imq_message_deduplication_id' in kwargs:
         del kwargs['_imq_message_deduplication_id']
     
-    if message_group and not message_deduplication_id:
-        _logger.critical("TODO: Compute deduplication_id for message group")
-
     message_name = extract_message_name(runnable, args, kwargs)
     if '_imq_message_name' in kwargs:
         del kwargs['_imq_message_name']  # We pass all "_imq" params via context

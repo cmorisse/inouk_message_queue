@@ -137,8 +137,6 @@ class IMQQueue(models.Model):
         default = dict(default or {}, name=new_name)
         return super(IMQQueue, self).copy(default)    
 
-    # TODO: Move to a mixin and update message.py which share the same code
-    
     def get_formview_id(self, access_uid=None):
         self.ensure_one()
         return self.env.ref('inouk_message_queue.imq_queue__form_view').id

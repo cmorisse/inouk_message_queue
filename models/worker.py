@@ -310,6 +310,7 @@ class IMQWorker(models.AbstractModel):
                                                         exc_traceback)
             returned_value = "\n".join(returned_value)
             state = 'failed'
+            _logger.error(returned_value)
             self.terminate_message(queue_obj, message)
             _logger.info("Deleted message:'%s' on queue. (%s)", 
                          message_obj.queue_message_id,
@@ -453,8 +454,7 @@ class IMQWorker(models.AbstractModel):
             message_obj.write(result_dict)
             processing_obj.write(result_dict)
 
-            # TODO: Add a parameter to control deletion which is
-            # unnecessary if queue has a Dead Letter Queue mechanism
+            # Delete message after MAX_ATTEMPT
             if result_dict['state'] != 'done' and message_obj.attempt >= message_obj.max_number_of_attempts:
                 _logger.debug("Queue[%s] deleting message %s after %s "
                                 "failed attempts.",
@@ -476,8 +476,6 @@ class IMQWorker(models.AbstractModel):
         processing_duration = (
             datetime.datetime.now() - processing_start_timestamp).seconds
 
-        #if processing_duration >= IMQ_SLEEP_INTERVAL:
-        # TODO: Rework
         _logger.debug("[WorkerCron=%s,Q=%s,Wn=%s,Wp=%s,threadid=%s] process_message_queue() exiting"
                         " after %ss processing time.",
                         os.getpid(),

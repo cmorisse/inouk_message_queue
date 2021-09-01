@@ -50,7 +50,7 @@ class ir_cron(models.Model):
         :param cron_cr: cursor holding lock on the cron job row, to use to update the next exec date,
             must not be committed/rolled back!
         """
-        _logger.critical("Entering _imq_process_job()")
+        _logger.debug("Entering _imq_process_job()")
         with api.Environment.manage():
             try:
                 cron = api.Environment(

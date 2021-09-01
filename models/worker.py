@@ -46,6 +46,7 @@ class IMQWorker(models.AbstractModel):
         :param queue_obj: required openerp.Model of the queue to query.
         :return: a SQS message object 
         """
+        _logger.debug("get_message for Q=%s/%s", queue_obj.name, queue_obj.provider)
         _get_message_method_name = "get_message__%s" % queue_obj.provider
         _get_message_method = getattr(self, _get_message_method_name)
         #_message = _get_message_method(queue_obj, wait_time=wait_time)

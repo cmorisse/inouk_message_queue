@@ -207,7 +207,6 @@ class IMQQueue(models.Model):
         result_str = json.dumps(result, sort_keys=True, indent=4)
         self.test_result = result_str
 
-    
     def btn_add_to_slack(self):
         """ Launch Slack oauth."""
         self.ensure_one()
@@ -235,7 +234,6 @@ class IMQQueue(models.Model):
             "target": "self",
         }
 
-    
     def btn_test_slack_notifications(self):
         """ Sends a Slack test notifications."""
         self.ensure_one()
@@ -243,8 +241,7 @@ class IMQQueue(models.Model):
         message = "Queue: *%s* is ready to send notifications." % self.name
         self.send_slack_notification(message)
         return
-    
-    
+        
     def btn_test_odoo_notifications(self):
         """ Sends an Odoo test notifications."""
         self.ensure_one()
@@ -252,22 +249,24 @@ class IMQQueue(models.Model):
         message = "Queue: *%s* is ready to send notifications." % self.name
         return self.send_odoo_notification(message)
 
-
-    def render_slack_to_fontawesome_part1(self, message):
-        r_message = message.replace(':white_check_mark:', 'XXXWHITECHECKMARKXXX')
-        r_message = r_message.replace(':bear:', 'XXXBEARXXX')
-        r_message = r_message.replace(':bangbang:', 'XXXBANGBANGXXX')
-        r_message = r_message.replace(':warning:', 'XXXWARNINGXXX')
-        r_message = r_message.replace(':x:', 'XXXXXXX')
+    def render_slack_to_fontawesome(self, message):
+        # if message startwith 
+        r_message = message.replace(':white_check_mark:', '<i class="fa fa-check-square"></i>')
+        r_message = r_message.replace(':bear:', '<i class="fa fa-paw"/>')
+        r_message = r_message.replace(':bangbang:', '<i class="fa fa-exclamation"></i>')
+        r_message = r_message.replace(':warning:', '<i class="fa fa-exclamation-triangle"></i>')
+        r_message = r_message.replace(':x:', '<i class="fa fa-times-circle"></i>')
         return r_message
 
-    def render_slack_to_fontawesome_part2(self, message):
-        r_message = message.replace('XXXWHITECHECKMARKXXX', '<i class="fa fa-check-square"></i>')
-        r_message = r_message.replace('XXXBEARXXX', '<i class="fa fa-paw"></i>')
-        r_message = r_message.replace('XXXBANGBANGXXX', '<i class="fa fa-exclamation"></i>')
-        r_message = r_message.replace('XXXWARNINGXXX', '<i class="fa fa-exclamation-triangle"></i>')
-        r_message = r_message.replace('XXXXXXX', '<i class="fa fa-times-circle"></i>')
-        return r_message
+    def escape_slack_icons(self, message):
+        """ We escape slack icons with _ in name to prevent slackdown to mess them """
+        esc_message = message.replace(':white_check_mark:', 'XXXWHITECHECKMARKXXX')
+        return esc_message
+
+    def unescape_slack_icons(self, message):
+        """ We escape slack icons with _ in name to prevent slackdown to mess them """
+        _message = message.replace('XXXWHITECHECKMARKXXX', ':white_check_mark:')
+        return _message
 
     def send_odoo_notification(self, message=None, raw=None, obj=None):
         """ Send message to Odoo #IMQ channels of all queues in record set. 
@@ -275,22 +274,45 @@ class IMQQueue(models.Model):
         """
         icp_model = self.env['ir.config_parameter'] 
         imqbot_partner_obj = self.env.ref('inouk_message_queue.partner_imq')
+
         for record in self:
             if record.use_odoo_notifications:
+
+                # first we escape slack icons with _ in name
+                message = self.escape_slack_icons(message)
+            
+                # then we escape {object_link} with a marker string 
+                message = message.replace(
+                    '{object_link}',
+                    "<XXXOBJECTLINKURLXXX|%s>" % (obj.name,)
+                )
+
                 if obj:
                     notification_text = message.replace(
-                        '{object_link}', 
-                        "*<%s|%s>*" % (obj.get_form_url(), obj.name,)
+                        '{object_link}',
+                        "<XXXOBJECTLINKURLXXX|%s>" % (obj.name,)
                     )
                     payload = notification_text
                 else:
                     payload = message
+
                 if message:
-                    body_html = self.render_slack_to_fontawesome_part1(payload)
-                    body_html = slackdown.render(body_html)
-                    body_html = self.render_slack_to_fontawesome_part2(body_html)
+                    # 2 we use slackdown to convert slack to HTML
+                    # but slackdown do not convert icons (eg: :smile:)
+                    body_html = slackdown.render(payload)
+                    body_html = self.unescape_slack_icons(body_html)
+                    body_html = self.render_slack_to_fontawesome(body_html)
+
+                    # finally we unescape our URL marker with the object URL
+                    if obj:
+                        body_html = body_html.replace(
+                            'XXXOBJECTLINKURLXXX', 
+                            obj.get_form_url()
+                        )
+
                 elif raw:
                     body_html = raw
+
                 channel_obj = self.env.ref('inouk_message_queue.imq_mail_channel')
                 channel_obj.message_post(body=body_html, 
                                          author_id=imqbot_partner_obj.id, 

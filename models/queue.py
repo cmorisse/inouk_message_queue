@@ -281,13 +281,8 @@ class IMQQueue(models.Model):
                 # first we escape slack icons with _ in name
                 message = self.escape_slack_icons(message)
             
-                # then we escape {object_link} with a marker string 
-                message = message.replace(
-                    '{object_link}',
-                    "<XXXOBJECTLINKURLXXX|%s>" % (obj.name,)
-                )
-
                 if obj:
+                    # then we escape {object_link} with a marker string 
                     notification_text = message.replace(
                         '{object_link}',
                         "<XXXOBJECTLINKURLXXX|%s>" % (obj.name,)

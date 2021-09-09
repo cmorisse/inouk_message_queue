@@ -111,6 +111,11 @@ class IMQWorker(models.AbstractModel):
 
         if msg_processor_obj.notify_message_processing_start:
             message_obj.queue_id.send_notification("Start to process {object_link}.", message_obj)
+            message_obj.queue_id.send_notification_v2(
+                title=message_obj.name,
+                message="Start Processing.",
+                obj=message_obj
+            )
 
         start_timestamp = datetime.datetime.now()
         raised = None
@@ -217,6 +222,12 @@ class IMQWorker(models.AbstractModel):
                         % duration_str,
                     message_obj
                 )
+                message_obj.queue_id.send_notification_v2(
+                    title=message_obj.name,
+                    message="Processing done without error (duration=%s)." % duration_str,
+                    icon=":white_check_mark:",
+                    obj=message_obj
+                )
 
         except IMQError as imq_err:  
             # commit, state = Failed, No retry (message removed from queue)
@@ -236,6 +247,12 @@ class IMQWorker(models.AbstractModel):
 
             if msg_processor_obj.notify_message_processing_fail:
                 message_obj.queue_id.send_notification(":x: Failed to process {object_link} ! (raised *IMQError*).", message_obj)
+                message_obj.queue_id.send_notification_v2(
+                    title=message_obj.name,
+                    message="Processing failed! (*IMQError* raised).",
+                    icon=":x:",
+                    obj=message_obj
+                )
 
         except IMQTerminateException as imq_err:
             # rollback, state = Terminated, No retry (message removed from queue)
@@ -256,6 +273,13 @@ class IMQWorker(models.AbstractModel):
                     ":bangbang: Processing of {object_link} terminated (*IMQTerminateException* raised).",
                     message_obj
                 )
+                message_obj.queue_id.send_notification_v2(
+                    title=message_obj.name,
+                    message="Processing terminated (*IMQTerminateException* raised).",
+                    icon=":bangbang:",
+                    obj=message_obj
+                )
+
 
         except (
             IMQRetryableError,
@@ -280,6 +304,12 @@ class IMQWorker(models.AbstractModel):
                     message_obj.queue_id.send_notification(
                         ":x: Failed (%s attempts) to process {object_link} (IMQRetryableError raised)!" % message_obj.max_number_of_attempts, 
                         message_obj)
+                    message_obj.queue_id.send_notification_v2(
+                        title=message_obj.name,
+                        message="Processing failed (%s attempts) (*IMQRetryableError* raised)!" % message_obj.max_number_of_attempts,
+                        icon=":x:",
+                        obj=message_obj
+                    )
 
             else:
                 if msg_processor_obj.notify_message_processing_retry:
@@ -287,6 +317,14 @@ class IMQWorker(models.AbstractModel):
                         ":warning: Retry (%s attempt(s)) to process {object_link} (IMQRetryableError raised)." % message_obj.attempt, 
                         message_obj
                     )
+                    message_obj.queue_id.send_notification_v2(
+                        title=message_obj.name,
+                        message="Retry (attempt %s) to process. (*IMQRetryableError* raised)." % message_obj.attempt, 
+                        icon=":warning:",
+                        obj=message_obj
+                    )
+
+
                 state = 'retry' 
                 # Task will retry after visibility timeout
             run_cursor.rollback()
@@ -322,6 +360,12 @@ class IMQWorker(models.AbstractModel):
                 message_obj.queue_id.send_notification(
                     ":x: Failed to process {object_link} (*%s* raised)!" % repr(exc_value),
                     message_obj
+                )
+                message_obj.queue_id.send_notification_v2(
+                    title=message_obj.name,
+                    message="Process failed (*%s* raised)!" % repr(exc_value),
+                    icon=":x:",
+                    obj=message_obj
                 )
 
         finally:

@@ -121,11 +121,12 @@
             <field name="arch" type="xml">
                 <form>
                     <header>
-                        <button string="Retry"
+                        <!--button string="Retry"
                                 type="object"
                                 name="do_retry_processing"
                                 class="oe_highlight"
-                                attrs="{'invisible':[('state', 'in', ['new'])]}"/>
+                                attrs="{'invisible':[('state', 'in', ['new'])]}"
+                                /-->
                         <button string="Archive"
                                 type="object"
                                 name="do_archive"
@@ -170,7 +171,6 @@
                             </group>
                             <group class="ik_lw180">
                                 <field name="group"/>
-                                <field name="message_deduplication_id"/>
                                 <field name="parent_message_id" />
                                 <field name="target_children_count" />
                                 <field name="planned_time" />
@@ -246,6 +246,10 @@
                                         <field name="processing_id"/>
                                     </group>
                                 </group>
+                                <group>
+                                    <field name="message_deduplication_id" class="text-overflow: ellipsis;"/>
+                                </group>
+
                             </page>
                             
                         </notebook>

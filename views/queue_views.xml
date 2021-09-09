@@ -70,8 +70,20 @@
                                     On this form, you can configure IMQ to send These notifications either to Odoo, Slack or Both.<b/>
                                     </div>
                                 </group>
+                                <group string="Microsoft Teams">
+                                    <div colspan="4">Just check the 'Use Notifications' checkmark below to activate Teams notifications.<br/>
+                                    Once it's done, use the "Test Teams Notification" button below to check your setup. <br/>
+                                    The kind of notifications sent for each message can be defined on a per "Message Processor" basis (in the "Message Processor" Form).<br/>
+                                    </div>
+                                    <group col="4" colspan="4">
+                                        <field name="use_msteams_notifications" colspan="4" />
+                                        <field name="msteams_webhookurl" colspan="4" />
+                                        <field name="msteams_http_timeout" colspan="4" />
+                                        <button type="object" name="btn_test_msteams_notifications" string="Test Teams notifications" class="btn-warning" />
+                                    </group>                                
+                                </group>                                
                                 <group string="Odoo notifications">
-                                    <div colspan="4">Just check the 'Use Odoo Notifications' checkmark below to activate Odoo notiications.<br/>
+                                    <div colspan="4">Just check the 'Use Odoo Notifications' checkmark below to activate Odoo notifications.<br/>
                                     Once it's done, use the "Test Odoo Notification" button below to check your setup. <br/>
                                     The kind of notifications sent for each message can be defined on a per "Message Processor" basis (in the "Message Processor" Form).<br/>
                                     </div>

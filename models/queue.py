@@ -123,6 +123,9 @@ class IMQQueue(models.Model):
         help="This field returns sqs secret when user is a member of imq admin group."
     )
 
+    use_msteams_notifications = fields.Boolean("Use Microsoft Teams notificatations")
+    msteams_webhookurl = fields.Char("Microsoft Teams URL")
+
     def _compute_admin_secret(self):
         for record in self:
             if self.user_has_groups('inouk_message_queue.group_admin'):
@@ -241,7 +244,15 @@ class IMQQueue(models.Model):
         message = "Queue: *%s* is ready to send notifications." % self.name
         self.send_slack_notification(message)
         return
-        
+
+    def btn_test_msteams_notifications(self):
+        """ Sends a Teams test notifications."""
+        self.ensure_one()
+        self.send_teams_notification(":bear:")
+        message = "Queue: *%s* is ready to send notifications." % self.name
+        self.send_teams_notification(message)
+        return
+
     def btn_test_odoo_notifications(self):
         """ Sends an Odoo test notifications."""
         self.ensure_one()
@@ -343,6 +354,13 @@ class IMQQueue(models.Model):
         """ Send message to all 'channels' (slack, sms) of all queues in recordset """
         self.send_slack_notification(message, obj=obj)
         self.send_odoo_notification(message, obj=obj)
+
+    def send_notification_v2(self, title=None, message=None, icon=None, obj=None, facts=None):
+        """ Send message to all 'channels' (slack, sms) of all queues in recordset """
+        #self.send_slack_notification(message, obj=obj)
+        #self.send_odoo_notification(message, obj=obj)
+        self.send_teams_notification(title=title, message=message, icon=icon, obj=obj, facts=facts)
+
     
     def aws_sqs__create_queue(self):
         self.ensure_one()

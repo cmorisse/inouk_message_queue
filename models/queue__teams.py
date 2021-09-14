@@ -52,7 +52,10 @@ class TeamsIMQQueue(models.Model):
         self, title:str, message:str=None, icon_url:str=None, obj_url:str=None, facts:dict=None
     ):
         # We set timeout to 500ms
-        myTeamsMessage = pymsteams.connectorcard(self.msteams_webhookurl, http_timeout=1)
+        myTeamsMessage = pymsteams.connectorcard(
+            self.msteams_webhookurl, 
+            http_timeout=msteams_http_timeout
+        )
         myTeamsMessage.color("0072C6")
         myTeamsMessage.summary(title)
         myTeamsMessage.title(title)
@@ -75,7 +78,6 @@ class TeamsIMQQueue(models.Model):
             myTeamsPotentialAction1 = pymsteams.potentialaction(_name = "Open Message")
             myTeamsPotentialAction1.addOpenURI("Open Message",[{"os": "default", "uri": obj_url}])
             myTeamsMessage.addPotentialAction(myTeamsPotentialAction1)
-        print(json.dumps(myTeamsMessage.payload))
         
         try:
             myTeamsMessage.send()

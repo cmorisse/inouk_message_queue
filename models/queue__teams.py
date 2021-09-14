@@ -93,6 +93,8 @@ class TeamsIMQQueue(models.Model):
 
     def render_icon__teams(self, icon:str):
         """ return icon as https://mpy13c-dev-cyril.odizy.ovh/inouk_message_queue/static/notifs/299110_check_sign_icon.png """
+        icp_model = self.env['ir.config_parameter'].sudo()
+        default_icon = "285667_bubbles_icon.png"
         icon_map = {
             ":white_check_mark:": "299110_check_sign_icon.png",
             ":bear:": "85348_bear_teddy_icon.png",
@@ -100,10 +102,8 @@ class TeamsIMQQueue(models.Model):
             ":warning:": "299112_warning_shield_icon.png",
             ":x:": "299045_sign_error_icon.png",
         }
-        default_icon = "285667_bubbles_icon.png"
         _icon = icon_map.get(icon, default_icon)
-
-        web_base_url = self.env['ir.config_parameter'].get_param('web.base.url')
+        web_base_url = icp_model.get_param('web.base.url')
         _icon_url = f"{web_base_url}/inouk_message_queue/static/notifs/{_icon}"
         return _icon_url
 

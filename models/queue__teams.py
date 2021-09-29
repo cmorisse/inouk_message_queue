@@ -54,7 +54,7 @@ class TeamsIMQQueue(models.Model):
         # We set timeout to 500ms
         myTeamsMessage = pymsteams.connectorcard(
             self.msteams_webhookurl, 
-            http_timeout=msteams_http_timeout
+            http_timeout=self.msteams_http_timeout
         )
         myTeamsMessage.color("0072C6")
         myTeamsMessage.summary(title)

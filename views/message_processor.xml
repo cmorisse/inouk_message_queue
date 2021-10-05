@@ -77,6 +77,13 @@
                                 </group>
                             </page>
                             <page string="Debug" groups="inouk_message_queue.group_debug">
+                                <group>
+                                    <group>
+                                        <field name="id" />
+                                    </group>
+                                    <group>
+                                    </group>
+                                </group>
                             </page>
                         </notebook>
                     </sheet>
@@ -90,6 +97,7 @@
             <field name="priority" eval="15"/>
             <field name="arch" type="xml">
                 <tree>
+                    <field name="id" optional="hide" />
                     <field name="type"/>
                     <field name="name"/>
                     <!-- readonly for RPC Call and manually entered for simple message -->

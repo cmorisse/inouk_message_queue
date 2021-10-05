@@ -3,9 +3,8 @@
     <data noupdate="1">
         <record id="imq_queue__default" model="imq.queue">
             <field name="name">default</field>
-            <field name="provider">aws_sqs</field>
-            <field name="description">This queue is created by default when 
-            'Inouk Message Queue' module installs.
+            <field name="provider">pgsql</field>
+            <field name="description">This queue is created by default when 'Inouk Message Queue' module installs.
             </field>
         </record>
     </data>

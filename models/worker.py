@@ -88,7 +88,7 @@ class IMQWorker(models.AbstractModel):
                     if isinstance(input[_o], odoo.models.BaseModel):
                         return input[_o]
             else:
-                raise Exception("Unsupported inout type for extract_orm_object().")
+                raise Exception("Unsupported input type for extract_orm_object().")
             return None
 
         def strfdelta(tdelta, fmt):
@@ -121,7 +121,7 @@ class IMQWorker(models.AbstractModel):
         raised = None
         try:
             # create a new environment dedicated to function execution
-            # So we gather all information stored in messageenv
+            # thus we gather all information stored in message env
             _uid = message_obj.user_id.id
             _message_type = message_obj.message_type
             _payload = message_obj.payload
@@ -132,6 +132,7 @@ class IMQWorker(models.AbstractModel):
             _module = msg_processor_obj.module
             _function = msg_processor_obj.function
             
+            # create a db cursor and Environment dedicated to execution
             run_cursor = self.env.registry.cursor()
             _logger.debug("run_cursor: %s created.", run_cursor)
             run_env = Environment(run_cursor,
@@ -159,7 +160,8 @@ class IMQWorker(models.AbstractModel):
 
                     # Purge
                     payload['self'].flush()
-                    payload['self'].invalidate_cache()
+                    run_cursor.commit()
+                    #payload['self'].invalidate_cache()
 
                 else:
                     _logger.debug("Executing 'function'.")                    
@@ -177,7 +179,7 @@ class IMQWorker(models.AbstractModel):
                     orm_object = extract_orm_object(payload['args'])
                     if orm_object:
                         orm_object.flush()
-                        orm_object.invalidate_cache()
+                    run_cursor.commit()
 
             else:  # message_type == 'simple'
                 if(msg_processor_obj.module and msg_processor_obj.function):
@@ -203,6 +205,7 @@ class IMQWorker(models.AbstractModel):
                                         message_obj.queue_id.name
                                     )
                     raise Exception(error_message)
+                run_cursor.commit()
             
             end_timestamp = datetime.datetime.now()
             duration_str = strfdelta(end_timestamp-start_timestamp, "{hours}hours{minutes}min{seconds}s")
@@ -210,7 +213,6 @@ class IMQWorker(models.AbstractModel):
                           message_obj.queue_message_id, 
                           duration_str)
 
-            run_cursor.commit()
             _logger.debug("run_cursor:%s committed.", run_cursor)
 
             self.terminate_message(queue_obj, message)
@@ -323,7 +325,6 @@ class IMQWorker(models.AbstractModel):
                         icon=":warning:",
                         obj=message_obj
                     )
-
 
                 state = 'retry' 
                 # Task will retry after visibility timeout
@@ -462,9 +463,9 @@ class IMQWorker(models.AbstractModel):
                 "attempt": message_obj.attempt + 1,
             })
             processing_obj = message_obj.create_processing_object()
-            message_obj.env.cr.commit() 
-
             self.change_message_visibility(queue_obj, message_obj, _message)
+            message_obj.flush()
+            self.env.cr.commit() 
 
             processor_obj = message_obj.processor_id
             if processor_obj:
@@ -472,6 +473,7 @@ class IMQWorker(models.AbstractModel):
                                         processing_obj,
                                         log_level=processor_obj.log_level,
                                         log_format=processor_obj.log_format)
+
                 if message_obj.capture_console:
                     self.start_stream_capture(message_obj, processing_obj)
 
@@ -498,6 +500,8 @@ class IMQWorker(models.AbstractModel):
             result_dict['end_time_microseconds'] = end_timestamp.microsecond
             message_obj.write(result_dict)
             processing_obj.write(result_dict)
+            message_obj.flush()
+            self.env.cr.commit()
 
             # Delete message after MAX_ATTEMPT
             if result_dict['state'] != 'done' and message_obj.attempt >= message_obj.max_number_of_attempts:
@@ -507,8 +511,11 @@ class IMQWorker(models.AbstractModel):
                                 message_obj.queue_message_id,
                                 message_obj.attempt)
                 self.terminate_message(queue_obj, _message)
+                message_obj.flush()
+                self.env.cr.commit()
 
         # Store message log modifications
+        queue_obj.flush()
         self.env.cr.commit()
         _logger.debug("[WorkerCron=%s,Q=%s,Wn=%s,Wp=%s,threadid=%s] Processing cursor:%s committed.",
                         os.getpid(),

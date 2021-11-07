@@ -42,7 +42,7 @@ class IMQMessageProcessor(models.Model):
     type = fields.Selection(IMQ_MESSAGE_PROCESSOR_TYPES, required=True)
     selector = fields.Char(help="Message selector for 'simple' message")
     module = fields.Char(
-        help="Name of module that contains the function. Eg. for Simple message"
+        help="Name of module that contains the function. Eg. for Simple message "
              "test you can use builtin"
              "odoo.addons.inouk_message_queue.models.test_launcher"
     )
@@ -57,8 +57,8 @@ class IMQMessageProcessor(models.Model):
                                        help="Defines if the function accepts an "
                                             "_imq_logger parameter. Must be set manually "
                                             "for processor of 'simple' messages.")
-    capture_log = fields.Boolean(default=False,
-                                 help="Check if you want to capture log of processor"
+    capture_log = fields.Boolean(default=True,
+                                 help="Check if you want to capture log of processor "
                                       "having 'logging activated'.")
     capture_console = fields.Boolean(
         default=False,

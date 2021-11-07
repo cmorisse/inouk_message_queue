@@ -53,16 +53,16 @@ class IMQMessageProcessor(models.Model):
     is_method = fields.Boolean(default=False,
                                help="Checked if function is a method, unchecked if it is"
                                     " a pure function.") 
-    logging_activated = fields.Boolean(default=False,
+    logging_activated = fields.Boolean(default=True,
                                        help="Defines if the function accepts an "
-                                            "_imq_logger parameter. Must be set manually"
+                                            "_imq_logger parameter. Must be set manually "
                                             "for processor of 'simple' messages.")
     capture_log = fields.Boolean(default=False,
                                  help="Check if you want to capture log of processor"
                                       "having 'logging activated'.")
     capture_console = fields.Boolean(
         default=False,
-        help="Check if you want to capture console output having 'logging activated'."
+        help="Check if you want to capture console output having 'logging activated'. "
              "If you check this, IMQ will pass an '_imq_stream' parameter to "
              "each called task. This option is only effective for task that "
              "implement it (eg. Muppy)."
@@ -78,7 +78,7 @@ class IMQMessageProcessor(models.Model):
              "SQS Queue parameters",
         default=False)
     visibility_timeout = fields.Integer(help="Time in seconds (from processing start) the"
-                                             " message will be invisible to other workers."
+                                             " message will be invisible to other workers. "
                                              "If 0 SQS will use the 'VisibilityTimeout' "
                                              "declared in the Queue. Min=0s, Max=12h.")
 

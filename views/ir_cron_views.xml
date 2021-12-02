@@ -31,4 +31,12 @@
 
         </field>
     </record>
+    
+    <record id="imq_workers_configuration__act_window" model="ir.actions.act_window">
+        <field name="name">Workers</field>
+        <field name="res_model">ir.cron</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('cron_name', 'like', 'IMQ')]</field>
+        <field name="context">{'search_default_all': 1}</field>
+    </record>
 </odoo>

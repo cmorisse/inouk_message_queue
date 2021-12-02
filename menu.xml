@@ -40,6 +40,10 @@
                           parent="configuration__menu"
                           sequence="200"
                           action="imq_message_processor__act_window" />
+                <menuitem id="workers_configuration__menuitem"
+                          parent="configuration__menu"
+                          sequence="300"
+                          action="imq_workers_configuration__act_window" />
 
 
             <menuitem id="tests__menu"

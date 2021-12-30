@@ -130,8 +130,13 @@ class IMQTestLauncher(models.Model):
             self.processing_duration_s
         )
         for i in range(self.processing_duration_s):
-            task_logger.info("   %s iteration # %s", an_object.name, i)
-            time.sleep(1)
+            #task_logger.info("   %s iteration # %s", an_object.name, i)
+            #time.sleep(1)
+            task_logger.info("   (q=%s) iteration # %ss (compute)", an_object.name, i)
+            s = time.time()
+            while time.time() < s + 1:
+                j = s / 3.145
+
 
         print("Processing task with param=%s" % a_param)
         task_logger.debug("Processing task with param=%s", a_param)
@@ -165,7 +170,7 @@ class IMQTestLauncher(models.Model):
             self.processing_duration_s
         )
         for i in range(self.processing_duration_s):
-            task_logger.info("   %s iteration # %s", step_name, i)
+            task_logger.info("   (q=%s) iteration # %ss (compute)", an_object.name, i)
             time.sleep(1)
 
     def launch_fifo_test(self):
@@ -194,8 +199,11 @@ def a_task_procedure(an_object, a_param, _imq_logger=None):
         an_object.processing_duration_s
     )
     for i in range(an_object.processing_duration_s):
-        task_logger.info("   %s iteration # %s", an_object.name, i)
-        time.sleep(1)
+        task_logger.info("   %s iteration # %ss (compute)", an_object.name, i)
+        s = time.time()
+        while time.time() < s + 1:
+            j = s / 3.145
+        #time.sleep(1)
 
     print("Processing atask with param=%s" % an_object.param)
     task_logger.debug("Processing atask with param=%s", an_object.param)

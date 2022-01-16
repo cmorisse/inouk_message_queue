@@ -69,7 +69,7 @@ WHERE id = (
         GROUP BY im."group", im.id, im.name, im.state
     )
     SELECT id FROM sq1
-    WHERE sq1.state = 'pending' AND (sq1.prev_state IN ('done', 'terminated', 'archived') OR sq1.prev_state IS NULL )
+    WHERE sq1.state in ('pending', 'retry') AND (sq1.prev_state IN ('done', 'terminated', 'archived') OR sq1.prev_state IS NULL )
     FOR UPDATE SKIP LOCKED
     LIMIT 1
 ) RETURNING id;

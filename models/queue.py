@@ -38,6 +38,10 @@ class IMQQueue(models.Model):
     # fields
     name = fields.Char(size=40, index=True, required=True)
     sqs_name = fields.Char("SQS Name", compute='compute_sqs_name', store=True)
+    sqs_queue_url = fields.Char(
+        "SQS Queue URL",
+        help="URL of the Q on AWS SQS"
+    )
     provider = fields.Selection(QUEUE_PROVIDERS, required=True)
     q_type = fields.Selection(QUEUE_TYPES, string="Queue Type", default='std', required=True)
     database_bound_q = fields.Boolean("Database Bound Queue", default=True)
@@ -381,8 +385,21 @@ class IMQQueue(models.Model):
                 "ContentBasedDeduplication": "true"
             })
 
-        q_obj = sqs_resource.create_queue(
+        sqs_queue = sqs_resource.create_queue(
             QueueName=self.sqs_name,
             Attributes=q_attr_dict
         )
-        self.test_result = q_obj
+        self.sqs_queue_url = sqs_queue.url
+
+    def aws_sqs__delete_queue(self):
+        self.ensure_one()
+        sqs_resource = boto3.resource(
+            'sqs',
+            region_name=self.region,
+            aws_access_key_id=self.key,
+            aws_secret_access_key=self.secret
+        )
+        sqs_queue = sqs_resource.get_queue_by_name(QueueName=self.sqs_name)
+        _resp = sqs_queue.delete()   
+        self.sqs_queue_url = None
+        self.test_result = _resp

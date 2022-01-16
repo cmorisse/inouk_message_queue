@@ -81,7 +81,7 @@ class IMQMessage(models.Model):
     payload = fields.Text(help=_("dict {'args': ..., 'kwargs': ...} pickled."))
     raw_message_body = fields.Text()
     processing_id = fields.Many2one('imq.message_processing', 
-                                    'message_id',
+                                    "Message Processing",
                                     index=True)
     processing_ids = fields.One2many('imq.message_processing', 'message_id')
     attempt = fields.Integer(default=0)
@@ -172,6 +172,10 @@ class IMQMessage(models.Model):
     def refresh(self):
         pass
     
+    def btn_retry_processing(self):
+        self.ensure_one()
+        self.do_retry_processing()
+
     def do_retry_processing(self):
         """Interactive method which call Q specific method to retry processing 
         of a message record set.

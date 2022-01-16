@@ -28,34 +28,6 @@ class IMQMessagePGSQL(models.Model):
                 _logger.error("Message Retry ignored. Only RPC messages can be retried.")
                 continue
         
-            message_body_values = {
-                'type': 'rpc',
-                'logging_activated': record.logging_activated,
-                'capture_console': record.capture_console,
-                'module_name': record.processor_id.module,
-                'function_name': record.processor_id.function,
-                'is_method': record.processor_id.is_method,
-                'context': jsonpickle.decode(record.context or "{}"),
-                'payload': jsonpickle.decode(record.payload or "{}"),
-                'user_id': record.user_id.id,
-            }
-
-            _message_attributes = {
-                'code': {
-                    'DataType': 'String',
-                    'StringValue': "%s" % (record.code),
-                }
-            }
-        
-            response = _send_message(
-                record.queue_id, 
-                record.name,
-                message_body_values, 
-                message_group=record.group or None, 
-                message_deduplication_id=None, 
-                message_attributes=_message_attributes
-            )
-
             queue_message_id_history = record.queue_message_id_history or ''
             queue_message_id_history = "%s %s\n" % (
                 datetime.datetime.now(),
@@ -63,7 +35,8 @@ class IMQMessagePGSQL(models.Model):
             ) + queue_message_id_history
             update_dict = {
                 'queue_message_id_history': queue_message_id_history,
-                'state': 'retry'
+                'state': 'retry',
+                'max_number_of_attempts': record.max_number_of_attempts + 1
             } 
             record.write(update_dict)
         return        

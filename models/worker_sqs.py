@@ -170,4 +170,12 @@ class IMQWorkerSQS(models.AbstractModel):
     
     def terminate_message__aws_sqs(self, queue_obj, sqs_message):
         sqs_message.delete()  # Delete message from Cloud Queue
+
         return True
+
+        if queue_obj.q_type == 'std':
+            sqs_message.delete()  # Delete message from Cloud Queue
+        
+        elif queue_obj.q_type == 'fifo_':
+            VISIBILITY_TIMEOUT_MAX = 12*60*60  # 12 hours
+            sqs_message.change_visibility(VisibilityTimeout=VISIBILITY_TIMEOUT_MAX)

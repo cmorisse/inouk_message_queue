@@ -18,8 +18,16 @@ from odoo.addons.inouk_message_queue.models.message_processor import (
     IMQ_MESSAGE_PROCESSOR_TYPES,
 )
 
-
 _logger = logging.getLogger(__name__)
+
+
+TEST_EXCEPTION_TYPES_LIST = [
+    ('exception',"Python Exception"),
+    ('usererror',"Odoo UserError"),
+    ('imqerror',"IMQError"),
+    ('imqretryable',"IMQRetryableError"),
+    ('imqterminate',"IMQTerminateException"),
+]
 
 
 class IMQTestLauncher(models.Model):
@@ -44,9 +52,20 @@ class IMQTestLauncher(models.Model):
     )
 
     should_raise_exception = fields.Boolean("Raise Exception", help="Will raise a UserError().")
-    should_raise_imqerror = fields.Boolean("Raise IMQError", help="Will raise a IMQError().")
-    should_raise_imqterminateexception = fields.Boolean("Raise IMQTerminateException", help="Will raise a IMQTerminateException().")
-    should_raise_imqretryableerror = fields.Boolean("Raise IMQRetryableError", help="Will raise a IMQRetryableError().")
+    should_raise_exception_type = fields.Selection(
+        selection=TEST_EXCEPTION_TYPES_LIST,
+        string="Exception type", 
+        help="The type of exception to raise."
+    )
+    should_raise_exception_stepname = fields.Char(
+        "Exception Step", 
+        help="Optional Step name that will raise. Must follow form  "
+             "'fifo_step{{number}}' Eg. fifo_step9."
+    )
+    should_raise_exception_latch = fields.Boolean(
+        "Exception Latch", 
+        help="Used to rearm exception"
+    )
 
     selector = fields.Char(
         default="TestMessage", 
@@ -147,20 +166,52 @@ class IMQTestLauncher(models.Model):
         )
         param_str = "Param=%s" % a_param
         self.process_result = p_result
-        if self.should_raise_exception:
-            raise UserError(param_str)
-        elif self.should_raise_imqerror:
-            raise IMQError(param_str)
-        elif self.should_raise_imqterminateexception:
-            raise IMQTerminateException(param_str)
-        elif self.should_raise_imqretryableerror:
-            raise IMQRetryableError(param_str)
+        if self.should_raise_exception and not self.should_raise_exception_latch:
+
+            if not should_raise_exception_step or (should_raise_exception_step and should_raise_exception_step==a_param):
+                if self.should_raise_exception_type=='exception':
+                    raise Exception(param_str)
+
+                elif self.should_raise_exception_type=='usererror':
+                    raise UserError(param_str)
+
+                elif self.should_raise_exception_type=='imqerror':
+                    raise IMQError(param_str)
+
+                elif self.should_raise_exception_type=='imqretryable':
+                    raise IMQRetryableError(param_str)
+
+                elif self.should_raise_exception_type=='imqterminate':
+                    raise IMQTerminateException(param_str)
+
 
         # We use print to get a trace in celery
         print("Processed: %s" % self)
         task_logger.debug("Processed %s", self)
         return self.process_result  # is stored in queue
-    
+
+
+    def process_exception(self, step_name):
+
+        if self.should_raise_exception and not self.should_raise_exception_latch:
+
+            exc_name = "Raise at %s" % step_name
+            if not self.should_raise_exception_stepname or (self.should_raise_exception_stepname and self.should_raise_exception_stepname==step_name):
+                if self.should_raise_exception_type=='exception':
+                    raise Exception(exc_name)
+
+                elif self.should_raise_exception_type=='usererror':
+                    raise UserError(exc_name)
+
+                elif self.should_raise_exception_type=='imqerror':
+                    raise IMQError(exc_name)
+
+                elif self.should_raise_exception_type=='imqretryable':
+                    raise IMQRetryableError(exc_name)
+
+                elif self.should_raise_exception_type=='imqterminate':
+                    raise IMQTerminateException(exc_name)
+
     @processor_method()
     def fifo_step(self, step_name, _imq_logger=None):
         task_logger = _imq_logger or _logger
@@ -169,9 +220,18 @@ class IMQTestLauncher(models.Model):
             step_name, 
             self.processing_duration_s
         )
+
+
         for i in range(self.processing_duration_s):
-            task_logger.info("   (q=%s) iteration # %ss (compute)", an_object.name, i)
+            task_logger.info(
+                "   q=%s, step_name=%s, iteration #%ss (compute)", 
+                self.queue_id.name, 
+                step_name,
+                i
+            )
             time.sleep(1)
+
+        self.process_exception(step_name)
 
     def launch_fifo_test(self):
         self.fifo_step.run_async(self, "fifo_step1", _imq_message_name="step1", _imq_queue_name=self.queue_id.name, _imq_message_group=self.message_group)

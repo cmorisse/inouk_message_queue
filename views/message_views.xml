@@ -121,12 +121,16 @@
             <field name="arch" type="xml">
                 <form>
                     <header>
-                        <!--button string="Retry"
+                        <button string="Retry"
                                 type="object"
-                                name="do_retry_processing"
-                                class="oe_highlight"
-                                attrs="{'invisible':[('state', 'in', ['new'])]}"
-                                /-->
+                                name="btn_retry_processing"
+                                class="btn-danger"
+                                attrs="{'invisible':[
+                                    '|',
+                                    ('state', 'not in', ['failed']),
+                                    '&amp;', ('queue_provider','=','aws_sqs'), ('queue_id.q_type','=','fifo')
+                                ]}"
+                                />
                         <button string="Archive"
                                 type="object"
                                 name="do_archive"
@@ -239,14 +243,23 @@
                             <page string="Debug" groups="inouk_message_queue.group_debug">
                                 <group>
                                     <group>
-                                        <field name="queue_provider"/>
+                                        <field name="id"/>
 
                                     </group>
                                     <group>
-                                        <field name="processing_id"/>
                                     </group>
                                 </group>
                                 <group>
+                                    <group class="ik_lw200">
+                                        <field name="attempt"/>
+                                        <field name="max_number_of_attempts"/>
+                                    </group>
+                                    <group class="ik_lw200">
+                                        <field name="queue_provider"/>
+                                        <field name="processing_id"/>
+                                    </group>
+                                </group>
+                                <group class="ik_lw200" >
                                     <field name="message_deduplication_id" class="text-overflow: ellipsis;"/>
                                 </group>
 

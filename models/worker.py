@@ -242,7 +242,11 @@ class IMQWorker(models.AbstractModel):
             state = 'failed'
             self.terminate_message(queue_obj, message)
 
-            _logger.info("Deleted message:'%s' on SQS (IMQError)", message_obj.queue_message_id)
+            _logger.info(
+                "Deleted %s on queue '%s' (IMQError)", 
+                message_obj,
+                message_obj.queue_message_id
+            )
 
             run_cursor.commit()
             run_env.clear()

@@ -10,6 +10,14 @@
             <field name="arch" type="xml">
                 <form>
                     <header>
+                        <button type="object" name="aws_sqs__create_queue" 
+                                string="Create SQS Queue on AWS" 
+                                attrs="{'invisible':['|', ('provider','!=','aws_sqs'),('sqs_queue_url','!=',False)]}"
+                                class="btn-warning" />
+                        <button type="object" name="aws_sqs__delete_queue" 
+                                string="Delete SQS Queue on AWS" 
+                                attrs="{'invisible':['|', ('provider','!=','aws_sqs'),('sqs_queue_url','=',False)]}"
+                                class="btn-danger" />
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
@@ -82,6 +90,7 @@
                                         <button type="object" name="btn_test_msteams_notifications" string="Test Teams notifications" class="btn-warning" />
                                     </group>                                
                                 </group>                                
+                                <!--
                                 <group string="Odoo notifications">
                                     <div colspan="4">Just check the 'Use Odoo Notifications' checkmark below to activate Odoo notifications.<br/>
                                     Once it's done, use the "Test Odoo Notification" button below to check your setup. <br/>
@@ -92,6 +101,7 @@
                                         <button type="object" name="btn_test_odoo_notifications" string="Test Odoo notifications" class="btn-warning" />
                                     </group>                                
                                 </group>                                
+                                -->
                                 <group string="Slack notifications">
                                     <div colspan="4" >Use the button below to define the workspace and the Slack channel in which IMQ will send the notifications. <br/>
                                     Once it's done, use the "Test Slack Notification" button below to check your setup. <br/>
@@ -113,17 +123,27 @@
                                 
                             </page>
                             <page string="Debug" groups="inouk_message_queue.group_debug">
-                                <group string="Slack" col="4" colspan="4">
-                                    <field name="slack_access_token" colspan="4" />
-                                    <field name="slack_webhook_url" colspan="4" />
-                                    <field name="slack_webhook_config_url" colspan="4" />
-                                    <field name="slack_oauth_access_response" colspan="4" />
-                                </group>                                
-                                <group string="SQS" col="4" colspan="4" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}">
-                                    <field name="key" widget="CopyClipboardChar" colspan="2"/>
-                                    <field name="admin_secret" widget="CopyClipboardChar" colspan="2"/>
-                                    <button type="object" name="aws_sqs__create_queue" string="Create Queue" class="btn-danger" colspan="4"/>
+                                <group>
+                                    <group>
+                                        <field name="id" />
+                                    </group>
+                                    <group>
+                                        
+                                    </group>
                                 </group>
+                                <group>
+                                    <group string="Slack" col="4" colspan="4">
+                                        <field name="slack_access_token" colspan="4" />
+                                        <field name="slack_webhook_url" colspan="4" />
+                                        <field name="slack_webhook_config_url" colspan="4" />
+                                        <field name="slack_oauth_access_response" colspan="4" />
+                                    </group>                                
+                                    <group string="SQS" col="4" colspan="4" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}">
+                                        <field name="sqs_queue_url" widget="CopyClipboardChar" colspan="4"/>
+                                        <field name="key" widget="CopyClipboardChar" colspan="2"/>
+                                        <field name="admin_secret" widget="CopyClipboardChar" colspan="2"/>
+                                    </group>
+                                </group>                                
                             </page>
                         </notebook>
                     </sheet>
@@ -138,11 +158,17 @@
             <field name="priority" eval="15"/>
             <field name="arch" type="xml">
                 <tree decoration-muted="(not active)" >
+                    <field name="id" optional="hide"/>
+                    <field name="provider" optional="show"/>
                     <field name="name"/>
-                    <field name="provider"/>
-                    <field name="sqs_name" />
-                    <field name="description"/>
-                    <field name="active" />
+                    <field name="description" optional="show"/>
+                    <field name="q_type"/>
+                    <field name="sqs_name" optional="hide" />
+                    <field name="visibility_timeout" optional="show"/>
+                    <field name="deduplication_interval_s" optional="show"/>
+                    <field name="use_msteams_notifications" optional="hide"/>
+                    <field name="slack_webhook_channel" optional="hide"/>
+                    <field name="active" optional="show"/>
                 </tree>
             </field>
         </record>
@@ -157,6 +183,7 @@
                     <field name="provider"/>
                     <field name="sqs_name" />
                     <field name="active" />
+                    <field name="id" />
                     <separator/>
                     <filter string="All" name="all" domain="['|', ('active', '=', False), ('active', '=', True)]" />
                     <group expand="0" string="Group By">

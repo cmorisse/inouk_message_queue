@@ -57,6 +57,7 @@
             <field name="priority" eval="15"/>
             <field name="arch" type="xml">
                 <tree>
+                    <field name="id" optional="hide" />
                     <field name="user_id"/>
                     <field name="queue_id"/>
                     <field name="message_id"/>
@@ -128,6 +129,15 @@
                                 </field>
                             </page>
                             <page string="Debug" groups="inouk_message_queue.group_debug">
+                                <group>
+                                    <group>
+                                        <field name="id"/>
+
+                                    </group>
+                                    <group>
+                                    </group>
+                                </group>
+
                             </page>
                             
                         </notebook>

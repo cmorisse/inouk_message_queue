@@ -24,9 +24,15 @@ class IMQMessageSQS(models.Model):
             if record.state == 'new':
                 _logger.error("Message Retry ignored. Messages in state 'new' can't be retried.")
                 continue
+
             if record.message_type != 'rpc':
                 _logger.error("Message Retry ignored. Only RPC messages can be retried.")
                 continue
+            
+            if record.queue_id.q_type == 'fifo':
+                _logger.error("Message Retry ignored. Only message on AWS standard queues can be retried.")
+                continue
+
             sqs_resource = boto3.resource(
                 'sqs',
                 region_name=record.queue_id.region,

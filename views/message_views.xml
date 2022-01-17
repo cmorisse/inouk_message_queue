@@ -128,7 +128,7 @@
                                 attrs="{'invisible':[
                                     '|',
                                     ('state', 'not in', ['failed']),
-                                    '&amp;', ('queue_provider','=','aws_sqs'), ('queue_id.q_type','=','fifo')
+                                    '&amp;', ('queue_provider','=','aws_sqs'), ('queue_type','=','fifo')
                                 ]}"
                                 />
                         <button string="Archive"
@@ -251,6 +251,7 @@
                                 </group>
                                 <group>
                                     <group class="ik_lw200">
+                                        <field name="queue_type"/>
                                         <field name="attempt"/>
                                         <field name="max_number_of_attempts"/>
                                     </group>

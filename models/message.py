@@ -48,6 +48,7 @@ class IMQMessage(models.Model):
     # fields
     queue_id = fields.Many2one('imq.queue', _("Queue"))
     queue_provider = fields.Selection(related='queue_id.provider', readonly=True)
+    queue_type = fields.Selection(related='queue_id.q_type', readonly=True)
     processor_id = fields.Many2one('imq.message_processor', string="Processor")
     group = fields.Char(_("Group"), index=True, readonly=True)
     name = fields.Char()

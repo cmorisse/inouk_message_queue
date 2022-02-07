@@ -64,6 +64,7 @@ class IMQOdooQueue(models.Model):
                     _logger.error("Failed to call res.users::ik_notify(). Is Addon inouk_notifications installed ?")
                 except:
                     raise
+
     def btn_test_odoo_notifications(self):
         """ Sends an Odoo test notifications."""
         self.ensure_one()

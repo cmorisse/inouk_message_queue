@@ -110,11 +110,11 @@ class IMQWorker(models.AbstractModel):
         queue_obj = message_obj.queue_id
 
         if msg_processor_obj.notify_message_processing_start:
-            message_obj.queue_id.send_notification("Start to process {object_link}.", message_obj)
-            message_obj.queue_id.send_notification_v2(
-                title=message_obj.name,
-                message="Start Processing.",
-                obj=message_obj
+            message_obj.queue_id.send_notification(
+                'info',
+                "Start processing",
+                "",
+                message_obj=message_obj
             )
 
         start_timestamp = datetime.datetime.now()
@@ -220,15 +220,11 @@ class IMQWorker(models.AbstractModel):
 
             if msg_processor_obj.notify_message_processing_end:
                 message_obj.queue_id.send_notification(
-                    ":white_check_mark: {object_link} processing done without error (duration=%s)."\
-                        % duration_str,
-                    message_obj
-                )
-                message_obj.queue_id.send_notification_v2(
-                    title=message_obj.name,
-                    message="Processing done without error (duration=%s)." % duration_str,
+                    'success',
+                    "Processing done without error",
+                    message="Duration=%s" % duration_str,
                     icon=":white_check_mark:",
-                    obj=message_obj
+                    message_obj=message_obj
                 )
 
         except IMQError as imq_err:  
@@ -252,12 +248,12 @@ class IMQWorker(models.AbstractModel):
             run_env.clear()
 
             if msg_processor_obj.notify_message_processing_fail:
-                message_obj.queue_id.send_notification(":x: Failed to process {object_link} ! (raised *IMQError*).", message_obj)
-                message_obj.queue_id.send_notification_v2(
-                    title=message_obj.name,
-                    message="Processing failed! (*IMQError* raised).",
+                message_obj.queue_id.send_notification(
+                    'danger',
+                    "Processing failed!",
+                    "*IMQError* has been raised.",
                     icon=":x:",
-                    obj=message_obj
+                    message_obj=message_obj
                 )
 
         except IMQTerminateException as imq_err:
@@ -276,16 +272,12 @@ class IMQWorker(models.AbstractModel):
 
             if msg_processor_obj.notify_message_processing_terminate:
                 message_obj.queue_id.send_notification(
-                    ":bangbang: Processing of {object_link} terminated (*IMQTerminateException* raised).",
-                    message_obj
-                )
-                message_obj.queue_id.send_notification_v2(
-                    title=message_obj.name,
-                    message="Processing terminated (*IMQTerminateException* raised).",
+                    'warning',
+                    "Processing terminated !",
+                    "*IMQTerminateException* has been raised.",
                     icon=":bangbang:",
-                    obj=message_obj
+                    message_obj=message_obj
                 )
-
 
         except (
             IMQRetryableError,
@@ -308,27 +300,24 @@ class IMQWorker(models.AbstractModel):
                              )
                 if msg_processor_obj.notify_message_processing_fail:
                     message_obj.queue_id.send_notification(
-                        ":x: Failed (%s attempts) to process {object_link} (IMQRetryableError raised)!" % message_obj.max_number_of_attempts, 
-                        message_obj)
-                    message_obj.queue_id.send_notification_v2(
-                        title=message_obj.name,
-                        message="Processing failed (%s attempts) (*IMQRetryableError* raised)!" % message_obj.max_number_of_attempts,
+                        'danger',
+                        "Retryable processing failed",
+                        "*IMQRetryableError* has been raised %s times (max attempt)." % message_obj.max_number_of_attempts,
                         icon=":x:",
-                        obj=message_obj
+                        message_obj=message_obj
                     )
 
             else:
                 if msg_processor_obj.notify_message_processing_retry:
                     message_obj.queue_id.send_notification(
-                        ":warning: Retry (%s attempt(s)) to process {object_link} (IMQRetryableError raised)." % message_obj.attempt, 
-                        message_obj
-                    )
-                    message_obj.queue_id.send_notification_v2(
-                        title=message_obj.name,
-                        message="Retry (attempt %s) to process. (*IMQRetryableError* raised)." % message_obj.attempt, 
+                        'warning',
+                        "Retry processing",
+                        "Retry processing attempt #%s (*IMQRetryableError* has been raised)." % message_obj.attempt,
                         icon=":warning:",
-                        obj=message_obj
+                        message_obj=message_obj
                     )
+
+
 
                 state = 'retry' 
                 # Task will retry after visibility timeout
@@ -363,14 +352,11 @@ class IMQWorker(models.AbstractModel):
             run_env.clear()  # invalidates and purges todos
             if msg_processor_obj.notify_message_processing_fail:
                 message_obj.queue_id.send_notification(
-                    ":x: Failed to process {object_link} (*%s* raised)!" % repr(exc_value),
-                    message_obj
-                )
-                message_obj.queue_id.send_notification_v2(
-                    title=message_obj.name,
-                    message="Process failed (*%s* raised)!" % repr(exc_value),
+                    'danger',
+                    "Processing failed",
+                    "*%s* has been raised." % repr(exc_value),
                     icon=":x:",
-                    obj=message_obj
+                    message_obj=message_obj
                 )
 
         finally:

@@ -90,7 +90,6 @@
                                         <button type="object" name="btn_test_msteams_notifications" string="Test Teams notifications" class="btn-warning" />
                                     </group>                                
                                 </group>                                
-                                <!--
                                 <group string="Odoo notifications">
                                     <div colspan="4">Just check the 'Use Odoo Notifications' checkmark below to activate Odoo notifications.<br/>
                                     Once it's done, use the "Test Odoo Notification" button below to check your setup. <br/>
@@ -101,7 +100,6 @@
                                         <button type="object" name="btn_test_odoo_notifications" string="Test Odoo notifications" class="btn-warning" />
                                     </group>                                
                                 </group>                                
-                                -->
                                 <group string="Slack notifications">
                                     <div colspan="4" >Use the button below to define the workspace and the Slack channel in which IMQ will send the notifications. <br/>
                                     Once it's done, use the "Test Slack Notification" button below to check your setup. <br/>

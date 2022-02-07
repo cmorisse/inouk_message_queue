@@ -113,22 +113,10 @@ class IMQQueue(models.Model):
         )
     ]
 
-    slack_team = fields.Char()
-    slack_access_token = fields.Char()
-    slack_webhook_channel = fields.Char()
-    slack_webhook_url = fields.Char("Slack webhook URL")
-    slack_webhook_config_url = fields.Char()
-    slack_oauth_access_response = fields.Text()
-
-    use_odoo_notifications = fields.Boolean()
-
     admin_secret = fields.Char(
         compute='_compute_admin_secret', 
         help="This field returns sqs secret when user is a member of imq admin group."
     )
-
-    use_msteams_notifications = fields.Boolean("Use Microsoft Teams notificatations")
-    msteams_webhookurl = fields.Char("Microsoft Teams URL")
 
     def _compute_admin_secret(self):
         for record in self:
@@ -214,158 +202,18 @@ class IMQQueue(models.Model):
         result_str = json.dumps(result, sort_keys=True, indent=4)
         self.test_result = result_str
 
-    def btn_add_to_slack(self):
-        """ Launch Slack oauth."""
-        self.ensure_one()
-        icp_model = self.env['ir.config_parameter'] 
-        base_url = icp_model.sudo().get_param('web.base.url')
-        SLACK_APP_CLIENT_ID = icp_model.get_param('imq.SLACK_APP_CLIENT_ID')
-        SLACK_OAUTH_CALLBACK = icp_model.get_param('imq.SLACK_OAUTH_CALLBACK')  # Cloudflare worker
+    def send_notification(self, message_type, message_title, message, icon=None, message_obj=None):
+        """ Send message to all 'channels' (slack, sms) of all queues in recordset """        
+        self.send_odoo_notification(
+            message_type, message_title, message, 
+            icon=icon, 
+            #sticky=True,
+            message_obj=message_obj, 
+            user_obj=message_obj.user_id
+        )
+        self.send_slack_notification(message_type, message_title, message, icon=icon, message_obj=message_obj)
+        self.send_teams_notification(message_type, message_title, message, icon=icon, message_obj=message_obj)
 
-        imq_slack_oauth_ctrl = "%s/imq/v1/socb" % base_url  # socb = Slack Oauth Call-Back
-        state_param_b = bytearray("%s/%s" % (imq_slack_oauth_ctrl, self.name), 'utf-8')
-        state_param_b = base64.urlsafe_b64encode(state_param_b)
-        state_param_str = state_param_b.decode('utf-8')
-        
-        # eg. https://slack.com/oauth/v2/authorize?client_id=5006003237.928870046194&scope=incoming-webhook
-        slack_auth_uri = "https://slack.com/oauth/v2/authorize?client_id=%s&scope=incoming-webhook"\
-                         "&redirect_uri=%s&state=%s" % (
-                             SLACK_APP_CLIENT_ID, 
-                             SLACK_OAUTH_CALLBACK, 
-                             state_param_str,)
-
-        _logger.debug("slack_auth_uri=%s", slack_auth_uri)
-        return {
-            "type": "ir.actions.act_url",
-            "url": slack_auth_uri,
-            "target": "self",
-        }
-
-    def btn_test_slack_notifications(self):
-        """ Sends a Slack test notifications."""
-        self.ensure_one()
-        self.send_slack_notification(":bear:")
-        message = "Queue: *%s* is ready to send notifications." % self.name
-        self.send_slack_notification(message)
-        return
-
-    def btn_test_msteams_notifications(self):
-        """ Sends a Teams test notifications."""
-        self.ensure_one()
-        self.send_teams_notification(":bear:")
-        message = "Queue: *%s* is ready to send notifications." % self.name
-        self.send_teams_notification(message)
-        return
-
-    def btn_test_odoo_notifications(self):
-        """ Sends an Odoo test notifications."""
-        self.ensure_one()
-        self.send_odoo_notification(":bear:")
-        message = "Queue: *%s* is ready to send notifications." % self.name
-        return self.send_odoo_notification(message)
-
-    def render_slack_to_fontawesome(self, message):
-        # if message startwith 
-        r_message = message.replace(':white_check_mark:', '<i class="fa fa-check-square"></i>')
-        r_message = r_message.replace(':bear:', '<i class="fa fa-paw"/>')
-        r_message = r_message.replace(':bangbang:', '<i class="fa fa-exclamation"></i>')
-        r_message = r_message.replace(':warning:', '<i class="fa fa-exclamation-triangle"></i>')
-        r_message = r_message.replace(':x:', '<i class="fa fa-times-circle"></i>')
-        return r_message
-
-    def escape_slack_icons(self, message):
-        """ We escape slack icons with _ in name to prevent slackdown to mess them """
-        esc_message = message.replace(':white_check_mark:', 'XXXWHITECHECKMARKXXX')
-        return esc_message
-
-    def unescape_slack_icons(self, message):
-        """ We escape slack icons with _ in name to prevent slackdown to mess them """
-        _message = message.replace('XXXWHITECHECKMARKXXX', ':white_check_mark:')
-        return _message
-
-    def send_odoo_notification(self, message=None, raw=None, obj=None):
-        """ Send message to Odoo #IMQ channels of all queues in record set. 
-        :param message: when formatted, must use slack markdown
-        """
-        icp_model = self.env['ir.config_parameter'] 
-        imqbot_partner_obj = self.env.ref('inouk_message_queue.partner_imq')
-
-        for record in self:
-            if record.use_odoo_notifications:
-
-                # first we escape slack icons with _ in name
-                message = self.escape_slack_icons(message)
-            
-                if obj:
-                    # then we escape {object_link} with a marker string 
-                    notification_text = message.replace(
-                        '{object_link}',
-                        "<XXXOBJECTLINKURLXXX|%s>" % (obj.name,)
-                    )
-                    payload = notification_text
-                else:
-                    payload = message
-
-                if message:
-                    # 2 we use slackdown to convert slack to HTML
-                    # but slackdown do not convert icons (eg: :smile:)
-                    body_html = slackdown.render(payload)
-                    body_html = self.unescape_slack_icons(body_html)
-                    body_html = self.render_slack_to_fontawesome(body_html)
-
-                    # finally we unescape our URL marker with the object URL
-                    if obj:
-                        body_html = body_html.replace(
-                            'XXXOBJECTLINKURLXXX', 
-                            obj.get_form_url()
-                        )
-
-                elif raw:
-                    body_html = raw
-
-                channel_obj = self.env.ref('inouk_message_queue.imq_mail_channel')
-                channel_obj.message_post(body=body_html, 
-                                         author_id=imqbot_partner_obj.id, 
-                                         message_type='notification',
-                                         subtype='mail.mt_comment')
-
-    def send_slack_notification(self, message, obj=None):
-        """ Send message to slack channels of all queues in record set """
-        for record in self:
-            if record.slack_webhook_url:
-                if obj:
-                    notification_text = message.replace(
-                        '{object_link}', 
-                        "*<%s|%s>*" % (obj.get_form_url(), obj.name,)
-                    )
-                    payload = { "text": notification_text }
-                else:
-                    payload = { "text": message }
-                    
-                headers = {'Content-type': 'application/json'}
-                result = requests.post(record.slack_webhook_url, 
-                                       data=json.dumps(payload), 
-                                       headers=headers)
-                _logger.debug("requests.post(%s, data=%s, headers=%s) => %s", 
-                    record.slack_webhook_url, 
-                    json.dumps(payload), 
-                    headers, 
-                    result
-                )
-                _logger.info("result.text => %s", result.text)
-
-    def send_notification(self, message, obj=None):
-        """ Send message to all 'channels' (slack, sms) of all queues in recordset """
-        self.send_slack_notification(message, obj=obj)
-        self.send_odoo_notification(message, obj=obj)
-
-    def send_notification_v2(self, title=None, message=None, icon=None, obj=None, facts=None):
-        """ Send message to all 'channels' (slack, sms) of all queues in recordset """
-        #self.send_slack_notification(message, obj=obj)
-        #self.send_odoo_notification(message, obj=obj)
-        self.send_teams_notification(title=title, message=message, icon=icon, obj=obj, facts=facts)
-
-    
     def aws_sqs__create_queue(self):
         self.ensure_one()
         sqs_resource = boto3.resource(

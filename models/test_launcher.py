@@ -156,7 +156,6 @@ class IMQTestLauncher(models.Model):
             while time.time() < s + 1:
                 j = s / 3.145
 
-
         print("Processing task with param=%s" % a_param)
         task_logger.debug("Processing task with param=%s", a_param)
         p_result = self.process_result or ""
@@ -168,7 +167,7 @@ class IMQTestLauncher(models.Model):
         self.process_result = p_result
         if self.should_raise_exception and not self.should_raise_exception_latch:
 
-            if not should_raise_exception_step or (should_raise_exception_step and should_raise_exception_step==a_param):
+            if not self.should_raise_exception_stepname or (self.should_raise_exception_stepname and self.should_raise_exception_stepname==a_param):
                 if self.should_raise_exception_type=='exception':
                     raise Exception(param_str)
 

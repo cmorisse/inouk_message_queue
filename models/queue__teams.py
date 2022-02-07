@@ -96,32 +96,55 @@ class TeamsIMQQueue(models.Model):
         icp_model = self.env['ir.config_parameter'].sudo()
         default_icon = "285667_bubbles_icon.png"
         icon_map = {
-            ":white_check_mark:": "299110_check_sign_icon.png",
             ":bear:": "85348_bear_teddy_icon.png",
+            
+            ":white_check_mark:": "299110_check_sign_icon.png",
+            "success": "299110_check_sign_icon.png",
+
             ":bangbang:": "53803_new_bang_icon.png",
-            ":warning:": "299112_warning_shield_icon.png",
+            "info": "53803_new_bang_icon.png",
+
+            "warning": "299112_warning_shield_icon.png",
+
             ":x:": "299045_sign_error_icon.png",
+            "danger": "299045_sign_error_icon.png",
         }
         _icon = icon_map.get(icon, default_icon)
         web_base_url = icp_model.get_param('web.base.url')
         _icon_url = f"{web_base_url}/inouk_message_queue/static/notifs/{_icon}"
         return _icon_url
 
-    def send_teams_notification(self, title=None, message=None, icon=None, obj=None, facts=None):
-        """ Send message to teams channels of all queues in record set """
+    def send_teams_notification(
+        self, message_type, message_title, message, icon=None, message_obj=None, facts=None
+    ):
+        """ Send message to teams channels of all queues in record set 
+        :param message_type: defines the 
+        """
         for record in self:
             if record.use_msteams_notifications and record.msteams_webhookurl:
-                icon_url = self.render_icon__teams(icon) if icon else None
-                obj_url = obj.get_form_url() if obj else None
-                self.send_teams_message(title, message=message, icon_url=icon_url, obj_url=obj_url, facts=facts)
+                if icon:
+                    icon_url = self.render_icon__teams(icon)
+                else:
+                    icon_url = self.render_icon__teams(message_type)
+
+                obj_url = message_obj.get_form_url() if message_obj else None
+
+                self.send_teams_message(
+                    message_title, 
+                    message=message, 
+                    icon_url=icon_url, 
+                    obj_url=obj_url, 
+                    facts=facts
+                )
 
     def btn_test_msteams_notifications(self):
         """ Sends a Teams test notifications."""
         self.ensure_one()
         _icon=":bear:"
         self.send_teams_notification(
-            title="Queue: %s" % self.name,
-            message="is ready to send notifications.",
+            'info',
+            "IMQ Notification Test",
+            "Queue: %s is ready to send notifications." % self.name,
             icon=_icon
         )
         return

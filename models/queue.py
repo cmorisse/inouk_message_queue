@@ -209,7 +209,7 @@ class IMQQueue(models.Model):
             icon=icon, 
             #sticky=True,
             message_obj=message_obj, 
-            user_obj=message_obj.user_id
+            user_obj=message_obj.user_id if message_obj else self.env.user
         )
         self.send_slack_notification(message_type, message_title, message, icon=icon, message_obj=message_obj)
         self.send_teams_notification(message_type, message_title, message, icon=icon, message_obj=message_obj)

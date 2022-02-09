@@ -15,7 +15,7 @@ _logger = logging.getLogger('ir_cron_patcher')
 
 def patch_ir_cron():
     ir_cron._intervalTypes['seconds'] = lambda interval: relativedelta(seconds=interval)
-    _logger.warning("Added 'seconds' to ir_cron.py::_intervalTypes")
+    _logger.info("Added 'seconds' to ir_cron.py::_intervalTypes")
 
     server.SLEEP_INTERVAL = 10
-    _logger.warning("server.py::SLEEP_INTERVAL=%s", server.SLEEP_INTERVAL)
+    _logger.info("server.py::SLEEP_INTERVAL=%s", server.SLEEP_INTERVAL)

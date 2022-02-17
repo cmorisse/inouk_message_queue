@@ -87,7 +87,7 @@ UPDATE imq_message
 SET state='pending', visibility_time=NULL
 WHERE
     state='wip'
-AND visibility_time <= NOW();
+AND visibility_time <= NOW() AT TIME ZONE 'utc';
 """
 
 

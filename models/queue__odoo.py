@@ -46,7 +46,7 @@ class IMQOdooQueue(models.Model):
         """
         for record in self:
             if record.use_odoo_notifications:
-                body_html = slackdown.render(message)
+                body_html = slackdown.render(message or "")
                 if message_obj:
                     obj_url = f'Message: <a href="{message_obj.get_form_url()}">{message_obj.name}</a>'
                     body_html += obj_url
@@ -55,7 +55,7 @@ class IMQOdooQueue(models.Model):
                 try:
                     user_obj.ik_notify(
                         message_type,
-                        message_title,
+                        message_title or "",
                         body_html, 
                         force_icon=self.render_icon__odoo(icon),
                         sticky=True if (message_type=='danger' or sticky) else False,

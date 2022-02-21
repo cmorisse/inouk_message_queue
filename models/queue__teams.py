@@ -34,6 +34,12 @@ class TeamsIMQQueue(models.Model):
         help="In seconds. eg 0.324 => 324ms",
         default=0.5
     )
+    msteams_https_proxy = fields.Char(
+        "Teams HTTPS Proxy",
+        help="Enter full URL of https proxy (eg. http://user:password@proxy_fqdns:proxy_port) to"
+             "use to send Microsoft Teams notifications. Please note that user and password must be"
+             " URL encoded."
+    )
             
     def get_form_url(self):
         self.ensure_one()
@@ -54,7 +60,8 @@ class TeamsIMQQueue(models.Model):
         # We set timeout to 500ms
         myTeamsMessage = pymsteams.connectorcard(
             self.msteams_webhookurl, 
-            http_timeout=self.msteams_http_timeout
+            http_timeout=self.msteams_http_timeout,
+            https_proxy=self.msteams_https_proxy or None
         )
         myTeamsMessage.color("0072C6")
         myTeamsMessage.summary(title)

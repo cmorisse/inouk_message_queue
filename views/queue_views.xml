@@ -141,6 +141,10 @@
                                         <field name="key" widget="CopyClipboardChar" colspan="2"/>
                                         <field name="admin_secret" widget="CopyClipboardChar" colspan="2"/>
                                     </group>
+                                    <group string="Microsoft Teams" col="4" colspan="4">
+                                        <field name="msteams_https_proxy" colspan="4"/>
+                                    </group>
+
                                 </group>                                
                             </page>
                         </notebook>

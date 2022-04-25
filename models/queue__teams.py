@@ -135,7 +135,6 @@ class TeamsIMQQueue(models.Model):
                     icon_url = self.render_icon__teams(message_type)
 
                 obj_url = message_obj.get_form_url() if message_obj else None
-
                 self.send_teams_message(
                     message_title, 
                     message=message, 

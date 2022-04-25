@@ -212,6 +212,9 @@ class IMQQueue(models.Model):
             user_obj=message_obj.user_id if message_obj else self.env.user
         )
         self.send_slack_notification(message_type, message_title, message, icon=icon, message_obj=message_obj)
+
+        if message_obj:
+            message = "%s<br/>%s" % (message_obj.name, message,)
         self.send_teams_notification(message_type, message_title, message, icon=icon, message_obj=message_obj)
 
     def aws_sqs__create_queue(self):

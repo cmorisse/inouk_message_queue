@@ -73,6 +73,7 @@
                                         <field name="rpc_test_method" />
                                         <field name="processing_duration_s"/>
                                         <field name="param"/>
+                                        <field name="pass_imqerror_value"/>
                                     </group>
                                     <group class="ik_lw240">
                                         <field name="should_raise_exception"/>

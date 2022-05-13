@@ -148,6 +148,7 @@ class IMQWorker(models.AbstractModel):
 
                 if message_obj.logging_activated and msg_processor_obj.capture_log:
                     payload['kwargs']['_imq_logger'] = TLS._logger
+
                 if message_obj.capture_console:
                     payload['kwargs']['_imq_stream'] = TLS._imq_stream
 
@@ -235,6 +236,12 @@ class IMQWorker(models.AbstractModel):
                                                         exc_value, 
                                                         exc_traceback)
             returned_value = "\n".join(returned_value)
+            try:
+                results = json.dumps(imq_err.results, indent=4)
+            except:
+                results = str(imq_err.results)
+            returned_value += "\n" + "-" * 80 + "\n" + results     
+            
             state = 'failed'
             self.terminate_message(queue_obj, message)
 
@@ -264,6 +271,12 @@ class IMQWorker(models.AbstractModel):
                                                         exc_value,
                                                         exc_traceback)
             returned_value = "\n".join(returned_value)
+            try:
+                results = json.dumps(imq_err.results, indent=4)
+            except:
+                results = str(imq_err.results)
+            returned_value += "\n" + "-" * 80 + "\n" + results     
+
             state = 'terminated'
             self.terminate_message(queue_obj, message)
             _logger.info("Deleted message:'%s' on queue (IMQTerminateException)", message_obj.queue_message_id)
@@ -316,9 +329,6 @@ class IMQWorker(models.AbstractModel):
                         icon=":warning:",
                         message_obj=message_obj
                     )
-
-
-
                 state = 'retry' 
                 # Task will retry after visibility timeout
             run_cursor.rollback()

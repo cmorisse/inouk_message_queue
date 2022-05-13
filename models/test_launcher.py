@@ -66,6 +66,7 @@ class IMQTestLauncher(models.Model):
         "Exception Latch", 
         help="Used to rearm exception"
     )
+    pass_imqerror_value = fields.Boolean("Pass a value to IMQError")
 
     selector = fields.Char(
         default="TestMessage", 
@@ -175,7 +176,7 @@ class IMQTestLauncher(models.Model):
                     raise UserError(param_str)
 
                 elif self.should_raise_exception_type=='imqerror':
-                    raise IMQError(param_str)
+                    raise IMQError(param_str, results=[{'key': "value"}])
 
                 elif self.should_raise_exception_type=='imqretryable':
                     raise IMQRetryableError(param_str)
@@ -203,7 +204,7 @@ class IMQTestLauncher(models.Model):
                     raise UserError(exc_name)
 
                 elif self.should_raise_exception_type=='imqerror':
-                    raise IMQError(exc_name)
+                    raise IMQError(exc_name, results=[{'key': "value"}])
 
                 elif self.should_raise_exception_type=='imqretryable':
                     raise IMQRetryableError(exc_name)
@@ -219,7 +220,6 @@ class IMQTestLauncher(models.Model):
             step_name, 
             self.processing_duration_s
         )
-
 
         for i in range(self.processing_duration_s):
             task_logger.info(
@@ -242,9 +242,8 @@ class IMQTestLauncher(models.Model):
         self.fifo_step.run_async(self, "fifo_step7", _imq_message_name="step7", _imq_queue_name=self.queue_id.name, _imq_message_group=self.message_group)
         self.fifo_step.run_async(self, "fifo_step8", _imq_message_name="step8", _imq_queue_name=self.queue_id.name, _imq_message_group=self.message_group)
 
-
 @processor()
-def a_task_procedure(an_object, a_param, _imq_logger=None):
+def a_task_procedure(an_object, a_param, _imq_logger=None, _imq_stream=None):
     """Run a_task_procedure #{0}
     This is our task. It simplied inject param in value adding it current time.
     """
@@ -273,14 +272,25 @@ def a_task_procedure(an_object, a_param, _imq_logger=None):
     )
     param = "Param=%s" % an_object.param
     an_object.process_result = p_result
-    if an_object.should_raise_exception:
-        raise UserError(param)
-    elif an_object.should_raise_imqerror:
-        raise IMQError(param)
-    elif an_object.should_raise_imqterminateexception:
-        raise IMQTerminateException(param)
-    elif an_object.should_raise_imqretryableerror:
-        raise IMQRetryableError(param)
+
+    if an_object.should_raise_exception:            
+        if an_object.should_raise_exception_type=='exception':
+            raise Exception(param)
+
+        elif an_object.should_raise_exception_type=='usererror':
+            raise UserError(param)
+
+        elif an_object.should_raise_exception_type=='imqerror':
+            if an_object.pass_imqerror_value:
+                raise IMQError(param, results=[{'key': "value"}])
+            else:
+                raise IMQError(param)
+
+        elif an_object.should_raise_exception_type=='imqretryable':
+            raise IMQRetryableError(param)
+
+        elif an_object.should_raise_exception_type=='imqterminate':
+            raise IMQTerminateException(param)
 
     # We use print to get a trace in celery
     print("Processed: %s" % an_object)

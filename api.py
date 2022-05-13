@@ -22,13 +22,23 @@ _logger = logging.getLogger(__name__)
 
 
 class IMQError(UserError):
-    pass
+    def __init__(self, message, results=None):
+        """ 
+        :param results: Any obj pr string
+        """
+        super().__init__(message)
+        self.results = results
 
 class IMQRetryableError(UserError):
     pass
 
 class IMQTerminateException(UserError):
-    pass
+    def __init__(self, message, results=None):
+        """ 
+        :param results: Any obj pr string
+        """
+        super().__init__(message)
+        self.results = results
 
 
 class OdooModelWrapper:

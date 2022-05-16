@@ -96,13 +96,22 @@ class IMQQueueSlack(models.Model):
                 payload = { "text": notification_text }
                     
                 headers = {'Content-type': 'application/json'}
-                result = requests.post(record.slack_webhook_url, 
-                                       data=json.dumps(payload), 
-                                       headers=headers)
-                _logger.debug("requests.post(%s, data=%s, headers=%s) => %s", 
-                    record.slack_webhook_url, 
-                    json.dumps(payload), 
-                    headers, 
-                    result
-                )
-                _logger.info("result.text => %s", result.text)
+                try:
+                    result = requests.post(record.slack_webhook_url, 
+                                        data=json.dumps(payload), 
+                                        headers=headers)
+                    _logger.debug("requests.post(%s, data=%s, headers=%s) => %s", 
+                        record.slack_webhook_url, 
+                        json.dumps(payload), 
+                        headers, 
+                        result
+                    )
+                    _logger.info("result.text => %s", result.text)
+                except:
+                    exc_type, exc_value, exc_traceback = exc_info = sys.exc_info()
+                    _logger.error("Failed to send slack notification !!!!!")
+                    exc_message = traceback.format_exception(exc_type, 
+                                                            exc_value, 
+                                                            exc_traceback)
+                    result_output = "\n".join(exc_message)
+                    _logger.error(result_output)

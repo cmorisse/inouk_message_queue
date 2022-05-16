@@ -203,9 +203,17 @@ class IMQQueue(models.Model):
         self.test_result = result_str
 
     def send_notification(self, message_type, message_title, message, icon=None, message_obj=None):
-        """ Send message to all 'channels' (slack, sms) of all queues in recordset """        
+        """ Send message to all 'channels' (slack, sms) of all queues in recordset
+
+        :param message_type: "danger", "warning", "success" or "info". This defines the overall aspect of the notification.
+        :param message_title: The title of the notification
+        :param message: The message text. HTML content is supported.
+        :pram icon: any of :bear:, success, info, warning, danger"
+        """        
         self.send_odoo_notification(
-            message_type, message_title, message, 
+            message_type, 
+            message_title, 
+            message, 
             icon=icon, 
             #sticky=True,
             message_obj=message_obj, 

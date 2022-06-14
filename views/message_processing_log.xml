@@ -48,12 +48,13 @@
             <field name="priority" eval="15"/>
             <field name="arch" type="xml">
                 <tree>
-                    <field name="create_date"/>
-                    <field name="message_id" />
-                    <field name="processing_id"/>
-                    <field name="logger_name" />
-                    <field name="log_level" />
-                    <field name="log_message" widget="html" class="ik_console" />
+                    <field name="id" optional="hide" />
+                    <field name="create_date" optional="show" />
+                    <field name="message_id" optional="show" />
+                    <field name="processing_id" optional="hide" />
+                    <field name="logger_name" optional="show" />
+                    <field name="log_level" optional="show" />
+                    <field name="log_message" widget="html" class="ik_console" optional="show"/>
                 </tree>
             </field>
         </record>

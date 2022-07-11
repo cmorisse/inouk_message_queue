@@ -22,6 +22,7 @@ _logger = logging.getLogger(__name__)
 
 
 class IMQError(UserError):
+    """ Commit, statut = "Failed", Pas de retry """
     def __init__(self, message, results=None):
         """ 
         :param results: Any obj pr string
@@ -29,10 +30,14 @@ class IMQError(UserError):
         super().__init__(message)
         self.results = results
 
+
 class IMQRetryableError(UserError):
+    """ Rollback, statut = "Retry", Retry automatique """
     pass
 
+
 class IMQTerminateException(UserError):
+    """ Rollback, statut = "Terminated", Pas de retry """
     def __init__(self, message, results=None):
         """ 
         :param results: Any obj pr string

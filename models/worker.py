@@ -600,17 +600,22 @@ class IMQLogHandler(logging.Handler):
     
     def emit(self, record):
         try:
+            _msg = record.msg % record.args
+        except Exception as e1: 
+            _logger.exception(e1)
+            _msg = "Failed to log:%s with %s" % (str(record.msg), str(record.args))
+        try:
             self._env['imq.message_processing_log'].sudo().create({
                 'message_id': self._message_id,
                 'active_message_id': self._message_id,
                 'processing_id': self._processing_id,
                 'logger_name': record.name,
                 'log_level': str(record.levelno),
-                'log_message': record.msg % record.args
+                'log_message': _msg
             })
             self._env.cr.commit()
-        except:
-            _logger.critical("Failed to log:%s with %s", record.msg, record.args)
+        except Exception as e2:
+            _logger.exception(e2)
         
     def flush(self):
         """ We can't commit in flush since flush can be called long after 

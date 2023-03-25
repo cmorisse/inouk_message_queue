@@ -6,7 +6,7 @@
             <field name="channel_type">chat</field>
             <field name="description">IMQ Processing notifications</field>
             <field name="group_ids" eval="[(4, ref('base.group_user'))]"/>
-            <field name="public">public</field>
+            <field name="channel_type">channel</field>
 
         </record>
     </data>

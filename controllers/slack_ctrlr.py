@@ -9,7 +9,7 @@ import werkzeug.wrappers
 import werkzeug
 
 from odoo import models, fields
-from odoo.http import request, route, Controller, Response, AuthenticationError
+from odoo.http import request, route, Controller, Response
 from odoo.tools.safe_eval import safe_eval
 
 

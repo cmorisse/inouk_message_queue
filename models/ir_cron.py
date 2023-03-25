@@ -26,23 +26,24 @@ class ir_cron(models.Model):
             self.doall = False
  
     @classmethod
-    def _process_job(cls, job_cr, job, cron_cr):
+    def _process_job(cls, db, cron_cr, job, ):
         """ Run a given job taking care of the repetition.
 
-        :param job_cr: cursor to use to execute the job, safe to commit/rollback
-        :param job: job to be run (as a dictionary).
+        :param db: odoo.sql_db connect to the database
         :param cron_cr: cursor holding lock on the cron job row, to use to update the next exec date,
             must not be committed/rolled back!
+        :param job: job to be run (as a dictionary).
         """
         _logger.debug("Entering imq::ir.cron._process_job()")
         if not job.get('imq_is_worker'):
-            super()._process_job(job_cr, job, cron_cr)
+            super()._process_job(db, cron_cr, job)
             return
-        cls._imq_process_job(job_cr, job, cron_cr)
+        cls._imq_process_job(db, cron_cr, job)
         return
 
     @classmethod
-    def _imq_process_job(cls, job_cr, job, cron_cr):
+    #def _imq_process_job(cls, job_cr, job, cron_cr):
+    def _imq_process_job(cls, db, cron_cr, job):
         """ Run a given job taking care of the repetition.
 
         :param job_cr: cursor to use to execute the job, safe to commit/rollback
@@ -51,36 +52,45 @@ class ir_cron(models.Model):
             must not be committed/rolled back!
         """
         _logger.debug("Entering _imq_process_job()")
-        with api.Environment.manage():
-            try:
-                cron = api.Environment(
-                    job_cr, 
-                    job['user_id'], 
-                    {
-                        'lastcall': fields.Datetime.from_string(job['lastcall'])
-                    }
-                )[cls._name]
-                
-                now = fields.Datetime.context_timestamp(cron, datetime.datetime.now())
-                numbercall = job['numbercall']
 
-                cron._callback(job['cron_name'], job['ir_actions_server_id'], job['id'])
-                if numbercall > 0:
-                    numbercall -= 1
-                if not numbercall:
-                    addsql = ', active=False'
-                else:
-                    addsql = ''
+        with cls.pool.cursor() as job_cr:
+            lastcall = fields.Datetime.to_datetime(job['lastcall'])
+            #interval = _intervalTypes[job['interval_type']](job['interval_number'])
+            env = api.Environment(job_cr, job['user_id'], {'lastcall': lastcall})
+            ir_cron = env[cls._name]
 
-                cron_cr.execute(
-                    "UPDATE ir_cron SET numbercall=%s, lastcall=%s"+addsql+" WHERE id=%s",(
-                    numbercall,
-                    fields.Datetime.to_string(now.astimezone(pytz.UTC)),
-                    job['id']
-                ))
-                cron.flush()
-                cron.invalidate_cache()
+            # Use the user's timezone to compare and compute datetimes,
+            # otherwise unexpected results may appear. For instance, adding
+            # 1 month in UTC to July 1st at midnight in GMT+2 gives July 30
+            # instead of August 1st!
+            now = fields.Datetime.now()
+            ir_cron._callback(job['cron_name'], job['ir_actions_server_id'], job['id'])
+            numbercall = job['numbercall']
 
-            finally:
-                job_cr.commit()
-                cron_cr.commit()
+#        with api.Environment.manage():
+#            try:
+#                ir_cron = api.Environment(
+#                    job_cr, 
+#                    job['user_id'], 
+#                    {
+#                        'lastcall': fields.Datetime.from_string(job['lastcall'])
+#                    }
+#                )[cls._name]               
+#            now = fields.Datetime.context_timestamp(cron, datetime.datetime.now())
+#            cron._callback(job['cron_name'], job['ir_actions_server_id'], job['id'])
+            ir_cron._callback(job['cron_name'], job['ir_actions_server_id'], job['id'])
+
+            if numbercall > 0:
+                numbercall -= 1
+            if not numbercall:
+                addsql = ', active=False'
+            else:
+                addsql = ''
+
+            cron_cr.execute(
+                "UPDATE ir_cron SET numbercall=%s, lastcall=%s"+addsql+" WHERE id=%s",(
+                numbercall,
+                fields.Datetime.to_string(now.astimezone(pytz.UTC)),
+                job['id']
+            ))
+            cron_cr.commit()

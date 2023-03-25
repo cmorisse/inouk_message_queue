@@ -240,7 +240,8 @@
                                     </tree>
                                 </field>
                             </page>
-                            <page string="Debug" groups="inouk_message_queue.group_debug">
+                            <page string="Debug" >
+                                    <!--groups="inouk_message_queue.group_debug"-->
                                 <group>
                                     <group>
                                         <field name="id"/>

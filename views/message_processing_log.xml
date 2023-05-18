@@ -15,6 +15,8 @@
                     <field name="log_level" />
                     <field name="log_message" />
 
+                    <filter name="filter_logs" string="Logs Only" domain="[('log_level','!=', False)]" />
+
                     <group string="Group by...">
                         <filter name="group_by_message_id"
                                 string="Message"

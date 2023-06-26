@@ -101,7 +101,7 @@ class IMQWorker(models.AbstractModel):
                       message_obj.queue_message_id, 
                       message_obj.name)
 
-        run_context = jsonpickle.decode(message_obj.context)
+        run_context = jsonpickle.decode(message_obj.context or '{}')
         run_context['_imq_message_id'] = message_obj.queue_message_id
         if worker_param:
             run_context['_imq_worker_param'] = worker_param
@@ -184,7 +184,14 @@ class IMQWorker(models.AbstractModel):
 
             else:  # message_type == 'simple'
                 if(msg_processor_obj.module and msg_processor_obj.function):
-                    payload = json.loads(message_obj.payload)
+                    # We extract payload from raw_message_body to support simple message
+                    # injected into a queue
+                    if message_obj.payload:
+                        payload = json.loads(message_obj.payload)
+                    else:
+                        _rmb = json.loads(message_obj.raw_message_body)
+                        payload = _rmb['payload']
+
                     function_module = importlib.import_module(
                         msg_processor_obj.module, 
                         package=None

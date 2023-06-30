@@ -160,8 +160,9 @@ class IMQWorker(models.AbstractModel):
                     )(*payload['args'], **payload['kwargs'])
 
                     # Purge
+                    payload['self'].flush()
                     #payload['self'].flush_all()
-                    run_env.flush_all()
+                    # run_env.flush_all()
                     run_cursor.commit()
                     #payload['self'].invalidate_cache()
 
@@ -465,9 +466,9 @@ class IMQWorker(models.AbstractModel):
             })
             processing_obj = message_obj.create_processing_object()
             self.change_message_visibility(queue_obj, message_obj, _message)
-            #message_obj.flush()
+            message_obj.flush()
             #self.env.flush_all()
-            message_obj.flush_recordset()
+            # message_obj.flush_recordset()
             self.env.cr.commit() 
 
             processor_obj = message_obj.processor_id
@@ -503,7 +504,8 @@ class IMQWorker(models.AbstractModel):
             result_dict['end_time_microseconds'] = end_timestamp.microsecond
             message_obj.write(result_dict)
             processing_obj.write(result_dict)
-            message_obj.flush_recordset()
+            message_obj.flush()
+            # message_obj.flush_recordset()
             self.env.cr.commit()
 
             # Delete message after MAX_ATTEMPT
@@ -518,7 +520,8 @@ class IMQWorker(models.AbstractModel):
                 self.env.cr.commit()
 
         # Store message log modifications
-        queue_obj.flush_recordset()
+        queue_obj.flush()
+        # queue_obj.flush_recordset()
         self.env.cr.commit()
         _logger.debug("[WorkerCron=%s,Q=%s,Wn=%s,Wp=%s,threadid=%s] Processing cursor:%s committed.",
                         os.getpid(),

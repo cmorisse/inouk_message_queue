@@ -472,8 +472,11 @@ def send_message(
 ):
     """ Sends a Simple message to any Queue.
     :param env: A valid Odoo env
-    :param queue: Queue name prefix of the queue to use or queue obj
+    :param queue: Queue name prefix of the queue to use or queue obj. Use 'default' or None for default queue.
     """
+    if queue is None:
+        queue = 'default'
+
     if isinstance(queue, str):
         queue_obj = env['imq.queue'].search([('name', '=', queue)])
         if not queue_obj:

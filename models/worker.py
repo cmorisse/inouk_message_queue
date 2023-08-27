@@ -607,7 +607,10 @@ class IMQLogHandler(logging.Handler):
     
     def emit(self, record):
         try:
-            _msg = record.msg % record.args
+            if record.args:
+                _msg = record.msg % record.args
+            else:
+                _msg = record.msg
         except Exception as e1: 
             _logger.exception(e1)
             _msg = "Failed to log:%s with %s" % (str(record.msg), str(record.args))

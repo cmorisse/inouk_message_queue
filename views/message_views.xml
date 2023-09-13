@@ -219,8 +219,7 @@
                                     <field name="payload"/>
                                     <field name="raw_message_body"
                                            readonly="1"
-                                           widget="ace" options="{'mode': 'python'}" 
-                                           colspan="4" />
+                                           widget="ace" options="{'mode': 'python'}" />
                                 </group>
                             </page>
                             <page string="Exec. history">

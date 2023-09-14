@@ -4,7 +4,7 @@
 "access_imq_message_processor_adm","IMQ - Message Processor for admin","inouk_message_queue.model_imq_message_processor","inouk_message_queue.group_admin","True","True","True","True"
 "access_imq_message_processor_usr","IMQ - Message Processor for user","inouk_message_queue.model_imq_message_processor","inouk_message_queue.group_user","True","True","True","True"
 "access_imq_message_adm","IMQ - Messages for admin","inouk_message_queue.model_imq_message","inouk_message_queue.group_admin","True","True","True","True"
-"access_imq_message_usr","IMQ - Message for user","inouk_message_queue.model_imq_message","inouk_message_queue.group_user","False","True","False","False"
+"access_imq_message_usr","IMQ - Message for user","inouk_message_queue.model_imq_message","inouk_message_queue.group_user","True","True","True","False"
 "access_imq_message_processing_adm","IMQ - Message Processing for admin","inouk_message_queue.model_imq_message_processing","inouk_message_queue.group_admin","True","True","True","True"
 "access_imq_message_processing_usr","IMQ - Message Processing for user","inouk_message_queue.model_imq_message_processing","inouk_message_queue.group_user",False,True,False,False
 "access_imq_worker_adm","IMQ - Worker for admin","inouk_message_queue.model_imq_worker","inouk_message_queue.group_admin","True","True","True","True"

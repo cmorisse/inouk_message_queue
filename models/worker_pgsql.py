@@ -150,9 +150,9 @@ class IMQWorkerSQS(models.AbstractModel):
 
         if processor_obj:
             if processor_obj.force_visibility_timeout:
-                _visibility_time = datetime.datetime.now() + datetime.timedelta(seconds=queue_obj.visibility_timeout)
-            else:
                 _visibility_time = datetime.datetime.now() + datetime.timedelta(seconds=processor_obj.visibility_timeout)
+            else:
+                _visibility_time = datetime.datetime.now() + datetime.timedelta(seconds=queue_obj.visibility_timeout)
 
             message_values_dict.update({
                 'processor_id': processor_obj.id,

@@ -201,7 +201,7 @@ class IMQWorker(models.AbstractModel):
                     }
                     if message_obj.capture_console:
                         payload['kwargs']['_imq_stream'] = TLS._imq_stream                    
-                    message_obj.flush()
+                    message_obj.flush_recordset()
                     returned_value = getattr(
                         function_module, 
                         msg_processor_obj.function

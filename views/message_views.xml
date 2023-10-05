@@ -114,7 +114,7 @@
             </field>
         </record>
 
-        <record id="imq_message__form_view" model="ir.ui.view">
+        <record id="imq_message__formview" model="ir.ui.view">
             <field name="name">imq.message_form.view</field>
             <field name="model">imq.message</field>
             <field name="priority" eval="15"/>

@@ -95,7 +95,11 @@ class IMQMessageProcessor(models.Model):
             'UNIQUE(type, selector, module, function)', 
             _("Processor must be unique !")
         )
-    ]    
+    ]
+
+    def btn_refresh(self):
+        self._calc_name()
+
     def copy(self, default=None):
         self.ensure_one()
         old_selector = default.get('selector') if default else ''

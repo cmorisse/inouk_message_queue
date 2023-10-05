@@ -18,7 +18,7 @@
                                     type="object"
                                     string="Refresh"
                                     icon="fa-refresh"
-                                    name="refresh" />
+                                    name="btn_refresh" />
                         </div>
                         <div class="oe_title">
                             <h1><field name="name"/></h1>

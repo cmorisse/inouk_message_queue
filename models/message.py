@@ -133,7 +133,7 @@ class IMQMessage(models.Model):
 
     def get_formview_id(self, access_uid=None):
         self.ensure_one()
-        return self.env.ref('inouk_message_queue.imq_message__form_view').id
+        return self.env.ref('inouk_message_queue.imq_message__formview').id
 
     def get_default_action(self, access_uid=None):
         self.ensure_one()

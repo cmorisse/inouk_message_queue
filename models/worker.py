@@ -509,8 +509,7 @@ class IMQWorker(models.AbstractModel):
             result_dict['end_time_microseconds'] = end_timestamp.microsecond
             message_obj.write(result_dict)
             processing_obj.write(result_dict)
-            message_obj.flush_recordset()
-            self.env.cr.commit()
+            message_obj.flush_recordset() ; self.env.cr.commit()
 
             # Delete message after MAX_ATTEMPT
             if result_dict['state'] != 'done' and message_obj.attempt >= message_obj.max_number_of_attempts:
@@ -520,8 +519,7 @@ class IMQWorker(models.AbstractModel):
                                 message_obj.queue_message_id,
                                 message_obj.attempt)
                 self.terminate_message(queue_obj, _message)
-                message_obj.flush()
-                self.env.cr.commit()
+                message_obj.flush_recordset() ; self.env.cr.commit()
 
         # Store message log modifications
         queue_obj.flush_recordset()

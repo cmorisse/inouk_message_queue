@@ -44,7 +44,7 @@ WHERE id = (
     WHERE 
             queue_id = %s
         AND state in ('pending', 'retry')
-        AND ( planned_time IS NULL OR planned_time > NOW() )
+        AND ( planned_time IS NULL OR planned_time < NOW() )
     ORDER BY enqueued_time  
     FOR UPDATE SKIP LOCKED LIMIT 1
 )

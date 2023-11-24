@@ -41,6 +41,12 @@ class ir_cron(models.Model):
         cls._imq_process_job(job_cr, job, cron_cr)
         return
 
+    @api.model
+    def _callback(self, cron_name, server_action_id, job_id):
+        """ Overload to pass cron_id """
+        self = self.with_context(cron_id=job_id)
+        return super()._callback(cron_name, server_action_id, job_id)
+
     @classmethod
     def _imq_process_job(cls, job_cr, job, cron_cr):
         """ Run a given job taking care of the repetition.
@@ -57,7 +63,7 @@ class ir_cron(models.Model):
                     job_cr, 
                     job['user_id'], 
                     {
-                        'lastcall': fields.Datetime.from_string(job['lastcall'])
+                        'lastcall': fields.Datetime.from_string(job['lastcall']),
                     }
                 )[cls._name]
                 

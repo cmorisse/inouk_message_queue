@@ -171,7 +171,7 @@ class IMQWorker(models.AbstractModel):
                         message_obj.processor_id.module, 
                         package=None
                     )
-                    message_obj.flush()
+                    message_obj.flush_recordset()
                     returned_value = getattr(
                         function_module, 
                         msg_processor_obj.function
@@ -180,7 +180,7 @@ class IMQWorker(models.AbstractModel):
                     # Purge
                     orm_object = extract_orm_object(payload['args'])
                     if orm_object:
-                        orm_object.flush()
+                        orm_object.flush_recordset()
                     run_cursor.commit()
 
             else:  # message_type == 'simple'

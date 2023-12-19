@@ -160,7 +160,7 @@ class IMQWorker(models.AbstractModel):
                     )(*payload['args'], **payload['kwargs'])
 
                     # Purge
-                    payload['self'].flush()
+                    # payload['self'].flush()
                     run_cursor.commit()
                     #payload['self'].invalidate_cache()
 
@@ -170,7 +170,7 @@ class IMQWorker(models.AbstractModel):
                         message_obj.processor_id.module, 
                         package=None
                     )
-                    message_obj.flush()
+                    # message_obj.flush()
                     returned_value = getattr(
                         function_module, 
                         msg_processor_obj.function
@@ -201,7 +201,7 @@ class IMQWorker(models.AbstractModel):
                     }
                     if message_obj.capture_console:
                         payload['kwargs']['_imq_stream'] = TLS._imq_stream                    
-                    message_obj.flush()
+                    # message_obj.flush()
                     returned_value = getattr(
                         function_module, 
                         msg_processor_obj.function
@@ -471,7 +471,7 @@ class IMQWorker(models.AbstractModel):
             })
             processing_obj = message_obj.create_processing_object()
             self.change_message_visibility(queue_obj, message_obj, _message)
-            message_obj.flush()
+            # message_obj.flush()
             self.env.cr.commit() 
 
             processor_obj = message_obj.processor_id
@@ -507,7 +507,7 @@ class IMQWorker(models.AbstractModel):
             result_dict['end_time_microseconds'] = end_timestamp.microsecond
             message_obj.write(result_dict)
             processing_obj.write(result_dict)
-            message_obj.flush()
+            # message_obj.flush()
             self.env.cr.commit()
 
             # Delete message after MAX_ATTEMPT
@@ -518,11 +518,11 @@ class IMQWorker(models.AbstractModel):
                                 message_obj.queue_message_id,
                                 message_obj.attempt)
                 self.terminate_message(queue_obj, _message)
-                message_obj.flush()
+                # message_obj.flush()
                 self.env.cr.commit()
 
         # Store message log modifications
-        queue_obj.flush()
+        # queue_obj.flush()
         self.env.cr.commit()
         _logger.debug("[WorkerCron=%s,Q=%s,Wn=%s,Wp=%s,threadid=%s] Processing cursor:%s committed.",
                         os.getpid(),
@@ -696,7 +696,7 @@ class MpyStringIO(StringIO):
     #    return super().writelines(__lines)
 
     def stop_capture(self):
-        self.flush()
+        # self.flush()
         if self._mpy_buffer:
             # self._log_model.sudo().create({
             #     'message_id': self._message_id,

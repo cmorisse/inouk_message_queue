@@ -6,7 +6,7 @@ import pathlib
 from dateutil.relativedelta import relativedelta
 
 from odoo.service import server
-from odoo.addons.base.models import ir_cron
+from odoo.addons.base.ir import ir_cron
 """
 Patch ir_cron and server.py to allow sub minute intervals.
 """

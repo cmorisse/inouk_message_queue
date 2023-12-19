@@ -8,7 +8,7 @@ from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
-from odoo.addons.base.models.ir_cron import _intervalTypes
+from odoo.addons.base.ir.ir_cron import _intervalTypes
 
 class ir_cron(models.Model):
     """ Patch to allow sub minute CRONs
@@ -36,16 +36,22 @@ class ir_cron(models.Model):
         """
         _logger.debug("Entering imq::ir.cron._process_job()")
         if not job.get('imq_is_worker'):
-            super()._process_job(job_cr, job, cron_cr)
+            super(ir_cron, self)._process_job(job_cr, job, cron_cr)
             return
         cls._imq_process_job(job_cr, job, cron_cr)
         return
 
+    # @api.model
+    # def _callback(self, cron_name, server_action_id, job_id):
+    #     """ Overload to pass cron_id """
+    #     self = self.with_context(cron_id=job_id)
+    #     return super()._callback(cron_name, server_action_id, job_id)
+
     @api.model
-    def _callback(self, cron_name, server_action_id, job_id):
+    def _callback(self, model_name, method_name, args, job_id):
         """ Overload to pass cron_id """
         self = self.with_context(cron_id=job_id)
-        return super()._callback(cron_name, server_action_id, job_id)
+        return super(ir_cron, self)._callback(model_name, method_name, args, job_id)
 
     @classmethod
     def _imq_process_job(cls, job_cr, job, cron_cr):
@@ -59,32 +65,29 @@ class ir_cron(models.Model):
         _logger.debug("Entering _imq_process_job()")
         with api.Environment.manage():
             try:
-                cron = api.Environment(
-                    job_cr, 
-                    job['user_id'], 
-                    {
-                        'lastcall': fields.Datetime.from_string(job['lastcall']),
-                    }
-                )[cls._name]
-                
+                cron = api.Environment(job_cr, job['user_id'], {})[cls._name]
+                # Use the user's timezone to compare and compute datetimes,
+                # otherwise unexpected results may appear. For instance, adding
+                # 1 month in UTC to July 1st at midnight in GMT+2 gives July 30
+                # instead of August 1st!
                 now = fields.Datetime.context_timestamp(cron, datetime.datetime.now())
+                nextcall = fields.Datetime.context_timestamp(cron, fields.Datetime.from_string(job['nextcall']))
                 numbercall = job['numbercall']
 
-                cron._callback(job['cron_name'], job['ir_actions_server_id'], job['id'])
-                if numbercall > 0:
-                    numbercall -= 1
+                ok = False
+                while nextcall < now and numbercall:
+                    if numbercall > 0:
+                        numbercall -= 1
+                    if not ok or job['doall']:
+                        cron._callback(job['model'], job['function'], job['args'], job['id'])
+                    if numbercall:
+                        nextcall += _intervalTypes[job['interval_type']](job['interval_number'])
+                    ok = True
+                addsql = ''
                 if not numbercall:
                     addsql = ', active=False'
-                else:
-                    addsql = ''
-
-                cron_cr.execute(
-                    "UPDATE ir_cron SET numbercall=%s, lastcall=%s"+addsql+" WHERE id=%s",(
-                    numbercall,
-                    fields.Datetime.to_string(now.astimezone(pytz.UTC)),
-                    job['id']
-                ))
-                cron.flush()
+                cron_cr.execute("UPDATE ir_cron SET nextcall=%s, numbercall=%s"+addsql+" WHERE id=%s",
+                                (fields.Datetime.to_string(nextcall.astimezone(pytz.UTC)), numbercall, job['id']))
                 cron.invalidate_cache()
 
             finally:

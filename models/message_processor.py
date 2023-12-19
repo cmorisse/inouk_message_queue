@@ -107,7 +107,7 @@ class IMQMessageProcessor(models.Model):
         return super().copy(default)    
 
     @api.model
-    def upsert_processor_from_message(self, message_body:dict):
+    def upsert_processor_from_message(self, message_body):
         """Find or create an imq.message_processor from a received message 
         body.
         :param message_body: Body of received message.

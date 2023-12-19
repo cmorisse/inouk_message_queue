@@ -67,8 +67,10 @@ class IMQMessageProcessing(models.Model):
     def _calc_processing_time(self):
         for record in self:
             if record.start_time and record.end_time:
+                start_time = datetime.datetime.strptime(record.start_time, "%Y-%m-%d %H:%M:%S")
+                end_time = datetime.datetime.strptime(record.end_time, "%Y-%m-%d %H:%M:%S")
                 record.processing_time = (
-                    self.end_time - self.start_time
+                    end_time - start_time
                 ).total_seconds()
             else:
                 record.processing_time = None

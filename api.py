@@ -160,7 +160,7 @@ def find_or_create_queue(env, queue_name):
         })
     return queue
 
-def find_or_create_processor(caller_env:api.Environment, function_name, module_name, is_method=False, 
+def find_or_create_processor(caller_env, function_name, module_name, is_method=False, 
                              logging_activated=False, processor_visibility_timeout=0):
     """Find or create an imq.message_processor from module and python function 
     names (for messages of type 'rpc')
@@ -231,7 +231,7 @@ def extract_env_from_params(runnable, args, kwargs):
 
 def _send_message(
     queue_obj, message_name, message_body_values, message_group=None, 
-    message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=True
+    message_deduplication_id=None, message_attributes=None, raise_on_duplicate=True
 ):    
     """ Low level driver method that sends message to a queue.
     """
@@ -477,8 +477,8 @@ def send_message(
     if queue is None:
         queue = 'default'
 
-    if isinstance(queue, str):
-        queue_obj = env['imq.queue'].search([('name', '=', queue)])
+    if isinstance(queue, str) or isinstance(queue, unicode):
+        queue_obj = env['imq.queue'].search([('name', '=', str(queue))])
         if not queue_obj:
             raise UserError("Unknown queue:'%s' !!!" % queue)
     else:
@@ -486,7 +486,7 @@ def send_message(
 
     if message_name is None:
         message_name = selector
-    
+
     if queue_obj.q_type == 'fifo' and not message_group:
         raise IMQError(
             "Missing required 'message_group' parameter to send message to FIFO queue:'%s'."

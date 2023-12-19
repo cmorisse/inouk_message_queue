@@ -20,7 +20,7 @@ _logger = logging.getLogger(__name__)
 
 def send_message__aws_sqs(
     queue_obj, message_name, message_body_values, message_group=None, 
-    message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=True,
+    message_deduplication_id=None, message_attributes=None, raise_on_duplicate=True,
 ):
     """ Send a simple message to AWS SQS queue.
     :param raise_on_duplicate: is ignored with SQS
@@ -42,7 +42,7 @@ def send_message__aws_sqs(
             'StringValue': message_name,
         },
     }
-    final_message_attributes = { **default_message_attributes, **message_attributes}
+    # final_message_attributes = { **default_message_attributes, **message_attributes}
 
 
     send_message_kwargs = {

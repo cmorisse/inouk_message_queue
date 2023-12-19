@@ -69,7 +69,7 @@ class IMQQueueSlack(models.Model):
         self.send_slack_notification('info', 'IMQ Notification Test', message)
         return
 
-    def render_icon__slack(self, icon:str):
+    def render_icon__slack(self, icon):
         # if message startwith 
         r_message = message.replace(':white_check_mark:', '<i class="fa fa-check-square"></i>')
         r_message = r_message.replace(':bear:', '<i class="fa fa-paw"/>')
@@ -83,10 +83,11 @@ class IMQQueueSlack(models.Model):
     ):
         """ Send message to slack channels of all queues in record set """
         _msg = "\n%s" % message if message else ''
-        notification_text = f"*{message_title}*{_msg}"
+        notification_text = "*{}*{}".format(message_title, _msg)
 
         if icon:
-            notification_text = f"{icon} {notification_text}"
+            # notification_text = f"{icon} {notification_text}"
+            notification_text = "{} {}".format(icon, notification_text)
 
         for record in self:
             if record.slack_webhook_url:

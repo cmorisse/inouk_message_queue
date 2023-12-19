@@ -4,7 +4,7 @@
         <field name="name">imq.ir_cron.formview.inherit</field>
         <field name="model">ir.cron</field>
         <field name="type">form</field>
-        <field name="inherit_id" ref="base.ir_cron_view_form"/>
+        <field name="inherit_id" ref="base.ir_cron_view"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='user_id']" position="after">
                 <field name="imq_is_worker" />
@@ -15,9 +15,9 @@
             <field name="interval_type" position="attributes">
                 <attribute name="attrs">{'invisible': [('imq_is_worker','=',True)]}</attribute>
             </field>
-            <label for="interval_number" position="attributes">
+            <!-- <label for="interval_number" position="attributes">
                 <attribute name="attrs">{'invisible': [('imq_is_worker','=',True)]}</attribute>
-            </label>
+            </label> -->
             <field name="nextcall" position="attributes">
                 <attribute name="force_save">1</attribute>
                 <attribute name="attrs">{'readonly': [('imq_is_worker','=',True)]}</attribute>

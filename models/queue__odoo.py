@@ -29,7 +29,7 @@ class IMQOdooQueue(models.Model):
 
     use_odoo_notifications = fields.Boolean(default=True)
 
-    def render_icon__odoo(self, icon:str):
+    def render_icon__odoo(self, icon):
         """ return icon as Font Awesome class """
         icon_map = {
             ":bear:": "fa-paw",
@@ -48,7 +48,7 @@ class IMQOdooQueue(models.Model):
             if record.use_odoo_notifications:
                 body_html = slackdown.render(message or "")
                 if message_obj:
-                    obj_url = f'Message: <a href="{message_obj.get_form_url()}">{message_obj.name}</a>'
+                    obj_url = 'Message: <a href="{}">{}</a>'.format(message_obj.get_form_url(), message_obj.name)
                     body_html += obj_url
                 if user_obj is None:
                     user_obj = self.env.user

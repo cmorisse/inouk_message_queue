@@ -55,7 +55,7 @@ class TeamsIMQQueue(models.Model):
         return url_str
 
     def send_teams_message(
-        self, title:str, message:str=None, icon_url:str=None, obj_url:str=None, facts:dict=None
+        self, title, message=None, icon_url=None, obj_url=None, facts=None
     ):
         # We set timeout to 500ms
         myTeamsMessage = pymsteams.connectorcard(
@@ -98,7 +98,7 @@ class TeamsIMQQueue(models.Model):
             _logger.error(returned_value)
         return
 
-    def render_icon__teams(self, icon:str):
+    def render_icon__teams(self, icon):
         """ return icon as https://mpy13c-dev-cyril.odizy.ovh/inouk_message_queue/static/notifs/299110_check_sign_icon.png """
         icp_model = self.env['ir.config_parameter'].sudo()
         default_icon = "285667_bubbles_icon.png"
@@ -118,7 +118,7 @@ class TeamsIMQQueue(models.Model):
         }
         _icon = icon_map.get(icon, default_icon)
         web_base_url = icp_model.get_param('web.base.url')
-        _icon_url = f"{web_base_url}/inouk_message_queue/static/notifs/{_icon}"
+        _icon_url = "{}/inouk_message_queue/static/notifs/{}".format(web_base_url, _icon)
         return _icon_url
 
     def send_teams_notification(

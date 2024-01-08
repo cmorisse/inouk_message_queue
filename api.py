@@ -182,7 +182,7 @@ def find_or_create_processor(caller_env, function_name, module_name, is_method=F
                 ('function', '=', function_name),
             ])
             if not processor_obj:
-                processor_obj = processor_model.with_user(USER_IMQ_ID).create({
+                processor_obj = processor_model.sudo(USER_IMQ_ID).create({
                     'type': 'rpc',
                     'module': module_name,
                     'function': function_name,
@@ -285,7 +285,7 @@ def enqueue(runnable, *args, **kwargs):
         del kwargs['_imq_is_method']
 
     # detect whether logging is requested
-    function_signature = inspect.getfullargspec(runnable)
+    function_signature = inspect.getargspec(runnable)
     logging_activated = '_imq_logger' in function_signature.args
 
     parent_message_id = kwargs.get('_imq_parent_message_id', None)

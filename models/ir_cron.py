@@ -36,7 +36,7 @@ class ir_cron(models.Model):
         """
         _logger.debug("Entering imq::ir.cron._process_job()")
         if not job.get('imq_is_worker'):
-            super(ir_cron, self)._process_job(job_cr, job, cron_cr)
+            super(ir_cron, cls)._process_job(job_cr, job, cron_cr)
             return
         cls._imq_process_job(job_cr, job, cron_cr)
         return

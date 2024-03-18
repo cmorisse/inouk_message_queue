@@ -10,7 +10,6 @@ import slackdown
 
 import odoo
 from odoo import models, fields, api
-from odoo.exceptions import except_orm
 from odoo.tools.translate import _
 from odoo.tools.safe_eval import safe_eval
 

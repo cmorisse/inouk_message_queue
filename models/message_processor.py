@@ -4,7 +4,6 @@ import logging
 
 import odoo
 from odoo import models, fields, api
-from odoo.exceptions import except_orm
 from odoo.tools.translate import _
 
 """Maps processings to messages."""

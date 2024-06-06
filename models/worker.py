@@ -119,6 +119,8 @@ class IMQWorker(models.AbstractModel):
 
         start_timestamp = datetime.datetime.now()
         raised = None
+        retry_delay_s = None
+
         try:
             # create a new environment dedicated to function execution
             # thus we gather all information stored in message env
@@ -310,6 +312,7 @@ class IMQWorker(models.AbstractModel):
             returned_value = traceback.format_exception(exc_type, 
                                                         exc_value, 
                                                         exc_traceback)
+
             returned_value = "\n".join(returned_value)
             if message_obj.attempt >= message_obj.max_number_of_attempts:
                 state = 'failed'
@@ -336,8 +339,12 @@ class IMQWorker(models.AbstractModel):
                         icon=":warning:",
                         message_obj=message_obj
                     )
-                state = 'retry' 
-                # Task will retry after visibility timeout
+                state = 'retry'   # Task will retry after visibility timeout or delay
+                if hasattr(imq_rerr, 'delay') and imq_rerr.delay:
+                    retry_delay_s = imq_rerr.delay
+                elif msg_processor_obj.retry_delay_s:
+                    retry_delay_s = msg_processor_obj.retry_delay_s
+
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
 
@@ -396,10 +403,15 @@ class IMQWorker(models.AbstractModel):
                 result = json.dumps(returned_value, indent=4)
             except:
                 result = str(returned_value)
-        return {
+
+        _r = {
             'result': result,
             'state': state
         }
+        if retry_delay_s:
+            _r['planned_time'] = fields.Datetime.to_string(datetime.datetime.now() + datetime.timedelta(seconds=retry_delay_s))
+
+        return _r
 
     def change_message_visibility(self, queue_obj, message_obj, _message):
         """ Update message visibility with timeout defined in processor
@@ -506,6 +518,8 @@ class IMQWorker(models.AbstractModel):
             result_dict['end_time'] = end_timestamp
             result_dict['end_time_microseconds'] = end_timestamp.microsecond
             message_obj.write(result_dict)
+            if 'planned_time' in result_dict:
+                del result_dict['planned_time']
             processing_obj.write(result_dict)
             message_obj.flush()
             self.env.cr.commit()
@@ -546,9 +560,9 @@ class IMQWorker(models.AbstractModel):
         return
 
     def start_log_capture(
-            self, message_obj, processing_obj, log_level=None, 
-            log_format="%(asctime)s %(name)s %(levelname)s %(message)s"
-        ):
+        self, message_obj, processing_obj, log_level=None, 
+        log_format="%(asctime)s %(name)s %(levelname)s %(message)s"
+    ):
         """Start capturing log output to a string buffer.
 
         See. http://docs.python.org/release/2.6/library/logging.html

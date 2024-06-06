@@ -44,7 +44,7 @@ WHERE id = (
     WHERE 
             queue_id = %s
         AND state in ('pending', 'retry')
-        AND ( planned_time IS NULL OR planned_time > NOW() )
+        AND ( planned_time IS NULL OR planned_time < NOW() )
     ORDER BY enqueued_time  
     FOR UPDATE SKIP LOCKED LIMIT 1
 )
@@ -69,7 +69,7 @@ WHERE id = (
         GROUP BY im."group", im.id, im.name, im.state
     )
     SELECT id FROM sq1
-    WHERE sq1.state in ('pending', 'retry') AND (sq1.prev_state IN ('done', 'terminated', 'archived') OR sq1.prev_state IS NULL )
+    WHERE sq1.state in ('pending', 'retry') AND ( planned_time IS NULL OR planned_time < NOW() ) AND (sq1.prev_state IN ('done', 'terminated', 'archived') OR sq1.prev_state IS NULL )
     FOR UPDATE SKIP LOCKED
     LIMIT 1
 ) RETURNING id;

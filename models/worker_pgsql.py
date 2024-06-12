@@ -61,6 +61,7 @@ WHERE id = (
         im.id,
         im.name,
         im.state,
+        planned_time,
         -- Previous row
         LAG(im.state) OVER ( PARTITION BY im."group" ORDER BY im.id ) AS prev_state,
         LAG(im.id) OVER ( PARTITION BY im."group" ORDER BY im.id ) AS prev_id
@@ -113,10 +114,12 @@ class IMQWorkerSQS(models.AbstractModel):
                 _msg_id = _row and _row[0] or None
 
             elif queue_obj.q_type == 'fifo':
+                _logger.debug("Polling queue '%s'.", queue_obj.id)
                 self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_fifo, (queue_obj.id,))
                 _row = self.env.cr.fetchone()
                 cr.commit()
                 _msg_id = _row and _row[0] or None
+                _logger.debug("Found message: %s to process.", _msg_id)
             else:
                 raise Exception("Unsupported Queue type:'%s' for get_message__pgsql()" % queue_obj.q_type)
 

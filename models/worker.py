@@ -470,6 +470,7 @@ class IMQWorker(models.AbstractModel):
         if not queue_obj.active:
             _logger.warning("Queue '%s' is not active. Exiting.", queue_name)
             return
+        _logger.debug("Polling queue '%s'/%s for new message.", queue_name, queue_obj.id)
 
         processing_start_timestamp = datetime.datetime.now()
 

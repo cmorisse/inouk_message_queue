@@ -76,7 +76,10 @@ class IMQTestLauncher(models.Model):
 
     processing_duration_s = fields.Integer("Task Duration in seconds")
     param = fields.Char()
-
+    delay_param = fields.Integer(
+        "Delay (IMQRetryableError)",
+        help="Optionl delay in s to defer retry when IMQRetryableError is raised"
+    )
     def send_rpc_message(self):
         """ Launchs a task straight or asynchonously depending on debug_mode """
         self.ensure_one()
@@ -179,7 +182,15 @@ class IMQTestLauncher(models.Model):
                     raise IMQError(param_str, results=[{'key': "value"}])
 
                 elif self.should_raise_exception_type=='imqretryable':
-                    raise IMQRetryableError(param_str)
+                    kwargs = {}
+                    if self.pass_imqerror_value:
+                        kwargs['results'] = [{'key': "value"}]
+                    if self.delay_param:
+                        kwargs['delay'] = self.delay_param
+                    if kwargs:
+                        raise IMQRetryableError(param_str, **kwargs)
+                    else:
+                        raise IMQRetryableError(param_str)
 
                 elif self.should_raise_exception_type=='imqterminate':
                     raise IMQTerminateException(param_str)
@@ -281,13 +292,25 @@ def a_task_procedure(an_object, a_param, _imq_logger=None, _imq_stream=None):
             raise UserError(param)
 
         elif an_object.should_raise_exception_type=='imqerror':
+            kwargs = {}
             if an_object.pass_imqerror_value:
-                raise IMQError(param, results=[{'key': "value"}])
+                kwargs['results'] = [{'key': "value"}]
+
+            if kwargs:
+                raise IMQError(param, **kwargs)
             else:
                 raise IMQError(param)
 
         elif an_object.should_raise_exception_type=='imqretryable':
-            raise IMQRetryableError(param)
+            kwargs = {}
+            if an_object.pass_imqerror_value:
+                kwargs['results'] = [{'key': "value"}]
+            if self.delay_param:
+                kwargs['delay'] = self.delay_param
+            if kwargs:
+                raise IMQRetryableError(param_str, **kwargs)
+            else:
+                raise IMQRetryableError(param_str)
 
         elif an_object.should_raise_exception_type=='imqterminate':
             raise IMQTerminateException(param)

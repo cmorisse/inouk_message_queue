@@ -33,8 +33,14 @@ class IMQError(UserError):
 
 class IMQRetryableError(UserError):
     """ Rollback, statut = "Retry", Retry automatique """
-    pass
-
+    def __init__(self, message, delay=None, results=None):
+        """ 
+        :param results: Any obj or string
+        :param delay: Optional delay in s to defer retry.
+        """
+        super().__init__(message)
+        self.results = results
+        self.delay = delay
 
 class IMQTerminateException(UserError):
     """ Rollback, statut = "Terminated", Pas de retry """

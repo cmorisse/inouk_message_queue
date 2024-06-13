@@ -303,7 +303,11 @@ def enqueue(runnable, *args, **kwargs):
     message_deduplication_id = kwargs.get('_imq_message_deduplication_id', None)
     if '_imq_message_deduplication_id' in kwargs:
         del kwargs['_imq_message_deduplication_id']
-    
+
+    _imq_raise_on_duplicate = kwargs.get('_imq_raise_on_duplicate', None)
+    if '_imq_raise_on_duplicate' in kwargs:
+        del kwargs['_imq_raise_on_duplicate']
+
     message_name = extract_message_name(runnable, args, kwargs)
     if '_imq_message_name' in kwargs:
         del kwargs['_imq_message_name']  # We pass all "_imq" params via context
@@ -401,7 +405,8 @@ def enqueue(runnable, *args, **kwargs):
         message_body_values, 
         message_group=message_group, 
         message_deduplication_id=message_deduplication_id, 
-        message_attributes=message_attributes
+        message_attributes=message_attributes,
+        raise_on_duplicate=_imq_raise_on_duplicate,
     )
     return response
 

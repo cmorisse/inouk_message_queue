@@ -89,6 +89,8 @@ def send_message__pgsql(
         "attempt": 0,
         "state": "pending"
     }
+    #_logger.debug("Creating message: %s:%s", queue_obj.name, message_name)
+    #_logger.debug("   values => %s", message_values)
     message_obj = message_model.create(message_values)
     return {
         "MessageId": message_obj.queue_message_id,

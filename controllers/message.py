@@ -35,7 +35,7 @@ class IMQMessageControllerV2(Controller):
         raise Exception("Missing 'web.base_url' system parameter.")
 
     @route('/imq/message/<string:queue_message_id>', methods=['GET'], type='http', auth='none', csrf=False, save_session=False)
-    def get_message(self, queue_message_id,kwargs=None):
+    def get_message(self, queue_message_id, *args, **kwargs):
         """ Return message data 
         curl --header 'Accept: application/json' -X GET  'https://mpy13c-k8s-journal-dev-cyril.truc-sbg3.odizy.ovh/imq/message/d703e30d-bcb9-4e48-95f2-bbbeb1ee74f4' 
         """

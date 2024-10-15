@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <openerp>
     <data noupdate="0">
-        <record id="imq_mail_channel" model="mail.channel">
+        <record id="imq_mail_channel" model="discuss.channel">
             <field name="name">IMQ</field>
             <field name="channel_type">chat</field>
             <field name="description">IMQ Processing notifications</field>

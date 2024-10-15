@@ -165,4 +165,6 @@ class IMQMessageProcessor(models.Model):
         return message_processor
 
 
+    def refresh(self):
+        pass
 

@@ -27,7 +27,10 @@
                         <group>
                             <group>
                                 <field name="type" />
-                                <field name="selector" attrs="{'required': [('type','!=','rpc')], 'invisible': [('type','!=','simple')]}"/>
+                                <field name="selector" 
+                                       required_condition="type != 'rpc'" 
+                                       invisible="type != 'simple'"/>
+
                                 <field name="max_attempt" />
                             </group>
                             <group>
@@ -41,8 +44,8 @@
                             <page string="Logging">
                                 <group>
                                     <group>
-                                        <field name="logging_activated" attrs="{'readonly': [('logging_activated','=','rpc')]}" />
-                                        <field name="capture_log" attrs="{'readonly': [('logging_activated','=',False)]}"/>
+                                        <field name="logging_activated" readonly="logging_activated == 'rpc'"/>
+                                        <field name="capture_log" readonly="logging_activated == False"/>
                                     </group>
                                     <group>
                                         <field name="log_level"/>

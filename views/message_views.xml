@@ -125,18 +125,15 @@
                                 type="object"
                                 name="btn_retry_processing"
                                 class="btn-danger"
-                                attrs="{'invisible':[
-                                    '|',
-                                    ('state', 'not in', ['failed']),
-                                    '&amp;', ('queue_provider','=','aws_sqs'), ('queue_type','=','fifo')
-                                ]}"
-                                />
+                                invisible="state not in ('failed') or (queue_provider == 'aws_sqs' and queue_type == 'fifo')" />
+
                         <button string="Archive"
                                 type="object"
                                 name="do_archive"
                                 class="oe_highlight"
                                 groups="inouk_message_queue.group_admin"
-                                attrs="{'invisible':[('state', 'in', ['new'])]}"/>
+                                invisible="state in ['new']"/>
+
                         <field name="state" widget="statusbar" statusbar_visible="new,wip,done,failed"/>
                     </header>
                     <sheet>
@@ -180,7 +177,7 @@
                                 <field name="planned_time" />
                                 <field name="start_time"/>
                                 <field name="end_time"/>
-                                <field name="visibility_time" attrs="{'invisible':[('queue_provider', 'not in', ['pgsql'])]}"/>
+                                <field name="visibility_time" invisible="not queue_provider.includes('pgsql')"/>
                             </group>
                             <group col="4" colspan="4" style="margin-top: -9px;">                          
                                 <field name="operator_comment" colspan="4"/>

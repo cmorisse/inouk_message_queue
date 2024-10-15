@@ -12,19 +12,21 @@
                     <header>
                         <button type="object" name="aws_sqs__create_queue" 
                                 string="Create SQS Queue on AWS" 
-                                attrs="{'invisible':['|', ('provider','!=','aws_sqs'),('sqs_queue_url','!=',False)]}"
+                                invisible="provider != 'aws_sqs' or sqs_queue_url != False" 
                                 class="btn-warning" />
+
                         <button type="object" name="aws_sqs__delete_queue" 
                                 string="Delete SQS Queue on AWS" 
-                                attrs="{'invisible':['|', ('provider','!=','aws_sqs'),('sqs_queue_url','=',False)]}"
+                                invisible="provider != 'aws_sqs' or sqs_queue_url == False" 
                                 class="btn-danger" />
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
                             <button class="oe_stat_button" 
                                     icon="fa-slack" 
-                                    attrs="{'invisible':[('slack_webhook_channel','=',False)]}"
+                                    invisible="slack_webhook_channel == False" 
                                     help="The Slack channel that will be used by this queue. Use the Slack tab to change it.">
+
                                 <div class="o_field_widget o_stat_info">
                                     <span class="o_stat_value">    
                                         <field name="slack_webhook_channel" widget="statinfo" nolabel="1" class="mr4"/>
@@ -43,15 +45,14 @@
                             <group class="ik_lw190">
                                 <field name="provider" />
                                 <field name="q_type" />
-                                <field name="deduplication_interval_s" attrs="{'invisible':['|',('q_type','!=','fifo'),('provider','!=','pgsql')]}"/>
-                                <field name="database_bound_q" widget="boolean_toggle" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}"/>
+                                <field name="deduplication_interval_s" invisible="q_type != 'fifo' or provider != 'pgsql'"/>
+                                <field name="database_bound_q" widget="boolean_toggle" invisible="not provider.includes('aws_sqs')"/>
                             </group>
                             <group class="ik_lw190">
-                                <field name="active" widget="boolean_toggle" />
-                                <field name="key" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}"/>
-                                <field name="secret" password="True" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}"/>
-                                <field name="region" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}" />
-                                <field name="visibility_timeout" attrs="{'invisible':[('provider','not in',['pgsql'])]}" />
+                                <field name="key" invisible="not provider.includes('aws_sqs')"/>
+                                <field name="secret" password="True" invisible="not provider.includes('aws_sqs')"/>
+                                <field name="region" invisible="not provider.includes('aws_sqs')"/>
+                                <field name="visibility_timeout" invisible="not provider.includes('pgsql')"/>
                             </group>
                         </group>
 
@@ -136,7 +137,7 @@
                                         <field name="slack_webhook_config_url" colspan="4" />
                                         <field name="slack_oauth_access_response" colspan="4" />
                                     </group>                                
-                                    <group string="SQS" col="4" colspan="4" attrs="{'invisible':[('provider','not in',['aws_sqs'])]}">
+                                    <group string="SQS" col="4" colspan="4" invisible="not provider.includes('aws_sqs')">
                                         <field name="sqs_queue_url" widget="CopyClipboardChar" 
                                                colspan="4"/>
                                         <field name="key" widget="CopyClipboardChar" colspan="2"/>

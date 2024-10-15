@@ -31,14 +31,20 @@
             <field name="arch" type="xml">
                 <form>
                     <header>
-                        <button string="Send Async RPC Call" type="object" class="btn-warning" 
-                                attrs="{'invisible':[('type','=','simple')]}"
+                        <button string="Send Async RPC Call" 
+                                type="object" 
+                                class="btn-warning" 
+                                invisible="type == 'simple'" 
                                 name="send_rpc_message"/>
-                        <button string="Send Simple Message" type="object" class="btn-warning" 
-                                attrs="{'invisible':[('type','=','rpc')]}"
+                        <button string="Send Simple Message" 
+                                type="object" 
+                                class="btn-warning" 
+                                invisible="type == 'rpc'" 
                                 name="send_simple_message"/>
-                        <button string="Launch FIFO Task Group" type="object" class="btn-warning" 
-                                attrs="{'invisible':[('queue_type','!=','fifo')]}"
+                        <button string="Launch FIFO Task Group" 
+                                type="object" 
+                                class="btn-warning" 
+                                invisible="queue_type != 'fifo'" 
                                 name="launch_fifo_test"/>
                     </header>
                     <sheet>
@@ -67,7 +73,7 @@
                                 </group>
                                 
                             </page>
-                            <page string="RPC" attrs="{'invisible':[('type','!=','rpc')]}">
+                           <page string="RPC" invisible="type != 'rpc'">
                                 <group>
                                     <group class="ik_lw190">
                                         <field name="rpc_test_method" />
@@ -85,7 +91,7 @@
                                 </group>
                                 
                             </page>
-                            <page string="Simple" attrs="{'invisible':[('type','!=','simple')]}">
+                            <page string="Simple" invisible="type != 'simple'">
                                 <group col="4" colspan="4">
 
                                     <field name="selector" colspan="4"/>

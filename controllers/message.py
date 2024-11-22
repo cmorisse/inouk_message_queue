@@ -12,7 +12,7 @@ from odoo import models, fields
 from odoo.http import request, route, Controller, Response, AuthenticationError
 from odoo.tools.safe_eval import safe_eval
 
-from odoo.addons.muppy_core.utils import json_datetime_serializer
+from odoo.addons.inouk_message_queue.utils import json_datetime_serializer
 
 
 _logger = logging.getLogger(__file__)

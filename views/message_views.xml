@@ -159,14 +159,13 @@
                                     icon="fa-refresh"
                                     name="refresh" />
                         </div>
-                        <div class="oe_title">
-                            <h2>Cloud id = <field name="queue_message_id" class="oe_inline"/></h2>
+                        <div colspan="4">
                             <h1><field name="name"/></h1>
                         </div>
 
                         <group>
                             <group>
-                                <field name="queue_message_id" />
+                                <field string="Cloud ID" name="queue_message_id" />
                                 <field name="processor_id" />
                                 <field name="queue_id"/>
                                 <field name="user_id"/>

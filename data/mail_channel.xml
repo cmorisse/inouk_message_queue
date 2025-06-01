@@ -1,13 +1,11 @@
 <?xml version="1.0" ?>
 <openerp>
     <data noupdate="0">
-        <record id="imq_mail_channel" model="discuss.channel">
+        <record id="imq_discuss_channel" model="discuss.channel">
             <field name="name">IMQ</field>
-            <field name="channel_type">chat</field>
             <field name="description">IMQ Processing notifications</field>
-            <field name="group_ids" eval="[(4, ref('base.group_user'))]"/>
             <field name="channel_type">channel</field>
-
-        </record>
+            <field name="group_ids" eval="[(4, ref('base.group_user'))]"/>
+        </record>          
     </data>
 </openerp>

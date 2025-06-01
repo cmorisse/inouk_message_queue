@@ -46,13 +46,13 @@
                                 <field name="provider" />
                                 <field name="q_type" />
                                 <field name="deduplication_interval_s" invisible="q_type != 'fifo' or provider != 'pgsql'"/>
-                                <field name="database_bound_q" widget="boolean_toggle" invisible="not provider.includes('aws_sqs')"/>
+                                <field name="database_bound_q" widget="boolean_toggle" invisible="provider != 'aws_sqs'"/>
                             </group>
                             <group class="ik_lw190">
-                                <field name="key" invisible="not provider.includes('aws_sqs')"/>
-                                <field name="secret" password="True" invisible="not provider.includes('aws_sqs')"/>
-                                <field name="region" invisible="not provider.includes('aws_sqs')"/>
-                                <field name="visibility_timeout" invisible="not provider.includes('pgsql')"/>
+                                <field name="key" invisible="provider != 'aws_sqs'"/>
+                                <field name="secret" password="True" invisible="provider != 'aws_sqs'"/>
+                                <field name="region" invisible="provider != 'aws_sqs'"/>
+                                <field name="visibility_timeout" invisible="provider != 'pgsql'"/>
                             </group>
                         </group>
 
@@ -137,7 +137,7 @@
                                         <field name="slack_webhook_config_url" colspan="4" />
                                         <field name="slack_oauth_access_response" colspan="4" />
                                     </group>                                
-                                    <group string="SQS" col="4" colspan="4" invisible="not provider.includes('aws_sqs')">
+                                    <group string="SQS" col="4" colspan="4" invisible="provider != 'aws_sqs'">
                                         <field name="sqs_queue_url" widget="CopyClipboardChar" 
                                                colspan="4"/>
                                         <field name="key" widget="CopyClipboardChar" colspan="2"/>

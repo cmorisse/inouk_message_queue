@@ -110,15 +110,20 @@ class StandaloneWorker(BaseWorker):
             self.observability_server.start()
         
         try:
-            # Get registry and find queues
-            registry = Registry(self.database)
-            with registry.cursor() as cr:
-                env = api.Environment(cr, SUPERUSER_ID, {})
-                queues = self._find_matching_queues(env)
-                
-            if not queues:
-                self.logger.error("No queues found to process")
-                return 1
+            # Get registry and find queue IDs (not queue objects)
+            with api.Environment.manage():
+                registry = Registry(self.database)
+                with registry.cursor() as cr:
+                    env = api.Environment(cr, SUPERUSER_ID, {})
+                    queues = self._find_matching_queues(env)
+                    
+                    if not queues:
+                        self.logger.error("No queues found to process")
+                        return 1
+                        
+                    # Store queue IDs and names for round-robin processing
+                    # Access all fields while cursor is still open
+                    queue_info = [(q.id, q.name, q.provider) for q in queues]
             
             # Main processing loop
             queue_index = 0
@@ -137,7 +142,7 @@ class StandaloneWorker(BaseWorker):
                     break
                 
                 # Round-robin queue selection
-                queue = queues[queue_index % len(queues)]
+                queue_id, queue_name, _queue_provider = queue_info[queue_index % len(queue_info)]
                 queue_index += 1
                 
                 # Start waiting timer if we haven't found messages recently
@@ -145,7 +150,7 @@ class StandaloneWorker(BaseWorker):
                     self.metrics_collector.start_waiting()
                 
                 # Process one message
-                processed = self._process_one_message(registry, queue)
+                processed = self._process_one_message(registry, queue_id, queue_name)
                 
                 if processed:
                     self.processed_count += 1
@@ -160,7 +165,7 @@ class StandaloneWorker(BaseWorker):
                 else:
                     consecutive_empty_polls += 1
                     # No message available, short sleep to avoid busy loop
-                    time.sleep(0.1)
+                    time.sleep(0.5)
                 
                 # Update metrics periodically
                 if self.processed_count % 10 == 0 or consecutive_empty_polls % 50 == 0:
@@ -182,82 +187,90 @@ class StandaloneWorker(BaseWorker):
             if self.observability_server.port:
                 self.observability_server.stop()
     
-    def _process_one_message(self, registry, queue):
+    def _process_one_message(self, registry, queue_id, queue_name):
         """Process a single message from the queue
         
         Args:
             registry: Odoo registry
-            queue: Queue object to process
+            queue_id: Queue ID to process
+            queue_name: Queue name for logging
             
         Returns:
             bool: True if message was processed, False if no message available
         """
-        with registry.cursor() as cr:
-            env = api.Environment(cr, SUPERUSER_ID, {})
-            
-            # Get next message
-            message = self.get_message(env, queue)
-            if not message:
-                return False
-            
-            # Store as current message for signal handler
-            self.current_message = message
-            
-            try:
-                # Store and process message
-                start_time = time.time()
-                message_obj = self.store_message(env, queue, message)
+        with api.Environment.manage():
+            with registry.cursor() as cr:
+                env = api.Environment(cr, SUPERUSER_ID, {})
                 
-                if not message_obj:
-                    self.logger.warning(f"Failed to store message from queue {queue.name}")
+                # Get queue object in this context
+                queue = env['imq.queue'].browse(queue_id)
+                if not queue.exists():
+                    self.logger.error(f"Queue {queue_name} (ID: {queue_id}) no longer exists")
                     return False
                 
-                # Update message attempt counter
-                message_obj.write({"attempt": message_obj.attempt + 1})
+                # Get next message
+                message = self.get_message(env, queue)
+                if not message:
+                    return False
                 
-                # Create processing object (used for logging in advanced configurations)
-                _processing_obj = message_obj.create_processing_object()
+                # Store as current message for signal handler
+                self.current_message = message
                 
-                # Update message visibility if needed
-                self.change_message_visibility(env, queue, message_obj, message)
-                
-                # Flush and commit message storage
-                message_obj.flush()
-                cr.commit()
-                
-                # Process the message
-                result = self.process_message(env, message_obj, message, {})
-                processing_duration = time.time() - start_time
-                
-                # Record metrics
-                success = result.get('state') == 'done'
-                self.metrics_collector.record_message_processed(
-                    queue.name, 
-                    processing_duration, 
-                    success=success
-                )
-                
-                # Log result
-                if success:
-                    self.logger.debug(f"Successfully processed message {message_obj.id} from queue {queue.name}")
-                else:
-                    self.logger.warning(f"Message {message_obj.id} from queue {queue.name} failed with state: {result.get('state')}")
-                
-                return True
-                
-            except Exception as e:
-                # Record failed message
-                processing_duration = time.time() - start_time
-                self.metrics_collector.record_message_processed(
-                    queue.name, 
-                    processing_duration, 
-                    success=False
-                )
-                
-                self.logger.error(f"Error processing message from queue {queue.name}: {e}", exc_info=True)
-                return False
-            finally:
-                self.current_message = None
+                try:
+                    # Store and process message
+                    start_time = time.time()
+                    message_obj = self.store_message(env, queue, message)
+                    
+                    if message_obj:
+                        self.logger.info(f"Starting to process message - ID: {message_obj.id}, Name: '{message_obj.name}', Queue: {queue_name}")
+                    
+                    if not message_obj:
+                        self.logger.warning(f"Failed to store message from queue {queue_name}")
+                        return False
+                    
+                    # Update message attempt counter
+                    message_obj.write({"attempt": message_obj.attempt + 1})
+                    
+                    # Create processing object (used for logging in advanced configurations)
+                    _processing_obj = message_obj.create_processing_object()
+                    
+                    # Update message visibility if needed
+                    self.change_message_visibility(env, queue, message_obj, message)
+                    
+                    # Flush and commit message storage
+                    message_obj.flush()
+                    cr.commit()
+                    
+                    # Process the message
+                    result = self.process_message(env, message_obj, message, {})
+                    processing_duration = time.time() - start_time
+                    
+                    # Record metrics
+                    success = result.get('state') == 'done'
+                    self.metrics_collector.record_message_processed(
+                        queue_name, 
+                        processing_duration, 
+                        success=success
+                    )
+                    
+                    # Log detailed message info
+                    self.logger.info(f"Processed message - ID: {message_obj.id}, Name: '{message_obj.name}', Queue: {queue_name}, State: {result.get('state')}")
+                    
+                    return True
+                    
+                except Exception as e:
+                    # Record failed message
+                    processing_duration = time.time() - start_time
+                    self.metrics_collector.record_message_processed(
+                        queue_name, 
+                        processing_duration, 
+                        success=False
+                    )
+                    
+                    self.logger.error(f"Error processing message from queue {queue_name}: {e}", exc_info=True)
+                    return False
+                finally:
+                    self.current_message = None
     
     def get_status(self):
         """Get current worker status

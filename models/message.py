@@ -46,11 +46,11 @@ class IMQMessage(models.Model):
     _order = 'id DESC'
 
     # fields
-    queue_id = fields.Many2one('imq.queue', _("Queue"))
+    queue_id = fields.Many2one('imq.queue', "Queue")
     queue_provider = fields.Selection(related='queue_id.provider', readonly=True)
     queue_type = fields.Selection(related='queue_id.q_type', readonly=True)
     processor_id = fields.Many2one('imq.message_processor', string="Processor")
-    group = fields.Char(_("Group"), index=True, readonly=True)
+    group = fields.Char("Group", index=True, readonly=True)
     name = fields.Char()
     message_type = fields.Selection(related='processor_id.type', readonly=True)
     queue_message_id = fields.Char("Queue Message Id",
@@ -69,42 +69,45 @@ class IMQMessage(models.Model):
                                     index=True)
     target_children_count = fields.Integer("Expected Children Items")
     queue_message_id_history = fields.Text()
-    user_id = fields.Many2one('res.users', _("User"),
+    user_id = fields.Many2one('res.users', "User",
                               default = lambda o: o.env.user.id,
-                              help=_("User owner of the Message. This defines "
+                              help="User owner of the Message. This defines "
                                      "the security restriction of executed "
-                                     "processing."))
-    code = fields.Char(help=_("Python expression that will be executed to "
+                                     "processing.")
+    code = fields.Char(help="Python expression that will be executed to "
                               "launch message processing. This is informational "
                               "only. Use fields in 'Exec. params. tab to "
-                              "manually create messages."))
-    context = fields.Text(help=_("pickled context dict"))
-    payload = fields.Text(help=_("dict {'args': ..., 'kwargs': ...} pickled."))
+                              "manually create messages.")
+    context = fields.Text(help="pickled context dict")
+    payload = fields.Text(help="dict {'args': ..., 'kwargs': ...} pickled.")
     raw_message_body = fields.Text()
     processing_id = fields.Many2one('imq.message_processing', 
                                     "Message Processing",
                                     index=True)
     processing_ids = fields.One2many('imq.message_processing', 'message_id')
     attempt = fields.Integer(default=0)
-    attempt_as_text = fields.Char(_("Attempt / max"), 
+    attempt_as_text = fields.Char("Attempt / max", 
                                   compute='_calc_attempt_vs_max_as_text')
 
     planned_time = fields.Datetime(
-        help=_("When should this message be processed.")
+        help="When should this message be processed."
     )
+    
     enqueued_time = fields.Datetime(
-        help=_("Timestamp when message has been sent to queue."),
+        help="Timestamp when message has been sent to queue.",
         readonly=True
     )
     enqueued_time_microseconds = fields.Integer()
 
     start_time = fields.Datetime(
-        help=_("Time when processing has started on this message"),
+        help="Time when processing has started on this message",
         readonly=True
     )
     start_time_microseconds = fields.Integer()
-    end_time = fields.Datetime(help=_("Processing end or failure time."),
-                               readonly=True)
+    end_time = fields.Datetime(
+        help="Processing end or failure time.",
+        readonly=True
+    )
     end_time_microseconds = fields.Integer()
     result = fields.Text(readonly=True)
     operator_comment = fields.Text()
@@ -122,8 +125,8 @@ class IMQMessage(models.Model):
     max_number_of_attempts = fields.Integer(default=MAX_ATTEMPTS)
     ikpdb_debug = fields.Boolean("IKPdb debug",
                                  default=False,
-                                 help=_("Will open IKPdb in post mortem mode "
-                                        "if an exception is raised."))
+                                 help="Will open IKPdb in post mortem mode "
+                                        "if an exception is raised.")
     _sql_constraints = [
         (
             'remote_id_uniq', 

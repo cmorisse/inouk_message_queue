@@ -22,20 +22,20 @@ class IMQMessageProcessing(models.Model):
     _order = "message_id DESC, attempt DESC"
 
     message_id = fields.Many2one('imq.message', 
-                                 _("Message"),
+                                 "Message",
                                  index=True,
                                  ondelete='cascade')
     attempt = fields.Integer(default=1)
 
 
     start_time = fields.Datetime(
-        help=_("Timestamp processing of message started."),
+        help="Timestamp processing of message started.",
         readonly=True
     )
     start_time_microseconds = fields.Integer(readonly=True)
 
     end_time = fields.Datetime(
-        help=_("Timestamp processing of message finished."),
+        help="Timestamp processing of message finished.",
         readonly=True)
     end_time_microseconds = fields.Integer(readonly=True)
 
@@ -45,17 +45,17 @@ class IMQMessageProcessing(models.Model):
 
     # duplicated to ease analysis
     queue_id = fields.Many2one('imq.queue', 
-                               _("Queue"), 
+                               "Queue", 
                                related='message_id.queue_id',
                                store=True,
                                readonly=True)
     user_id = fields.Many2one('res.users',
-                              _("User"),
+                              "User",
                               related='message_id.user_id',
                               store=True,
                               readonly=True)
     processor_id = fields.Many2one('imq.message_processor',
-                                   _("Processor"),
+                                   "Processor",
                                    related='message_id.processor_id',
                                    store=True,
                                    readonly=True)
@@ -83,9 +83,9 @@ class IMQMessageProcessingLog(models.Model):
     _description = "IMQ - Message Processing Log"
     _order = "processing_id, id"
 
-    processing_id = fields.Many2one('imq.message_processing', _("Processing"), ondelete='cascade', index=True)
-    message_id = fields.Many2one('imq.message', _("Message"), ondelete='cascade', index=True)
-    active_message_id = fields.Many2one('imq.message', _("Active Message"), ondelete='cascade', index=True)
+    processing_id = fields.Many2one('imq.message_processing', "Processing", ondelete='cascade', index=True)
+    message_id = fields.Many2one('imq.message', "Message", ondelete='cascade', index=True)
+    active_message_id = fields.Many2one('imq.message', "Active Message", ondelete='cascade', index=True)
 
     logger_name = fields.Char()
     log_level = fields.Selection(IMQ_MESSAGE_PROCESSOR_LOG_LEVEL)

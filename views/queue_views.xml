@@ -1,41 +1,31 @@
+<?xml version='1.0' encoding='utf-8'?>
 <odoo>
     <data>
-        <!--
-            Queue
-        -->
+        
         <record id="imq_queue__form_view" model="ir.ui.view">
             <field name="name">imq.queue.form.view</field>
             <field name="model">imq.queue</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
                 <form>
                     <header>
-                        <button type="object" name="aws_sqs__create_queue" 
-                                string="Create SQS Queue on AWS" 
-                                invisible="provider != 'aws_sqs' or sqs_queue_url != False" 
-                                class="btn-warning" />
+                        <button type="object" name="aws_sqs__create_queue" string="Create SQS Queue on AWS" invisible="provider != 'aws_sqs' or sqs_queue_url != False" class="btn-warning" />
 
-                        <button type="object" name="aws_sqs__delete_queue" 
-                                string="Delete SQS Queue on AWS" 
-                                invisible="provider != 'aws_sqs' or sqs_queue_url == False" 
-                                class="btn-danger" />
+                        <button type="object" name="aws_sqs__delete_queue" string="Delete SQS Queue on AWS" invisible="provider != 'aws_sqs' or sqs_queue_url == False" class="btn-danger" />
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
-                            <button class="oe_stat_button" 
-                                    icon="fa-slack" 
-                                    invisible="slack_webhook_channel == False" 
-                                    help="The Slack channel that will be used by this queue. Use the Slack tab to change it.">
+                            <button class="oe_stat_button" icon="fa-slack" invisible="slack_webhook_channel == False" help="The Slack channel that will be used by this queue. Use the Slack tab to change it.">
 
                                 <div class="o_field_widget o_stat_info">
                                     <span class="o_stat_value">    
-                                        <field name="slack_webhook_channel" widget="statinfo" nolabel="1" class="mr4"/>
+                                        <field name="slack_webhook_channel" widget="statinfo" nolabel="1" class="mr4" />
                                     </span>
                                 </div>
                             </button>
                         </div>
                         <div class="oe_title">
-                            <h1><field name="name"/></h1>
+                            <h1><field name="name" /></h1>
                             <div class="o_row">
                                 <field name="sqs_name" readonly="1" force_save="1" />
                             </div>
@@ -45,14 +35,14 @@
                             <group class="ik_lw190">
                                 <field name="provider" />
                                 <field name="q_type" />
-                                <field name="deduplication_interval_s" invisible="q_type != 'fifo' or provider != 'pgsql'"/>
-                                <field name="database_bound_q" widget="boolean_toggle" invisible="provider != 'aws_sqs'"/>
+                                <field name="deduplication_interval_s" invisible="q_type != 'fifo' or provider != 'pgsql'" />
+                                <field name="database_bound_q" widget="boolean_toggle" invisible="provider != 'aws_sqs'" />
                             </group>
                             <group class="ik_lw190">
-                                <field name="key" invisible="provider != 'aws_sqs'"/>
-                                <field name="secret" password="True" invisible="provider != 'aws_sqs'"/>
-                                <field name="region" invisible="provider != 'aws_sqs'"/>
-                                <field name="visibility_timeout" invisible="provider != 'pgsql'"/>
+                                <field name="key" invisible="provider != 'aws_sqs'" />
+                                <field name="secret" password="True" invisible="provider != 'aws_sqs'" />
+                                <field name="region" invisible="provider != 'aws_sqs'" />
+                                <field name="visibility_timeout" invisible="provider != 'pgsql'" />
                             </group>
                         </group>
 
@@ -60,11 +50,11 @@
                             <page string="Description">
                                 <field name="description" />
                             </page>
-                            <page string="Test" >
-                                <group col="4" colspan="4" class="ik_lw200" >
+                            <page string="Test">
+                                <group col="4" colspan="4" class="ik_lw200">
                                     <field name="test_message_name" />
                                     <field name="test_message_selector" />
-                                    <newline/>
+                                    <newline />
                                     <field name="test_message_group" />
                                     <field name="test_message_deduplication_id" />
                                     <field name="test_payload" widget="ace" options="{'mode': 'python'}" colspan="4" />
@@ -75,14 +65,14 @@
                             </page>
                             <page string="Notifications">
                                 <group>
-                                    <div colspan="4" >IMQ can send several kinds of notifications related to message processing in queue.<br/> 
-                                    On this form, you can configure IMQ to send These notifications either to Odoo, Slack or Both.<b/>
+                                    <div colspan="4">IMQ can send several kinds of notifications related to message processing in queue.<br /> 
+                                    On this form, you can configure IMQ to send These notifications either to Odoo, Slack or Both.<b />
                                     </div>
                                 </group>
                                 <group string="Microsoft Teams">
-                                    <div colspan="4">Just check the 'Use Notifications' checkmark below to activate Teams notifications.<br/>
-                                    Once it's done, use the "Test Teams Notification" button below to check your setup. <br/>
-                                    The kind of notifications sent for each message can be defined on a per "Message Processor" basis (in the "Message Processor" Form).<br/>
+                                    <div colspan="4">Just check the 'Use Notifications' checkmark below to activate Teams notifications.<br />
+                                    Once it's done, use the "Test Teams Notification" button below to check your setup. <br />
+                                    The kind of notifications sent for each message can be defined on a per "Message Processor" basis (in the "Message Processor" Form).<br />
                                     </div>
                                     <group col="4" colspan="4">
                                         <field name="use_msteams_notifications" colspan="4" />
@@ -92,9 +82,9 @@
                                     </group>                                
                                 </group>                                
                                 <group string="Internal notifications">
-                                    <div colspan="4">Just check the 'Use Internal Notifications' checkmark below to activate Internal notifications.<br/>
-                                    Once it's done, use the "Test Internal Notification" button below to check your setup. <br/>
-                                    The kind of notifications sent for each message can be defined on a per "Message Processor" basis (in the "Message Processor" Form).<br/>
+                                    <div colspan="4">Just check the 'Use Internal Notifications' checkmark below to activate Internal notifications.<br />
+                                    Once it's done, use the "Test Internal Notification" button below to check your setup. <br />
+                                    The kind of notifications sent for each message can be defined on a per "Message Processor" basis (in the "Message Processor" Form).<br />
                                     </div>
                                     <group col="4" colspan="4">
                                         <field name="use_odoo_notifications" colspan="4" />
@@ -102,16 +92,13 @@
                                     </group>                                
                                 </group>                                
                                 <group string="Slack notifications">
-                                    <div colspan="4" >Use the button below to define the workspace and the Slack channel in which IMQ will send the notifications. <br/>
-                                    Once it's done, use the "Test Slack Notification" button below to check your setup. <br/>
-                                    The kind of notifications sent for each message can be defined on a per "Message Processor" basis (in the "Message Processor" Form).<br/>
+                                    <div colspan="4">Use the button below to define the workspace and the Slack channel in which IMQ will send the notifications. <br />
+                                    Once it's done, use the "Test Slack Notification" button below to check your setup. <br />
+                                    The kind of notifications sent for each message can be defined on a per "Message Processor" basis (in the "Message Processor" Form).<br />
                                     </div>
                                     <group col="4" colspan="4">
-                                        <!--
-                                        <label for="slack_test_result" string="Test Result:" colspan="4" />
-                                        <field name="slack_test_result" colspan="4" widget="ace" options="{'mode': 'python'}" nolabel="1" />
-                                        -->
-                                        <button type="object" name="btn_add_to_slack" >
+                                        
+                                        <button type="object" name="btn_add_to_slack">
                                             <img alt="Bind to Slack" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcset="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x" />
                                         </button>
                                         <field name="slack_team" colspan="4" />
@@ -138,13 +125,12 @@
                                         <field name="slack_oauth_access_response" colspan="4" />
                                     </group>                                
                                     <group string="SQS" col="4" colspan="4" invisible="provider != 'aws_sqs'">
-                                        <field name="sqs_queue_url" widget="CopyClipboardChar" 
-                                               colspan="4"/>
-                                        <field name="key" widget="CopyClipboardChar" colspan="2"/>
-                                        <field name="admin_secret" widget="CopyClipboardChar" colspan="2"/>
+                                        <field name="sqs_queue_url" widget="CopyClipboardChar" colspan="4" />
+                                        <field name="key" widget="CopyClipboardChar" colspan="2" />
+                                        <field name="admin_secret" widget="CopyClipboardChar" colspan="2" />
                                     </group>
                                     <group string="Microsoft Teams" col="4" colspan="4">
-                                        <field name="msteams_https_proxy" colspan="4"/>
+                                        <field name="msteams_https_proxy" colspan="4" />
                                     </group>
 
                                 </group>                                
@@ -159,39 +145,39 @@
         <record id="imq_queue__tree_view" model="ir.ui.view">
             <field name="name">imq.queue__tree.view</field>
             <field name="model">imq.queue</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
-                <tree decoration-muted="(not active)" >
-                    <field name="id" optional="hide"/>
-                    <field name="provider" optional="show"/>
-                    <field name="name"/>
-                    <field name="description" optional="show"/>
-                    <field name="q_type"/>
+                <list decoration-muted="(not active)">
+                    <field name="id" optional="hide" />
+                    <field name="provider" optional="show" />
+                    <field name="name" />
+                    <field name="description" optional="show" />
+                    <field name="q_type" />
                     <field name="sqs_name" optional="hide" />
-                    <field name="visibility_timeout" optional="show"/>
-                    <field name="deduplication_interval_s" optional="show"/>
-                    <field name="use_msteams_notifications" optional="hide"/>
-                    <field name="slack_webhook_channel" optional="hide"/>
-                    <field name="active" optional="show"/>
-                </tree>
+                    <field name="visibility_timeout" optional="show" />
+                    <field name="deduplication_interval_s" optional="show" />
+                    <field name="use_msteams_notifications" optional="hide" />
+                    <field name="slack_webhook_channel" optional="hide" />
+                    <field name="active" optional="show" />
+                </list>
             </field>
         </record>
 
         <record id="imq_queue__filter_view" model="ir.ui.view">
             <field name="name">imq.queue__filter.view</field>
             <field name="model">imq.queue</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
                 <search>
-                    <field name="name"/>
-                    <field name="provider"/>
+                    <field name="name" />
+                    <field name="provider" />
                     <field name="sqs_name" />
                     <field name="active" />
                     <field name="id" />
-                    <separator/>
+                    <separator />
                     <filter string="All" name="all" domain="['|', ('active', '=', False), ('active', '=', True)]" />
                     <group expand="0" string="Group By">
-                        <filter string="Provider" name="provider" domain="[]" context="{'group_by':'provider'}"/>
+                        <filter string="Provider" name="provider" domain="[]" context="{'group_by':'provider'}" />
                     </group>
                     
                 </search>
@@ -201,11 +187,9 @@
         <record id="imq_queue__act_window" model="ir.actions.act_window">
             <field name="name">Queues</field>
             <field name="res_model">imq.queue</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
             <field name="context">{'search_default_all': 1}</field>
             <field name="help">Manage Queues</field>
         </record>
     </data>
 </odoo>
-
-

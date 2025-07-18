@@ -1,4 +1,4 @@
-<?xml version="1.0" ?>
+<?xml version='1.0' encoding='utf-8'?>
 <odoo>
     <data noupdate="1">
         <record id="ir_cron__worker_default" model="ir.cron">
@@ -8,15 +8,13 @@
             <field name="state">code</field>
             <field name="code">model.process_message_queue(None,'worker0')</field>
 
-            <field name="interval_number" eval="1"/>
+            <field name="interval_number" eval="1" />
             <field name="interval_type">minutes</field>
-            <field name="numbercall" eval="-1"/>
-            <field name="imq_is_worker" eval="True"/>
-            <field name="doall" eval="False"/>
+            <field name="imq_is_worker" eval="True" />
 
             <field name="active" eval="True" />
-            <field name="user_id" ref="base.user_root"/>
-            <field name="priority" eval="5"/>
+            <field name="user_id" ref="base.user_root" />
+            <field name="priority" eval="5" />
         </record>
     </data>
 
@@ -24,7 +22,7 @@
         <record id="imq_purge_messages__cron" model="ir.cron">
             <field name="name">IMQ: Purge Messages History</field>
             <field name="model_id" ref="inouk_message_queue.model_imq_message" />
-            <field name="user_id" ref="inouk_message_queue.user_imq"/>
+            <field name="user_id" ref="inouk_message_queue.user_imq" />
             <field name="state">code</field>
             <field name="code"># This will purge all messages older than 'imq.messages_retention_period_in_hours'
 # When imq.messages_retention_period_in_hours is undefined, a default value of 720 hours (30 days) is used.
@@ -32,9 +30,7 @@
 model.purge_messages_history()</field>
             <field name="interval_number">6</field>
             <field name="interval_type">hours</field>
-            <field name="numbercall">-1</field>
             <field name="active" eval="True" />
-            <field name="doall" eval="False"/>
             <field name="nextcall">2000-01-01 00:00:00</field>
         </record>
     </data>
@@ -43,17 +39,15 @@ model.purge_messages_history()</field>
         <record id="imq_reset_pgsql_messages_visibility__cron" model="ir.cron">
             <field name="name">IMQ: Reset pgsql Queues Messages Visibility</field>
             <field name="model_id" ref="inouk_message_queue.model_imq_worker" />
-            <field name="user_id" ref="inouk_message_queue.user_imq"/>
+            <field name="user_id" ref="inouk_message_queue.user_imq" />
             <field name="state">code</field>
             <field name="code"># This will reset visibility of messages that are 'wip' while
 # visibility time is over.
 model.process_pgsql_messqges_visibility_timeout_daemon()</field>
             <field name="interval_number">5</field>
             <field name="interval_type">seconds</field>
-            <field name="numbercall">-1</field>
             <field name="active" eval="True" />
-            <field name="doall" eval="False"/>
-            <field name="nextcall" eval="(DateTime.now().replace(minute=0, second=0, microsecond=0))"/>
+            <field name="nextcall" eval="(DateTime.now().replace(minute=0, second=0, microsecond=0))" />
         </record>
     </data>
 

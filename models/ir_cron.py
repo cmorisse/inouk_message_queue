@@ -14,7 +14,10 @@ class ir_cron(models.Model):
     """ Patch to allow sub minute CRONs
     """
     _inherit = "ir.cron"
-    interval_type = fields.Selection(selection_add=[('seconds', 'Seconds')])
+    interval_type = fields.Selection(
+        selection_add=[('seconds', 'Seconds')],
+        ondelete={"seconds": 'cascade'}
+    )
     imq_is_worker = fields.Boolean("Is IMQ Worker?")
 
     @api.onchange('imq_is_worker')
@@ -56,16 +59,19 @@ class ir_cron(models.Model):
         with cls.pool.cursor() as job_cr:
             lastcall = fields.Datetime.to_datetime(job['lastcall'])
             #interval = _intervalTypes[job['interval_type']](job['interval_number'])
-            env = api.Environment(job_cr, job['user_id'], {'lastcall': lastcall})
-            ir_cron = env[cls._name]
+            env = api.Environment(job_cr, job['user_id'], {
+                'lastcall': job['lastcall'],
+                'cron_id': job['id'],
+            })
+            cron = env[cls._name].browse(job['id'])
 
             # Use the user's timezone to compare and compute datetimes,
             # otherwise unexpected results may appear. For instance, adding
             # 1 month in UTC to July 1st at midnight in GMT+2 gives July 30
             # instead of August 1st!
             now = fields.Datetime.now()
-            ir_cron._callback(job['cron_name'], job['ir_actions_server_id'], job['id'])
-            numbercall = job['numbercall']
+            cron._callback(job['cron_name'], job['ir_actions_server_id'],)
+            # numbercall = job['numbercall']
 
 #        with api.Environment.manage():
 #            try:
@@ -78,18 +84,17 @@ class ir_cron(models.Model):
 #                )[cls._name]               
 #            now = fields.Datetime.context_timestamp(cron, datetime.datetime.now())
 #            cron._callback(job['cron_name'], job['ir_actions_server_id'], job['id'])
-            ir_cron._callback(job['cron_name'], job['ir_actions_server_id'], job['id'])
+            cron._callback(job['cron_name'], job['ir_actions_server_id'])
 
-            if numbercall > 0:
-                numbercall -= 1
-            if not numbercall:
-                addsql = ', active=False'
-            else:
-                addsql = ''
+            # if numbercall > 0:
+            #     numbercall -= 1
+            # if not numbercall:
+            #     addsql = ', active=False'
+            # else:
+            addsql = ''
 
             cron_cr.execute(
-                "UPDATE ir_cron SET numbercall=%s, lastcall=%s"+addsql+" WHERE id=%s",(
-                numbercall,
+                "UPDATE ir_cron SET lastcall=%s"+addsql+" WHERE id=%s",(
                 fields.Datetime.to_string(now.astimezone(pytz.UTC)),
                 job['id']
             ))

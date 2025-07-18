@@ -1,42 +1,35 @@
+<?xml version='1.0' encoding='utf-8'?>
 <odoo>
     <data>
 
-        <!--
-           Message Processor 
-        -->
+        
         <record id="imq_message_processor__form_view" model="ir.ui.view">
             <field name="name">imq.message_processor.form.view</field>
             <field name="model">imq.message_processor</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
                 <form>
                     <header>
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
-                            <button class="oe_stat_button"
-                                    type="object"
-                                    string="Refresh"
-                                    icon="fa-refresh"
-                                    name="refresh" />
+                            <button class="oe_stat_button" type="object" string="Refresh" icon="fa-refresh" name="refresh" />
 
                         </div>
                         <div class="oe_title">
-                            <h1><field name="name"/></h1>
+                            <h1><field name="name" /></h1>
                         </div>
                         <group>
                             <group>
                                 <field name="type" />
-                                <field name="selector" 
-                                       required_condition="type != 'rpc'" 
-                                       invisible="type != 'simple'"/>
+                                <field name="selector" required_condition="type != 'rpc'" invisible="type != 'simple'" />
 
                                 <field name="max_attempt" />
                             </group>
                             <group>
-                                <field name="module" required="True"/>
-                                <field name="function" required="True"/>
-                                <field name="is_method"/>
+                                <field name="module" required="True" />
+                                <field name="function" required="True" />
+                                <field name="is_method" />
                             </group>
                         </group>
 
@@ -44,12 +37,12 @@
                             <page string="Logging">
                                 <group>
                                     <group>
-                                        <field name="logging_activated" readonly="logging_activated == 'rpc'"/>
-                                        <field name="capture_log" readonly="logging_activated == False"/>
+                                        <field name="logging_activated" readonly="logging_activated == 'rpc'" />
+                                        <field name="capture_log" readonly="logging_activated == False" />
                                     </group>
                                     <group>
-                                        <field name="log_level"/>
-                                        <field name="log_format"/>
+                                        <field name="log_level" />
+                                        <field name="log_format" />
                                     </group>
                                 </group>
                             </page>
@@ -64,9 +57,9 @@
                             </page>
                             <page string="SQS Parameters">
                                 <group>
-                                    <group class="ik_lw210" >
-                                        <field name="force_visibility_timeout"/>
-                                        <field name="visibility_timeout"/>
+                                    <group class="ik_lw210">
+                                        <field name="force_visibility_timeout" />
+                                        <field name="visibility_timeout" />
                                     </group>
                                     <group>
                                     </group>                                    
@@ -103,32 +96,30 @@
         <record id="imq_message_processor__tree_view" model="ir.ui.view">
             <field name="name">imq.message_processor.tree.view</field>
             <field name="model">imq.message_processor</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
-                <tree>
+                <list>
                     <field name="id" optional="hide" />
-                    <field name="type"/>
-                    <field name="name"/>
-                    <!-- readonly for RPC Call and manually entered for simple message -->
-                    <field name="logging_activated"/> 
-                    <field name="capture_log"/>
-                    <field name="log_level"/>
-                    <field name="log_format"/>
-                    <field name="is_method"/>
-                    <field name="force_visibility_timeout"/>
-                    <field name="visibility_timeout"/>
-                </tree>
+                    <field name="type" />
+                    <field name="name" />
+                    
+                    <field name="logging_activated" /> 
+                    <field name="capture_log" />
+                    <field name="log_level" />
+                    <field name="log_format" />
+                    <field name="is_method" />
+                    <field name="force_visibility_timeout" />
+                    <field name="visibility_timeout" />
+                </list>
             </field>
         </record>
 
         <record id="imq_message_processor__act_window" model="ir.actions.act_window">
             <field name="name">Message Processors</field>
             <field name="res_model">imq.message_processor</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
             <field name="help">Manage Message processors</field>
         </record>
     </data>
 
 </odoo>
-
-

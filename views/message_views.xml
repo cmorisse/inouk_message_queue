@@ -1,92 +1,49 @@
+<?xml version='1.0' encoding='utf-8'?>
 <odoo>
     <data>
-        <!--
-            Message Queue
-        -->
+        
         <record id="imq_message__search_view" model="ir.ui.view">
             <field name="name">imq.message.search_view</field>
             <field name="model">imq.message</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
                 <search string="Search messages">
-                    <filter name="filter_new"
-                            string="New"
-                            domain="[('state','=', 'new')]" />
-                    <filter name="filter_pending"
-                            string="Pending"
-                            domain="[('state','=', 'pending')]" />
-                    <filter name="filter_wip"
-                            string="In progress"
-                            domain="[('state','=', 'wip')]" />
-                    <filter name="filter_retry"
-                            string="Retry"
-                            domain="[('state','=', 'retry')]" />
-                    <filter name="filter_done"
-                            string="Done"
-                            domain="[('state','=', 'done')]" />
-                    <filter name="filter_failed"
-                            string="Failed"
-                            domain="[('state','=', 'failed')]" />
-                    <filter name="filter_terminated"
-                            string="Terminated"
-                            domain="[('state','=', 'terminated')]" />
-                    <filter name="filter_archived"
-                            string="Archived"
-                            domain="[('state','=', 'archived')]" />
-                    <filter name="filter_reset"
-                            string="Reset"
-                            domain="[('state','=', 'reset')]" />
-                    <separator/>
-                    <filter string="Today" name="filter_today" domain="['|', ('start_time', '>', context_today().strftime('%%Y-%%m-%%d 00:00:00') ), ('enqueued_time', '>', context_today().strftime('%%Y-%%m-%%d 00:00:00') ) ]"/>
-                    <filter string="Yesterday" name="filter_yesterday" domain="[ ('start_time', '>', (context_today() - datetime.timedelta(days=1)).strftime('%%Y-%%m-%%d 00:00:00')), ('start_time', '&lt;', context_today().strftime('%%Y-%%m-%%d 00:00:00')) ]"/>
-                    <separator/>
-                    <filter string="Retried" name="filter_retried" domain="[ ('attempt', '>', 1) ]"/>
+                    <filter name="filter_new" string="New" domain="[('state','=', 'new')]" />
+                    <filter name="filter_pending" string="Pending" domain="[('state','=', 'pending')]" />
+                    <filter name="filter_wip" string="In progress" domain="[('state','=', 'wip')]" />
+                    <filter name="filter_retry" string="Retry" domain="[('state','=', 'retry')]" />
+                    <filter name="filter_done" string="Done" domain="[('state','=', 'done')]" />
+                    <filter name="filter_failed" string="Failed" domain="[('state','=', 'failed')]" />
+                    <filter name="filter_terminated" string="Terminated" domain="[('state','=', 'terminated')]" />
+                    <filter name="filter_archived" string="Archived" domain="[('state','=', 'archived')]" />
+                    <filter name="filter_reset" string="Reset" domain="[('state','=', 'reset')]" />
+                    <separator />
+                    <filter string="Today" name="filter_today" domain="['|', ('start_time', '&gt;', context_today().strftime('%%Y-%%m-%%d 00:00:00') ), ('enqueued_time', '&gt;', context_today().strftime('%%Y-%%m-%%d 00:00:00') ) ]" />
+                    <filter string="Yesterday" name="filter_yesterday" domain="[ ('start_time', '&gt;', (context_today() - datetime.timedelta(days=1)).strftime('%%Y-%%m-%%d 00:00:00')), ('start_time', '&lt;', context_today().strftime('%%Y-%%m-%%d 00:00:00')) ]" />
+                    <separator />
+                    <filter string="Retried" name="filter_retried" domain="[ ('attempt', '&gt;', 1) ]" />
 
                     <group string="Group by...">
-                        <filter name="group_by_state"
-                                string="State"
-                                context="{'group_by': 'state'}"
-                                help="Group messages by state"/>
-                        <filter name="group_by_queue"
-                                string="Queue"
-                                context="{'group_by': 'queue_id'}"
-                                help="Group messages by Queue"/>
-                        <filter name="group_by_group"
-                                string="Group"
-                                context="{'group_by': 'group'}"
-                                help="Group messages by Group"/>
-                        <filter name="group_by_parent_message_id"
-                                string="Parent Message"
-                                context="{'group_by': 'parent_message_id'}"
-                                help="Group messages by Parent Message"/>
-                        <filter name="group_by_processor"
-                                string="Processor"
-                                context="{'group_by': 'processor_id'}"
-                                help="Group messages by Processor"/>
-                        <filter name="group_by_start_time"
-                                string="Start time"
-                                context="{'group_by': 'start_time'}"
-                                help="Group messages by Name"/>
-                        <filter name="group_by_name"
-                                string="Name"
-                                context="{'group_by': 'name'}"
-                                help="Group messages by Name"/>
-                        <filter name="group_by_user"
-                                string="User"
-                                context="{'group_by': 'user_id'}"
-                                help="Group messages by User"/>
+                        <filter name="group_by_state" string="State" context="{'group_by': 'state'}" help="Group messages by state" />
+                        <filter name="group_by_queue" string="Queue" context="{'group_by': 'queue_id'}" help="Group messages by Queue" />
+                        <filter name="group_by_group" string="Group" context="{'group_by': 'group'}" help="Group messages by Group" />
+                        <filter name="group_by_parent_message_id" string="Parent Message" context="{'group_by': 'parent_message_id'}" help="Group messages by Parent Message" />
+                        <filter name="group_by_processor" string="Processor" context="{'group_by': 'processor_id'}" help="Group messages by Processor" />
+                        <filter name="group_by_start_time" string="Start time" context="{'group_by': 'start_time'}" help="Group messages by Name" />
+                        <filter name="group_by_name" string="Name" context="{'group_by': 'name'}" help="Group messages by Name" />
+                        <filter name="group_by_user" string="User" context="{'group_by': 'user_id'}" help="Group messages by User" />
                     </group>
 
-                    <field name="name"/>
-                    <field name="result"/>
-                    <field name="payload"/>
-                    <field name="processor_id"/>
-                    <field name="operator_comment"/>
-                    <field name="group"/>
-                    <field name="queue_message_id"/>
+                    <field name="name" />
+                    <field name="result" />
+                    <field name="payload" />
+                    <field name="processor_id" />
+                    <field name="operator_comment" />
+                    <field name="group" />
+                    <field name="queue_message_id" />
                     
-                    <field name="state"/>
-                    <field name="user_id"/>
+                    <field name="state" />
+                    <field name="user_id" />
                 </search>
             </field>
         </record>
@@ -94,105 +51,82 @@
         <record id="imq_message__tree_view" model="ir.ui.view">
             <field name="name">imq.message_tree.view</field>
             <field name="model">imq.message</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
-                <tree  default_order="id desc">
+                <list default_order="id desc">
                     <field name="id" optional="hide" />
                     <field name="user_id" optional="hide" />
                     <field name="queue_message_id" optional="hide" />
-                    <field name="name"/>
+                    <field name="name" />
                     <field name="group" optional="hide" />
-                    <field name="queue_id"/>
-                    <field name="processor_id"/>
-                    <field name="enqueued_time" optional="show"/>
-                    <field name="enqueued_time_microseconds" optional="show"/>
-                    <field name="start_time"/>
-                    <field name="end_time"/>
-                    <field name="attempt_as_text"/>
-                    <field name="state"/>
-                </tree>
+                    <field name="queue_id" />
+                    <field name="processor_id" />
+                    <field name="enqueued_time" optional="show" />
+                    <field name="enqueued_time_microseconds" optional="show" />
+                    <field name="start_time" />
+                    <field name="end_time" />
+                    <field name="attempt_as_text" />
+                    <field name="state" />
+                </list>
             </field>
         </record>
 
         <record id="imq_message__form_view" model="ir.ui.view">
             <field name="name">imq.message_form.view</field>
             <field name="model">imq.message</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
                 <form>
                     <header>
-                        <button string="Retry"
-                                type="object"
-                                name="btn_retry_processing"
-                                class="btn-danger"
-                                invisible="state not in ('failed') or (queue_provider == 'aws_sqs' and queue_type == 'fifo')" />
+                        <button string="Retry" type="object" name="btn_retry_processing" class="btn-danger" invisible="state not in ('failed') or (queue_provider == 'aws_sqs' and queue_type == 'fifo')" />
 
-                        <button string="Archive"
-                                type="object"
-                                name="do_archive"
-                                class="oe_highlight"
-                                groups="inouk_message_queue.group_admin"
-                                invisible="state in ['new']"/>
+                        <button string="Archive" type="object" name="do_archive" class="oe_highlight" groups="inouk_message_queue.group_admin" invisible="state in ['new']" />
 
-                        <field name="state" widget="statusbar" statusbar_visible="new,wip,done,failed"/>
+                        <field name="state" widget="statusbar" statusbar_visible="new,wip,done,failed" />
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
-                            <button class="oe_stat_button"
-                                    string="Exec. logs"
-                                    icon="fa-align-left"
-                                    name="%(imq_message_processing_log__act_window)d"
-                                    context="{'search_default_message_id': [active_id]}"
-                                    type="action"/>
-                            <button class="oe_stat_button"
-                                    string="Exec. stats"
-                                    icon="fa-bar-chart"
-                                    name="%(imq_message_processing__act_window)d"
-                                    context="{'search_default_message_id': [active_id], 'default_message_id': active_id}"
-                                    type="action"/>
-                            <button class="oe_stat_button"
-                                    type="object"
-                                    string="Refresh"
-                                    icon="fa-refresh"
-                                    name="refresh" />
+                            <button class="oe_stat_button" string="Exec. logs" icon="fa-align-left" name="%(imq_message_processing_log__act_window)d" context="{'search_default_message_id': [id]}" type="action" />
+                            <button class="oe_stat_button" string="Exec. stats" icon="fa-bar-chart" name="%(imq_message_processing__act_window)d" context="{'search_default_message_id': [id], 'default_message_id': id}" type="action" />
+                            <button class="oe_stat_button" type="object" string="Refresh" icon="fa-refresh" name="refresh" />
                         </div>
                         <div class="oe_title">
-                            <h2>Cloud id = <field name="queue_message_id" class="oe_inline"/></h2>
-                            <h1><field name="name"/></h1>
+                            <h2>Cloud id = <field name="queue_message_id" class="oe_inline" /></h2>
+                            <h1><field name="name" /></h1>
                         </div>
 
                         <group>
                             <group>
                                 <field name="queue_message_id" />
                                 <field name="processor_id" />
-                                <field name="queue_id"/>
-                                <field name="user_id"/>
-                                <field name="attempt_as_text"/>
-                                <field name="enqueued_time"/>
+                                <field name="queue_id" />
+                                <field name="user_id" />
+                                <field name="attempt_as_text" />
+                                <field name="enqueued_time" />
                             </group>
                             <group class="ik_lw180">
-                                <field name="group"/>
+                                <field name="group" />
                                 <field name="parent_message_id" />
                                 <field name="target_children_count" />
                                 <field name="planned_time" />
-                                <field name="start_time"/>
-                                <field name="end_time"/>
-                                <field name="visibility_time" invisible="queue_provider != 'pgsql'"/>
+                                <field name="start_time" />
+                                <field name="end_time" />
+                                <field name="visibility_time" invisible="queue_provider != 'pgsql'" />
                             </group>
                             <group col="4" colspan="4" style="margin-top: -9px;">                          
-                                <field name="operator_comment" colspan="4"/>
+                                <field name="operator_comment" colspan="4" />
                             </group>
                         </group>
 
                         <notebook>
                             <page string="Result">
-                                <field name="result" widget="ace" readonly="1"/>
+                                <field name="result" widget="ace" readonly="1" />
                             </page>
                             <page string="Log / Debug">
                                 <group>
                                     <group>
-                                        <field name="ikpdb_debug"  />
-                                        <field name="logging_activated" readonly="1"/>
+                                        <field name="ikpdb_debug" />
+                                        <field name="logging_activated" readonly="1" />
                                         
                                     </group>
                                     <group>
@@ -200,47 +134,43 @@
                                         
                                     </group>
                                 </group>
-                                <field name="log_ids" >
-                                    <tree>
+                                <field name="log_ids">
+                                    <list>
                                         <field name="processing_id" invisible="1" />
                                         <field name="create_date" string="Time" />
-                                        <field name="log_level"/>
+                                        <field name="log_level" />
                                         <field name="log_message" class="ik_console" />
-                                    </tree>
+                                    </list>
                                 </field>
                             </page>
                             <page string="Exec. params.">
                                 <group>
-                                    <field name="code"/>
-                                    <field name="context"/>
-                                    <field name="payload"/>
-                                    <field name="raw_message_body"
-                                           readonly="1"
-                                           widget="ace" options="{'mode': 'python'}" />
+                                    <field name="code" />
+                                    <field name="context" />
+                                    <field name="payload" />
+                                    <field name="raw_message_body" readonly="1" widget="ace" options="{'mode': 'python'}" />
                                 </group>
                             </page>
                             <page string="Exec. history">
                                 <group>
-                                    <field name="queue_message_id_history"
-                                           readonly="1"
-                                           colspan="4" />
+                                    <field name="queue_message_id_history" readonly="1" colspan="4" />
                                 </group>
                                 
                                 <field name="processing_ids">
-                                    <tree>
-                                        <field name="attempt"/>
-                                        <field name="start_time"/>
-                                        <field name="end_time"/>
-                                        <field name="state"/>
+                                    <list>
+                                        <field name="attempt" />
+                                        <field name="start_time" />
+                                        <field name="end_time" />
+                                        <field name="state" />
 
-                                    </tree>
+                                    </list>
                                 </field>
                             </page>
-                            <page string="Debug" >
-                                    <!--groups="inouk_message_queue.group_debug"-->
+                            <page string="Debug">
+                                    
                                 <group>
                                     <group>
-                                        <field name="id"/>
+                                        <field name="id" />
 
                                     </group>
                                     <group>
@@ -248,17 +178,17 @@
                                 </group>
                                 <group>
                                     <group class="ik_lw200">
-                                        <field name="queue_type"/>
-                                        <field name="attempt"/>
-                                        <field name="max_number_of_attempts"/>
+                                        <field name="queue_type" />
+                                        <field name="attempt" />
+                                        <field name="max_number_of_attempts" />
                                     </group>
                                     <group class="ik_lw200">
-                                        <field name="queue_provider"/>
-                                        <field name="processing_id"/>
+                                        <field name="queue_provider" />
+                                        <field name="processing_id" />
                                     </group>
                                 </group>
-                                <group class="ik_lw200" >
-                                    <field name="message_deduplication_id" class="text-overflow: ellipsis;"/>
+                                <group class="ik_lw200">
+                                    <field name="message_deduplication_id" class="text-overflow: ellipsis;" />
                                 </group>
 
                             </page>
@@ -272,21 +202,20 @@
         <record id="imq_message__act_window" model="ir.actions.act_window">
             <field name="name">Messages</field>
             <field name="res_model">imq.message</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
             <field name="help">Browse messages from all queues</field>
             <field name="context">{'search_default_filter_pending': True, 'search_default_filter_wip': True, 'search_default_filter_failed': True, 'search_default_filter_reset': True, 'search_default_filter_today': True, 'search_default_filter_retry': True,}</field>
         </record>
 
-        <!--
-        -->
+        
         <record id="retry_msg__server_action" model="ir.actions.server">
             <field name="name">Retry</field>
             <field name="state">code</field>
             <field name="type">ir.actions.server</field>
             <field name="usage">ir_actions_server</field>
             <field name="activity_user_type">specific</field>
-            <field name="model_id" ref="model_imq_message"/>
-            <field name="binding_model_id" ref="model_imq_message"/>
+            <field name="model_id" ref="model_imq_message" />
+            <field name="binding_model_id" ref="model_imq_message" />
             <field name="binding_type">action</field>
             <field name="code">records.do_retry_processing()</field>
         </record>
@@ -297,8 +226,8 @@
             <field name="type">ir.actions.server</field>
             <field name="usage">ir_actions_server</field>
             <field name="activity_user_type">specific</field>
-            <field name="model_id" ref="model_imq_message"/>
-            <field name="binding_model_id" ref="model_imq_message"/>
+            <field name="model_id" ref="model_imq_message" />
+            <field name="binding_model_id" ref="model_imq_message" />
             <field name="binding_type">action</field>
             <field name="code">records.do_archive()</field>
         </record>
@@ -308,5 +237,3 @@
     </data>
 
 </odoo>
-
-

@@ -1,61 +1,28 @@
+<?xml version='1.0' encoding='utf-8'?>
 <openerp>
     <data>
-        <menuitem id="imq__topmenu"
-                  name="IMQ"
-                  sequence="1000" 
-                  parent="inouk_core.inouk_topmenu"/>
+        <menuitem id="imq__topmenu" name="IMQ" sequence="1000" parent="inouk_core.inouk_topmenu" />
 
-            <menuitem id="queues__menu"
-                      name="Queues"
-                      sequence="100"
-                      parent="inouk_message_queue.imq__topmenu"/>
+            <menuitem id="queues__menu" name="Queues" sequence="100" parent="inouk_message_queue.imq__topmenu" />
 
-                <menuitem id="messages__menuitem"
-                          parent="queues__menu"
-                          sequence="100"
-                          action="imq_message__act_window" />
+                <menuitem id="messages__menuitem" parent="queues__menu" sequence="100" action="imq_message__act_window" />
                           
-                <menuitem id="message_processings__menuitem"
-                          parent="queues__menu"
-                          sequence="200"
-                          action="imq_message_processing__act_window" />
+                <menuitem id="message_processings__menuitem" parent="queues__menu" sequence="200" action="imq_message_processing__act_window" />
 
-                <menuitem id="message_processing_logs__menuitem"
-                          parent="queues__menu"
-                          sequence="300"
-                          action="imq_message_processing_log__act_window" />
+                <menuitem id="message_processing_logs__menuitem" parent="queues__menu" sequence="300" action="imq_message_processing_log__act_window" />
 
 
-            <menuitem id="configuration__menu"
-                      name="Configuration"
-                      sequence="1000"
-                      parent="inouk_message_queue.imq__topmenu"/>
+            <menuitem id="configuration__menu" name="Configuration" sequence="1000" parent="inouk_message_queue.imq__topmenu" />
                       
-                <menuitem id="queues__menuitem"
-                          parent="configuration__menu"
-                          sequence="100"
-                          action="imq_queue__act_window" />
+                <menuitem id="queues__menuitem" parent="configuration__menu" sequence="100" action="imq_queue__act_window" />
 
-                <menuitem id="processors__menuitem"
-                          parent="configuration__menu"
-                          sequence="200"
-                          action="imq_message_processor__act_window" />
-                <menuitem id="workers_configuration__menuitem"
-                          parent="configuration__menu"
-                          sequence="300"
-                          action="imq_workers_configuration__act_window" />
+                <menuitem id="processors__menuitem" parent="configuration__menu" sequence="200" action="imq_message_processor__act_window" />
+                <menuitem id="workers_configuration__menuitem" parent="configuration__menu" sequence="300" action="imq_workers_configuration__act_window" />
 
 
-            <menuitem id="tests__menu"
-                      name="Tests"
-                      groups="inouk_message_queue.group_debug"
-                      sequence="1100"
-                      parent="inouk_message_queue.imq__topmenu"/>
+            <menuitem id="tests__menu" name="Tests" groups="inouk_message_queue.group_debug" sequence="1100" parent="inouk_message_queue.imq__topmenu" />
 
-                <menuitem id="test_launcher__menuitem"
-                          parent="tests__menu"
-                          sequence="100"
-                          action="imq_test_launcher__act_window" />
+                <menuitem id="test_launcher__menuitem" parent="tests__menu" sequence="100" action="imq_test_launcher__act_window" />
 
 
     </data>

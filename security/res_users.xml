@@ -1,14 +1,14 @@
-<?xml version="1.0" ?>
+<?xml version='1.0' encoding='utf-8'?>
 <openerp>
     <data noupdate="0">
-        <record id="inouk_message_queue.partner_imq" model="res.partner" >
+        <record id="inouk_message_queue.partner_imq" model="res.partner">
             <field name="name">IMQbot</field>
             <field name="email">imq@inouk.fr</field>
-            <!--field name="customer" eval="False"/-->
+            
         </record>
 
         <record id="inouk_message_queue.user_imq" model="res.users">
-            <field name="partner_id" ref="inouk_message_queue.partner_imq"/>
+            <field name="partner_id" ref="inouk_message_queue.partner_imq" />
             <field name="login">imq@inouk.fr</field>
         </record>
     </data>

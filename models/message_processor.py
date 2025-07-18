@@ -92,7 +92,7 @@ class IMQMessageProcessor(models.Model):
         (
             'processor_uniq', 
             'UNIQUE(type, selector, module, function)', 
-            _("Processor must be unique !")
+            "Processor must be unique !"
         )
     ]
 

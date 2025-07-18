@@ -1,4 +1,4 @@
-<?xml version="1.0" ?>
+<?xml version='1.0' encoding='utf-8'?>
 <openerp>
     <data noupdate="1">
         <record id="icp__imq_stop_workers_template" model="ir.config_parameter">
@@ -19,7 +19,7 @@
         </record>
         <record id="icp__imq_slack_oauth_callback" model="ir.config_parameter">
             <field name="key">imq.SLACK_OAUTH_CALLBACK</field>
-            <!-- This the adress of the cloudflare worker -->
+            
             <field name="value">https://socb-imq.inouk.workers.dev/</field>
         </record>
     </data>

@@ -1,52 +1,30 @@
+<?xml version='1.0' encoding='utf-8'?>
 <odoo>
     <data>
-        <!--
-            Message Processing (Statistics)
-        -->
+        
         <record id="imq_message_processing__search_view" model="ir.ui.view">
             <field name="name">imq.message_processing_search.view</field>
             <field name="model">imq.message_processing</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
                 <search string="Search Processings">
-                    <filter name="filter_state_done"
-                            string="Done"
-                            domain="[('state','=', 'done')]"
-                            help="Show only 'Done' processings."/>
-                    <filter name="filter_state_failed"
-                            string="Failed"
-                            domain="[('state','=', 'failed')]"
-                            help="Show only 'Failed' processings."/>
-                    <separator/>
+                    <filter name="filter_state_done" string="Done" domain="[('state','=', 'done')]" help="Show only 'Done' processings." />
+                    <filter name="filter_state_failed" string="Failed" domain="[('state','=', 'failed')]" help="Show only 'Failed' processings." />
+                    <separator />
 
                     <group string="Group by...">
-                        <filter name="group_by_queue_id"
-                                string="Queue"
-                                domain="[]"
-                                context="{'group_by': 'queue_id'}"/>
-                        <filter name="group_by_processor"
-                                string="Processor"
-                                domain="[]"
-                                context="{'group_by': 'processor_id'}"/>
-                        <filter name="group_by_message_id"
-                                string="Message"
-                                domain="[]"
-                                context="{'group_by': 'message_id'}"/>
-                        <filter name="group_by_state"
-                                string="State"
-                                domain="[]"
-                                context="{'group_by': 'state'}"/>
-                        <filter name="group_by_user_id"
-                                string="User"
-                                domain="[]"
-                                context="{'group_by': 'user_id'}"/>
+                        <filter name="group_by_queue_id" string="Queue" domain="[]" context="{'group_by': 'queue_id'}" />
+                        <filter name="group_by_processor" string="Processor" domain="[]" context="{'group_by': 'processor_id'}" />
+                        <filter name="group_by_message_id" string="Message" domain="[]" context="{'group_by': 'message_id'}" />
+                        <filter name="group_by_state" string="State" domain="[]" context="{'group_by': 'state'}" />
+                        <filter name="group_by_user_id" string="User" domain="[]" context="{'group_by': 'user_id'}" />
                     </group>
 
-                    <field name="queue_id"/>
-                    <field name="processor_id"/>
-                    <field name="user_id"/>
-                    <field name="message_id"/>
-                    <field name="state"/>
+                    <field name="queue_id" />
+                    <field name="processor_id" />
+                    <field name="user_id" />
+                    <field name="message_id" />
+                    <field name="state" />
                 </search>
             </field>
         </record>
@@ -54,84 +32,75 @@
         <record id="imq_message_processing__tree_view" model="ir.ui.view">
             <field name="name">imq.message_processing_tree.view</field>
             <field name="model">imq.message_processing</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
-                <tree>
+                <list>
                     <field name="id" optional="hide" />
-                    <field name="user_id"/>
-                    <field name="queue_id"/>
-                    <field name="message_id"/>
-                    <field name="attempt"/>
-                    <field name="processor_id"/>
-                    <field name="processing_time"/>
-                    <field name="state"/>
-                </tree>
+                    <field name="user_id" />
+                    <field name="queue_id" />
+                    <field name="message_id" />
+                    <field name="attempt" />
+                    <field name="processor_id" />
+                    <field name="processing_time" />
+                    <field name="state" />
+                </list>
             </field>
         </record>
 
         <record id="imq_message_processing__form_view" model="ir.ui.view">
             <field name="name">imq.message_processing_form.view</field>
             <field name="model">imq.message_processing</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
                 <form>
                     <header>
-                        <field name="state" widget="statusbar" statusbar_visible="new,wip,done,failed"/>
+                        <field name="state" widget="statusbar" statusbar_visible="new,wip,done,failed" />
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
-                            <button class="oe_stat_button"
-                                    string="Exec. logs"
-                                    icon="fa-align-left"
-                                    name="%(imq_message_processing_log__act_window)d"
-                                    context="{'search_default_message_id': [active_id]}"
-                                    type="action"/>
-                            <button class="oe_stat_button"
-                                    type="object"
-                                    string="Refresh"
-                                    icon="fa-refresh"
-                                    name="refresh" />
+                            <button class="oe_stat_button" string="Exec. logs" icon="fa-align-left" name="%(imq_message_processing_log__act_window)d" context="{'search_default_message_id': [id]}" type="action" />
+                            <button class="oe_stat_button" type="object" string="Refresh" icon="fa-refresh" name="refresh" />
                         </div>
                         <div class="oe_title">
-                            <h1><field name="message_id"/></h1>
+                            <h1><field name="message_id" /></h1>
                         </div>
 
                         <group>
                             <group>
                                 <field name="processor_id" colspan="4" />
-                                <field name="queue_id"/>
-                                <field name="start_time"/>
-                                <field name="processing_time"/>
+                                <field name="queue_id" />
+                                <field name="start_time" />
+                                <field name="processing_time" />
                                 
                             </group>
                             <group>
-                                <field name="user_id"/>
-                                <field name="attempt"/>
-                                <field name="end_time"/>
+                                <field name="user_id" />
+                                <field name="attempt" />
+                                <field name="end_time" />
                                 
                             </group>
                         </group>
 
                         <notebook>
                             <page string="Result">
-                                <field name="result" readonly="1"/>
+                                <field name="result" readonly="1" />
                             </page>
                             <page string="Log">
                                 <group>
                                 </group>
-                                <field name="log_ids" >
-                                    <tree colors="teal:log_level=='10';green:level=='20';fuchsia:log_level=='30';red:log_level=='40';purple:log_level=='50'" >
+                                <field name="log_ids">
+                                    <list colors="teal:log_level=='10';green:level=='20';fuchsia:log_level=='30';red:log_level=='40';purple:log_level=='50'">
                                         <field name="processing_id" invisible="1" />
                                         <field name="create_date" string="Time" />
-                                        <field name="log_level"/>
-                                        <field name="log_message"/>
-                                    </tree>
+                                        <field name="log_level" />
+                                        <field name="log_message" />
+                                    </list>
                                 </field>
                             </page>
                             <page string="Debug" groups="inouk_message_queue.group_debug">
                                 <group>
                                     <group>
-                                        <field name="id"/>
+                                        <field name="id" />
 
                                     </group>
                                     <group>
@@ -151,10 +120,9 @@
         <record id="imq_message_processing__act_window" model="ir.actions.act_window">
             <field name="name">Messages processings</field>
             <field name="res_model">imq.message_processing</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
             <field name="help">Review all messages processings</field>
         </record>
     </data>
 
 </odoo>
-

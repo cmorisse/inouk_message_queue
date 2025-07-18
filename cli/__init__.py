@@ -1,2 +1,7 @@
 # CLI commands for IMQ Workers v3
-from .imq_worker import IMQWorkerCommand
+try:
+    from .imq_worker import IMQWorker
+except ImportError as e:
+    # Log import errors but don't fail module loading
+    import logging
+    logging.getLogger(__name__).warning(f"Failed to import CLI components: {e}")

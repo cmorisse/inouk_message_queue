@@ -10,7 +10,7 @@ from odoo.modules.registry import Registry
 
 from .base import BaseWorker
 from .monitoring import MemoryMonitor, MetricsCollector, ObservabilityServer
-from ..utils.worker_utils import get_worker_name, validate_queue_pattern
+from ..worker_utils.worker_utils import get_worker_name, validate_queue_pattern
 
 _logger = logging.getLogger(__name__)
 

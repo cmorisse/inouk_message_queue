@@ -9,7 +9,7 @@ from odoo.cli import Command
 _logger = logging.getLogger(__name__)
 
 
-class IMQWorkerCommand(Command):
+class IMQWorker(Command):
     """Run IMQ worker to process messages from queues"""
     name = 'imq-worker'
     

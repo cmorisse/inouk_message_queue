@@ -27,7 +27,7 @@ class TestPhase1Implementation(unittest.TestCase):
     
     def test_worker_utils(self):
         """Test worker utility functions"""
-        from utils.worker_utils import (
+        from worker_utils.worker_utils import (
             parse_memory_limit, format_duration, format_memory_size,
             validate_queue_pattern, get_worker_name, safe_int
         )

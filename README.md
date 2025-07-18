@@ -250,6 +250,70 @@ for item in items:
 2. Increase visibility timeout for long tasks
 3. Use multiple queues to separate workloads
 
+## Testing
+
+### Running All Tests
+
+A comprehensive test suite is available to validate the IMQ Workers v3 implementation:
+
+```bash
+# Run all tests
+./run_tests.sh
+```
+
+The test script performs the following checks:
+
+1. **Module Loading Test**: Verifies the module loads without errors in Odoo
+2. **CLI Command Registration Test**: Confirms the `imqworker` command is properly registered
+3. **CLI Help Test**: Validates the command-line help system works
+4. **Worker Initialization Test**: Tests worker startup and database connection
+5. **Unit Tests**: Runs basic import and utility function tests
+6. **CLI Argument Validation**: Ensures invalid arguments are rejected
+7. **Database Connection Test**: Verifies database connectivity through the worker
+
+### Manual Testing
+
+#### Test CLI Command
+```bash
+# Test command registration
+bin/start_odoo help | grep imqworker
+
+# Test help system
+bin/start_odoo imqworker --help
+
+# Test worker with non-existent queue (should exit gracefully)
+bin/start_odoo imqworker --database mydb --queue test_queue --max-messages 1
+```
+
+#### Test Worker Functionality
+```bash
+# Test with existing queue
+bin/start_odoo imqworker --database mydb --queue default --max-messages 5
+
+# Test with memory limit
+bin/start_odoo imqworker --database mydb --queue default --max-rss-memory 512M
+
+# Test with regex pattern
+bin/start_odoo imqworker --database mydb --queue "mpy.*" --max-messages 10
+
+# Test with observability (metrics and health checks)
+bin/start_odoo imqworker --database mydb --queue default --observability-port 8080
+```
+
+### Test Results
+
+The test script provides colored output and a summary:
+- 🎉 **All tests passed**: Green success message
+- ❌ **Some tests failed**: Red error message with details
+
+### Continuous Integration
+
+The test script is designed to work in CI/CD environments:
+- Returns exit code 0 on success
+- Returns exit code 1 on failure
+- Uses timeout mechanisms to prevent hanging
+- Provides detailed error messages
+
 ## License
 
 This module is licensed under OPL-1.
@@ -258,9 +322,22 @@ This module is licensed under OPL-1.
 
 Created by Cyril MORISSE (@cmorisse)
 
+## Development Documentation
+
+For developers working on IMQ Workers v3, comprehensive development documentation is available in [`./docs/dev/`](./docs/dev/):
+
+- **Analysis**: Codebase analysis and improvement opportunities
+- **Implementation**: Progress tracking and milestone documentation  
+- **Specifications**: Technical specs and implementation plans
+
 ## Contributing
 
 Contributions are welcome! Please submit pull requests or issues on the project repository.
+
+When contributing:
+1. Review the development documentation in `./docs/dev/`
+2. Run the test suite with `./run_tests.sh`
+3. Follow the existing code patterns and conventions
 
 ## Support
 

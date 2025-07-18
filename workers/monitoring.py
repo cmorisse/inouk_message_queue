@@ -15,7 +15,7 @@ try:
 except ImportError:
     HAS_PROMETHEUS = False
 
-from ..utils.worker_utils import parse_memory_limit, format_memory_size
+from ..worker_utils.worker_utils import parse_memory_limit, format_memory_size
 
 _logger = logging.getLogger(__name__)
 

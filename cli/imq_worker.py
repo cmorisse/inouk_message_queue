@@ -45,6 +45,10 @@ class IMQWorker(Command):
         parser.add_argument('--metrics-path', type=str, default='/metrics',
                           help='HTTP path for Prometheus metrics endpoint')
         
+        # Message targeting
+        parser.add_argument('--message', '-m', type=str, default=None,
+                          help='Optional: Process specific message by ID or MessageId within the specified queue')
+        
         # Parse arguments
         try:
             parsed_args = parser.parse_args(args)
@@ -64,6 +68,14 @@ class IMQWorker(Command):
         if not parsed_args.metrics_path.startswith('/'):
             print("Error: --metrics-path must start with '/'", file=sys.stderr)
             return 1
+            
+        # Validate message ID format if provided
+        if parsed_args.message:
+            import re
+            uuid_pattern = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+            if not (parsed_args.message.isdigit() or re.match(uuid_pattern, parsed_args.message)):
+                print("Error: --message must be a numeric ID or valid MessageId UUID", file=sys.stderr)
+                return 1
         
         # Set up logging
         log_level = getattr(logging, parsed_args.log_level.upper())
@@ -86,7 +98,8 @@ class IMQWorker(Command):
                 worker_name=parsed_args.worker_name,
                 log_level=parsed_args.log_level,
                 observability_port=parsed_args.observability_port,
-                metrics_path=parsed_args.metrics_path
+                metrics_path=parsed_args.metrics_path,
+                target_message_id=parsed_args.message
             )
             
             # Run worker

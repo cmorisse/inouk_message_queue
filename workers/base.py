@@ -32,27 +32,31 @@ class BaseWorker:
     def __init__(self):
         self.logger = _logger
     
-    def get_message(self, env, queue_obj, wait_time=0):
+    def get_message(self, env, queue_obj, wait_time=0, target_message_id=None):
         """Query queue for next message to process
         
         Args:
             env: Odoo environment
             queue_obj: Queue object to query
             wait_time: Time to wait for message (currently unused)
+            target_message_id: Optional specific message ID to target
             
         Returns:
             Message object or None
         """
-        self.logger.debug("get_message for Q=%s/%s", queue_obj.name, queue_obj.provider)
+        self.logger.debug("get_message for Q=%s/%s, target_msg=%s", 
+                         queue_obj.name, queue_obj.provider, target_message_id)
         
-        # Use provider-specific method
+        # Use provider-specific method from worker model
+        worker_model = env['imq.worker']
         method_name = f"get_message__{queue_obj.provider}"
-        if hasattr(self, method_name):
-            method = getattr(self, method_name)
-            return method(env, queue_obj)
+        if hasattr(worker_model, method_name):
+            method = getattr(worker_model, method_name)
+            return method(queue_obj, wait_time, target_message_id)
         else:
-            # Fallback to original model method
-            worker_model = env['imq.worker']
+            # Fallback to original model method (without target_message_id support)
+            if target_message_id:
+                self.logger.warning(f"Provider {queue_obj.provider} doesn't support message targeting, ignoring --message parameter")
             return worker_model.get_message(queue_obj, wait_time)
     
     def store_message(self, env, queue_obj, message, start_timestamp=None):

@@ -17,8 +17,8 @@ from ..worker_utils.worker_utils import get_worker_name, validate_queue_pattern
 
 _logger = logging.getLogger(__name__)
 
-# Thread-local storage for IMQ logging
-TLS = threading.local()
+# Import shared TLS from base worker to ensure consistent logging context
+from .base import TLS
 
 
 class StandaloneWorker(BaseWorker):
@@ -33,6 +33,9 @@ class StandaloneWorker(BaseWorker):
         self.max_messages = kwargs.get('max_messages', 0)
         self.max_rss_memory = kwargs.get('max_rss_memory')
         self.worker_name = get_worker_name(kwargs.get('worker_name'))
+        
+        # Message targeting
+        self.target_message_id = kwargs.get('target_message_id')
         
         # State tracking
         self.processed_count = 0
@@ -390,6 +393,8 @@ class StandaloneWorker(BaseWorker):
             self.logger.info(f"Will exit after processing {self.max_messages} messages")
         if self.max_rss_memory:
             self.logger.info(f"Will exit when RSS memory exceeds {self.max_rss_memory}")
+        if self.target_message_id:
+            self.logger.info(f"Message-specific mode: targeting message {self.target_message_id}")
         
         # Start observability server if configured
         if self.observability_server.port:
@@ -527,7 +532,7 @@ class StandaloneWorker(BaseWorker):
                     return 'failed'
                 
                 # Get next message
-                message = self.get_message(env, queue)
+                message = self.get_message(env, queue, 0, self.target_message_id)
                 if not message:
                     return 'empty'
                 

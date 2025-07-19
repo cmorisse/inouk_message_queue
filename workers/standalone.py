@@ -4,6 +4,7 @@
 import re
 import signal
 import logging
+import socket
 import time
 import datetime
 import threading
@@ -56,13 +57,19 @@ class StandaloneWorker(BaseWorker):
         self.observability_server = ObservabilityServer(
             kwargs.get('observability_port', 0),
             self.metrics_collector,
-            kwargs.get('metrics_path', '/metrics')
+            self.memory_monitor,
+            worker_ref=self,
+            metrics_path=kwargs.get('metrics_path', '/metrics')
         )
         
         # Setup logging
         log_level = getattr(logging, kwargs.get('log_level', 'INFO').upper())
         self.logger = logging.getLogger(f'IMQWorker.{self.worker_name}')
         self.logger.setLevel(log_level)
+        
+        # Initialize tracking attributes for health checker
+        self.last_message_time = time.time()
+        self.last_activity_time = time.time()
         
         # Validate queue pattern
         if not validate_queue_pattern(self.queue_pattern):
@@ -379,6 +386,33 @@ class StandaloneWorker(BaseWorker):
             'total_failed': total_failed
         }
     
+    def _check_stop_parameter(self, env):
+        """Check if standalone workers should stop via system parameter
+        
+        Args:
+            env: Odoo environment
+            
+        Returns:
+            bool: True if worker should stop, False otherwise
+        """
+        try:
+            host_name = socket.gethostname()
+            stopped_workers_nodes = env["ir.config_parameter"].sudo().get_param("imq.STOP_STANDALONE_WORKERS", "").split(',')
+            
+            # Remove empty strings from split
+            stopped_workers_nodes = [node.strip() for node in stopped_workers_nodes if node.strip()]
+            
+            if stopped_workers_nodes and (host_name in stopped_workers_nodes or '*' in stopped_workers_nodes):
+                self.logger.info(f"Stopping worker due to imq.STOP_STANDALONE_WORKERS parameter (hostname: {host_name})")
+                return True
+                
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Error checking stop parameter: {e}")
+            # Don't stop on errors - let worker continue
+            return False
+    
     def run(self):
         """Main processing loop
         
@@ -436,6 +470,15 @@ class StandaloneWorker(BaseWorker):
                     self.logger.error(f"RSS memory limit exceeded: {memory_info['rss_mb']:.1f}MB / {memory_info['max_rss_mb']:.1f}MB, exiting")
                     break
                 
+                # Check stop parameter periodically (every 10 iterations to avoid overhead)
+                if self.processed_count % 10 == 0:
+                    with api.Environment.manage():
+                        with registry.cursor() as cr:
+                            env = api.Environment(cr, SUPERUSER_ID, {})
+                            if self._check_stop_parameter(env):
+                                self.should_stop = True
+                                break
+                
                 # Select next healthy queue
                 queue_selection = self._select_next_queue(queue_info, queue_index)
                 if not queue_selection:
@@ -475,6 +518,8 @@ class StandaloneWorker(BaseWorker):
                 elif result == 'empty':
                     # Queue is empty - this is not a failure, so don't update failure stats
                     consecutive_empty_polls += 1
+                    # Update activity to show worker is alive and polling
+                    self.observability_server.update_last_activity()
                     # No message available, short sleep to avoid busy loop
                     time.sleep(0.5)
                 
@@ -488,6 +533,8 @@ class StandaloneWorker(BaseWorker):
                 # Update metrics periodically
                 if self.processed_count % 10 == 0 or consecutive_empty_polls % 50 == 0:
                     self.metrics_collector.update_metrics(self.memory_monitor)
+                    # Update activity during metrics update to provide regular heartbeat
+                    self.observability_server.update_last_activity()
                 
                 # Log status summary periodically (every 10 minutes)
                 if self.processed_count % 600 == 0 and self.processed_count > 0:
@@ -617,6 +664,10 @@ class StandaloneWorker(BaseWorker):
                     
                     # Log detailed message info
                     self.logger.info(f"Processed message - ID: {message_obj.id}, Name: '{message_obj.name}', Queue: {queue_name}, State: {result.get('state')}")
+                    
+                    # Update tracking attributes for health checker
+                    self.last_message_time = time.time()
+                    self.last_activity_time = time.time()
                     
                     # Stop logging capture
                     if message_obj.logging_activated and processor_obj.capture_log:

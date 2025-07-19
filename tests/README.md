@@ -18,6 +18,12 @@ This directory contains all tests for the IMQ Workers v3 implementation.
 - **`run_tests.py`** - Test runner for all test suites
 - **`__init__.py`** - Package initialization
 
+### Workers Directory Tests
+- **`workers/test_resource_limits.py`** - Comprehensive automated tests for resource limits
+- **`workers/manual_limit_test.py`** - Simple manual testing script for individual limit tests
+- **`workers/verify_limits.py`** - Implementation verification script
+- **`workers/test_worker_stop_parameters.py`** - Worker stopping control functionality tests
+
 ## Running Tests
 
 ### Run All Tests
@@ -28,6 +34,21 @@ python3 tests/run_tests.py
 ### Run Specific Test Suite
 ```bash
 python3 tests/test_phase1_simple.py
+```
+
+### Run Worker Tests
+```bash
+# Resource limit tests
+python3 tests/workers/test_resource_limits.py
+
+# Manual limit testing
+python3 tests/workers/manual_limit_test.py
+
+# Implementation verification
+python3 tests/workers/verify_limits.py
+
+# Worker stopping control tests
+python3 tests/workers/test_worker_stop_parameters.py
 ```
 
 ### Run from Project Root
@@ -45,9 +66,20 @@ python3 tests/run_tests.py
 - ✅ **CLI Structure** - Argument parsing, validation, error handling
 - ✅ **Prometheus Metrics** - Metrics creation, export functionality
 
+### Phase 3 Tests Cover:
+- ✅ **Resource Limits** - Message count and memory limit enforcement
+- ✅ **Graceful Shutdown** - SIGTERM and SIGINT signal handling
+- ✅ **Advanced Observability** - Health, readiness, and status endpoints
+- ✅ **Worker Control** - System parameter-based stopping functionality
+
+### Worker Tests Cover:
+- ✅ **Resource Limit Testing** - Automated tests for memory and message limits
+- ✅ **Manual Testing Scripts** - Simple scripts for individual limit verification
+- ✅ **Implementation Verification** - Validates all features are properly implemented
+- ✅ **Worker Stop Control** - Tests parameter parsing and hostname matching logic
+
 ### Future Tests (Planned):
 - **Phase 2** - Queue processing and regex matching
-- **Phase 3** - Resource management and advanced metrics
 - **Phase 4** - Kubernetes integration and observability
 - **Integration Tests** - End-to-end worker functionality
 - **Performance Tests** - Throughput and resource usage benchmarks
@@ -84,6 +116,7 @@ When adding new test files:
 
 ## Test Results
 
+### Phase 1 Tests
 All Phase 1 tests currently pass:
 - ✅ Directory Structure
 - ✅ Worker Utils
@@ -91,4 +124,35 @@ All Phase 1 tests currently pass:
 - ✅ CLI Structure
 - ✅ Prometheus Metrics
 
-Total: 5/5 test suites passing 🎉
+### Phase 3 & Worker Tests
+All Phase 3 and worker tests currently pass:
+- ✅ Resource Limit Testing (comprehensive automated tests)
+- ✅ Manual Limit Testing (simple verification scripts)
+- ✅ Implementation Verification (validates all features present)
+- ✅ Worker Stop Control (parameter parsing and hostname matching)
+
+**Total: 9/9 test suites passing 🎉**
+
+## Worker Stop Control Testing
+
+The worker stopping control functionality includes comprehensive tests:
+
+### System Parameter Tests
+- ✅ Parameter parsing logic (empty, single, multiple hostnames)
+- ✅ Hostname matching (exact, wildcard, list matching)
+- ✅ Edge case handling (empty strings, malformed input)
+
+### Implementation Tests  
+- ✅ XML parameter definitions in place
+- ✅ Cron worker backward compatibility 
+- ✅ Standalone worker integration
+- ✅ All required imports and methods present
+
+### Usage Examples
+The test script provides complete configuration examples for:
+- Stopping all workers (`*`)
+- Stopping workers on specific servers
+- Stopping workers on multiple servers
+- Mixed environment configurations
+
+Run `python3 tests/workers/test_worker_stop_parameters.py` for full verification.

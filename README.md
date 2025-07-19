@@ -111,6 +111,55 @@ Workers are configured as Odoo cron jobs:
 2. Configure the IMQ worker cron job
 3. Set execution frequency based on your needs
 
+### Worker Control via System Parameters
+
+You can control worker execution using system parameters for maintenance or debugging:
+
+#### Stopping Cron Workers
+
+To stop cron workers (traditional Odoo scheduled action workers):
+
+1. Navigate to **Settings > Technical > Parameters > System Parameters**
+2. Create or edit parameter:
+   - **Key**: `imq.STOP_CRON_WORKERS`
+   - **Value**: 
+     - `*` to stop all cron workers
+     - `hostname1,hostname2` to stop workers on specific servers
+     - `server.example.com` to stop workers on a single server
+
+#### Stopping Standalone Workers
+
+To stop standalone workers (IMQ Workers v3):
+
+1. Navigate to **Settings > Technical > Parameters > System Parameters**
+2. Create or edit parameter:
+   - **Key**: `imq.STOP_STANDALONE_WORKERS`
+   - **Value**: 
+     - `*` to stop all standalone workers
+     - `hostname1,hostname2` to stop workers on specific servers
+     - `server.example.com` to stop workers on a single server
+
+#### Examples
+
+```bash
+# Stop all cron workers for maintenance
+Key: imq.STOP_CRON_WORKERS
+Value: *
+
+# Stop standalone workers on production servers only
+Key: imq.STOP_STANDALONE_WORKERS  
+Value: prod-worker-01.internal,prod-worker-02.internal
+
+# Stop all workers on current server (mixed environment)
+Key: imq.STOP_CRON_WORKERS
+Value: $(hostname)
+
+Key: imq.STOP_STANDALONE_WORKERS
+Value: $(hostname)
+```
+
+**Note**: Workers check these parameters periodically and will stop gracefully when detected. This allows for controlled shutdown during deployments or maintenance without killing processes.
+
 ## Advanced Usage
 
 ### Error Handling
@@ -268,6 +317,8 @@ bin/start_odoo imqworker --database $PGDATABASE --queue default \
   --max-rss-memory 1024M --observability-port 8080
 ```
 
+**Note**: Use `--database $PGDATABASE` to automatically use the database name from your environment variables.
+
 ### Message Targeting
 
 The `--message` parameter allows you to process a specific message by ID or MessageId. This is particularly useful for debugging, testing, or processing stuck messages:
@@ -326,6 +377,500 @@ bin/start_odoo imqworker --database $PGDATABASE --queue default \
 # Observability
 --observability-port PORT  # Port for liveness probe and metrics (0=disabled)
 --metrics-path PATH        # HTTP path for Prometheus metrics (default: /metrics)
+```
+
+## Advanced Observability
+
+IMQ Workers v3 provides comprehensive observability features designed for modern container environments and operations teams. When you enable observability with `--observability-port`, the worker exposes multiple HTTP endpoints for health checking, monitoring, and debugging.
+
+### Quick Start
+
+```bash
+# Start worker with observability on port 8080
+bin/start_odoo imqworker --database $PGDATABASE --queue default \
+  --observability-port 8080 --worker-name "production-worker"
+```
+
+This enables all observability endpoints:
+- **Health Check**: http://localhost:8080/healthz
+- **Readiness Probe**: http://localhost:8080/readyz  
+- **Detailed Status**: http://localhost:8080/status
+- **Liveness Probe**: http://localhost:8080/livez
+- **Prometheus Metrics**: http://localhost:8080/metrics
+
+### Health Check Endpoint (`/healthz`)
+
+Provides comprehensive health assessment suitable for monitoring systems and alerting.
+
+```bash
+curl http://localhost:8080/healthz
+```
+
+**Response Format:**
+```json
+{
+  "apiVersion": "imq/v1",
+  "kind": "WorkerHealth",
+  "metadata": {
+    "worker_name": "production-worker",
+    "timestamp": "2025-07-19T15:30:45Z",
+    "database": "production_db"
+  },
+  "status": {
+    "status": "healthy",
+    "checks": {
+      "database": "ok",
+      "memory_usage": "ok", 
+      "queue_connection": "ok",
+      "message_processing": "ok"
+    },
+    "uptime": "2h15m30s",
+    "last_activity": "2025-07-19T15:29:12Z"
+  }
+}
+```
+
+**Health Status Values:**
+- `healthy`: All systems operating normally
+- `degraded`: Minor issues detected (high memory usage, slow processing)  
+- `unhealthy`: Critical issues requiring attention
+
+**Individual Check Status:**
+- **database**: `ok` | `error: <details>`
+- **memory_usage**: `ok` | `warning` | `critical`
+- **queue_connection**: `ok` | `no_queues` | `error`
+- **message_processing**: `ok` | `slow` | `stuck` | `starting`
+
+**HTTP Status Codes:**
+- `200`: Healthy or degraded
+- `503`: Unhealthy
+
+### Readiness Probe Endpoint (`/readyz`)
+
+Indicates whether the worker is ready to process messages. Perfect for Kubernetes readiness probes.
+
+```bash
+curl http://localhost:8080/readyz
+```
+
+**Response Format:**
+```json
+{
+  "apiVersion": "imq/v1",
+  "kind": "WorkerReadiness", 
+  "metadata": {
+    "worker_name": "production-worker",
+    "timestamp": "2025-07-19T15:30:45Z",
+    "database": "production_db"
+  },
+  "status": {
+    "ready": true,
+    "reason": "ready",
+    "queue_status": {
+      "connected": true,
+      "queues_found": 3,
+      "last_poll": "2025-07-19T15:30:45Z"
+    }
+  }
+}
+```
+
+**Readiness Reasons:**
+- `ready`: Worker can accept new messages
+- `starting`: Worker still initializing (first 30 seconds)
+- `shutting_down`: Graceful shutdown in progress
+- `overloaded`: Memory limit exceeded
+
+**HTTP Status Codes:**
+- `200`: Ready to process messages
+- `503`: Not ready
+
+### Detailed Status Endpoint (`/status`)
+
+Comprehensive runtime information for operations teams and debugging.
+
+```bash
+curl http://localhost:8080/status
+```
+
+**Response Format:**
+```json
+{
+  "apiVersion": "imq/v1",
+  "kind": "WorkerStatus",
+  "metadata": {
+    "worker_name": "production-worker", 
+    "timestamp": "2025-07-19T15:30:45Z",
+    "database": "production_db"
+  },
+  "status": {
+    "worker": {
+      "name": "production-worker",
+      "version": "v3.0.0",
+      "uptime": "2h15m30s",
+      "pid": 12345,
+      "started_at": "2025-07-19T13:15:15Z"
+    },
+    "configuration": {
+      "queue_pattern": "production.*",
+      "max_messages": 1000,
+      "max_rss_memory": "512M",
+      "database": "production_db"
+    },
+    "runtime": {
+      "messages_processed": 247,
+      "current_memory_mb": 245.6,
+      "memory_usage_percent": 47.9,
+      "processing_rate_per_minute": 12.3,
+      "average_processing_time": "2.1s",
+      "last_message_at": "2025-07-19T15:29:12Z"
+    },
+    "queues": [
+      {
+        "name": "production-orders",
+        "processed": 150,
+        "failed": 2,
+        "avg_duration": "1.8s"
+      }
+    ],
+    "limits": {
+      "message_limit_reached": false,
+      "memory_limit_reached": false, 
+      "shutdown_requested": false
+    }
+  }
+}
+```
+
+**Always returns `200` status code**
+
+### Liveness Probe Endpoint (`/livez`)
+
+Simple endpoint for basic liveness checking. Returns `OK` if worker process has been operational (polling queues, processing messages, or performing normal worker operations) within 5 minutes. This indicates the worker process is alive and functioning, regardless of message availability.
+
+```bash
+curl http://localhost:8080/livez
+# Response: OK (HTTP 200) or "No recent activity" (HTTP 503)
+```
+
+**Activity is updated when the worker:**
+- Successfully processes a message
+- Polls queues (even when empty)
+- Performs periodic metrics updates  
+- Executes normal operational tasks
+
+### Prometheus Metrics Endpoint (`/metrics`)
+
+Exports comprehensive metrics in Prometheus format for monitoring and alerting.
+
+```bash
+curl http://localhost:8080/metrics
+```
+
+**Key Metrics Available:**
+
+**Worker Lifecycle:**
+- `imq_worker_uptime_seconds` - Worker uptime
+- `imq_worker_wait_time_seconds` - Time spent waiting for messages
+- `imq_worker_wait_time_percent` - Percentage of time waiting
+
+**Message Processing:**
+- `imq_worker_messages_processed_total` - Total messages processed
+- `imq_worker_messages_failed_total` - Total messages failed  
+- `imq_worker_message_duration_seconds` - Processing duration histogram
+
+**Memory Usage:**
+- `imq_worker_rss_memory_bytes` - Current RSS memory usage
+- `imq_worker_max_rss_memory_bytes` - Configured memory limit
+
+**Per-Queue Metrics:**
+- `imq_worker_queue_messages_processed_total{queue="default"}` - Messages per queue
+- `imq_worker_queue_messages_failed_total{queue="default"}` - Failures per queue
+- `imq_worker_queue_message_duration_seconds{queue="default"}` - Duration per queue
+
+### Error Handling
+
+All endpoints provide structured error responses:
+
+```bash
+# Invalid endpoint
+curl http://localhost:8080/invalid
+```
+
+```json
+{
+  "error": "Not Found",
+  "available_endpoints": ["/livez", "/healthz", "/readyz", "/status", "/metrics"]
+}
+```
+
+**Server errors return 500 with details:**
+```json
+{
+  "error": "Internal server error",
+  "details": "Specific error message"
+}
+```
+
+### Kubernetes Integration
+
+Perfect for Kubernetes deployments with standard probe configuration:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imq-worker
+spec:
+  template:
+    spec:
+      containers:
+      - name: worker
+        image: myapp:latest
+        command: ["bin/start_odoo"]
+        args:
+          - "imqworker"
+          - "--database=$(DATABASE_NAME)"
+          - "--queue=production.*"
+          - "--max-messages=1000"
+          - "--max-rss-memory=512M"
+          - "--observability-port=8080"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        
+        # Resource limits
+        resources:
+          limits:
+            memory: "768Mi"  # Higher than --max-rss-memory
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+```
+
+### Monitoring Setup
+
+#### Prometheus ServiceMonitor
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: imq-worker-metrics
+spec:
+  selector:
+    matchLabels:
+      app: imq-worker
+  endpoints:
+  - port: observability
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+```
+
+#### Grafana Dashboard Queries
+
+```promql
+# Worker uptime
+imq_worker_uptime_seconds
+
+# Messages processed per second
+rate(imq_worker_messages_processed_total[5m])
+
+# Average processing time
+rate(imq_worker_message_duration_seconds_sum[5m]) / 
+rate(imq_worker_message_duration_seconds_count[5m])
+
+# Error rate percentage
+rate(imq_worker_messages_failed_total[5m]) / 
+rate(imq_worker_messages_processed_total[5m]) * 100
+
+# Memory usage percentage
+imq_worker_rss_memory_bytes / imq_worker_max_rss_memory_bytes * 100
+
+# Wait time percentage (worker efficiency)
+imq_worker_wait_time_percent
+```
+
+#### Alerting Rules
+
+```yaml
+groups:
+- name: imq-worker
+  rules:
+  - alert: IMQWorkerDown
+    expr: up{job="imq-worker"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "IMQ Worker is down"
+      
+  - alert: IMQWorkerUnhealthy
+    expr: probe_success{job="imq-worker-health"} == 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "IMQ Worker health check failing"
+      
+  - alert: IMQWorkerHighErrorRate  
+    expr: rate(imq_worker_messages_failed_total[5m]) / rate(imq_worker_messages_processed_total[5m]) > 0.1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "IMQ Worker error rate above 10%"
+      
+  - alert: IMQWorkerHighMemoryUsage
+    expr: (imq_worker_rss_memory_bytes / imq_worker_max_rss_memory_bytes) > 0.9
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "IMQ Worker memory usage above 90%"
+```
+
+### Operational Workflows
+
+#### Health Check Script
+
+```bash
+#!/bin/bash
+# health_check.sh - Simple health monitoring script
+
+WORKER_URL="http://localhost:8080"
+ENDPOINTS=("healthz" "readyz" "status")
+
+for endpoint in "${ENDPOINTS[@]}"; do
+  response=$(curl -s -w "%{http_code}" "${WORKER_URL}/${endpoint}")
+  http_code="${response: -3}"
+  
+  if [[ "$http_code" =~ ^2[0-9]{2}$ ]]; then
+    echo "✅ /$endpoint: OK ($http_code)"
+  else
+    echo "❌ /$endpoint: FAILED ($http_code)"
+    exit 1
+  fi
+done
+
+echo "🎉 All health checks passed!"
+```
+
+#### Status Monitoring
+
+```bash
+#!/bin/bash
+# monitor_worker.sh - Real-time worker monitoring
+
+watch -n 5 "
+echo 'IMQ Worker Status:'
+curl -s http://localhost:8080/status | jq '
+  .status.runtime | 
+  \"Messages: \(.messages_processed) | Rate: \(.processing_rate_per_minute)/min | Memory: \(.current_memory_mb)MB | Avg: \(.average_processing_time)\"
+'
+"
+```
+
+#### Load Testing with Observability
+
+```bash
+#!/bin/bash
+# load_test.sh - Load test with monitoring
+
+# Start monitoring in background
+./monitor_worker.sh &
+MONITOR_PID=$!
+
+# Create load test messages
+bin/start_odoo imqtest --database $PGDATABASE --simple \
+  --queue production --count 1000 --delay 0.1
+
+# Monitor processing
+echo "Monitoring worker performance..."
+while true; do
+  pending=$(curl -s http://localhost:8080/status | jq '.status.runtime.messages_processed')
+  if [ "$pending" -ge 1000 ]; then
+    break
+  fi
+  sleep 5
+done
+
+# Stop monitoring
+kill $MONITOR_PID
+
+echo "Load test completed!"
+curl -s http://localhost:8080/status | jq '.status.runtime'
+```
+
+### Best Practices
+
+1. **Always enable observability** in production environments
+2. **Use readiness probes** for Kubernetes deployments
+3. **Monitor error rates** and set up alerting for > 5% failure rates
+4. **Track memory usage** trends to optimize resource allocation
+5. **Set up dashboards** for queue depth, processing rates, and worker health
+6. **Use /status endpoint** for debugging performance issues
+7. **Monitor wait time percentage** to optimize worker scaling
+
+### Troubleshooting
+
+#### Worker Not Responding to Health Checks
+
+```bash
+# Check if observability port is accessible
+nc -zv localhost 8080
+
+# Check worker logs for startup errors
+docker logs <worker-container>
+
+# Verify worker is still running
+ps aux | grep imqworker
+```
+
+#### High Memory Usage Alerts
+
+```bash
+# Get detailed memory information
+curl -s http://localhost:8080/status | jq '.status.runtime.current_memory_mb'
+
+# Check memory limit configuration
+curl -s http://localhost:8080/status | jq '.status.configuration.max_rss_memory'
+
+# Monitor memory trend
+for i in {1..10}; do
+  echo "$(date): $(curl -s http://localhost:8080/status | jq '.status.runtime.current_memory_mb')MB"
+  sleep 30
+done
+```
+
+#### Processing Slowdown Investigation
+
+```bash
+# Check processing rate and average time
+curl -s http://localhost:8080/status | jq '.status.runtime | {rate: .processing_rate_per_minute, avg_time: .average_processing_time}'
+
+# Check queue-specific performance  
+curl -s http://localhost:8080/status | jq '.status.queues[]'
+
+# Check last activity time
+curl -s http://localhost:8080/status | jq '.status.runtime.last_message_at'
 ```
 
 ## IMQ Dump Command (`imqdump`)

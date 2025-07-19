@@ -252,6 +252,278 @@ for item in items:
 
 ## Testing
 
+### IMQ Test CLI Command (`imqtest`)
+
+The `imqtest` command provides a powerful CLI interface for creating and testing IMQ messages. It offers complete feature parity with the GUI test launcher and is perfect for debugging, automation, and load testing.
+
+#### Quick Start
+
+```bash
+# List available test processors
+bin/start_odoo imqtest --database $PGDATABASE --list-processors
+
+# Create a simple test message
+bin/start_odoo imqtest --database $PGDATABASE --simple --queue default --verbose
+
+# Create an RPC method test with custom parameters
+bin/start_odoo imqtest --database $PGDATABASE --rpc-method --queue default --param "test_data" --duration 10
+
+# Create multiple messages with JSON output
+bin/start_odoo imqtest --database $PGDATABASE --simple --queue default --count 5 --json-output
+```
+
+#### Command Syntax
+
+```bash
+bin/start_odoo imqtest [OPTIONS] TEST_TYPE
+```
+
+#### Required Arguments
+
+- `--database`, `-d`: Database name to connect to
+- **Test Type** (choose one):
+  - `--simple`: Create simple message test using SimpleMessage_processor
+  - `--rpc-method`: Create RPC message test using a_task_method
+  - `--rpc-function`: Create RPC message test using a_task_procedure  
+  - `--fifo-test`: Create FIFO test sequence
+  - `--list-processors`: List available test processors
+
+#### Message Configuration Options
+
+```bash
+--queue QUEUE, -q QUEUE          # Queue name (default: default)
+--count COUNT, -c COUNT          # Number of messages to create (default: 1)
+--name NAME, -n NAME             # Custom message name (auto-generated if not provided)
+--selector SELECTOR, -s SELECTOR # Processor selector for simple messages (default: TestMessage)
+--payload PAYLOAD, -p PAYLOAD    # JSON payload for simple messages (default: {})
+```
+
+#### RPC Test Options
+
+```bash
+--param PARAM                    # Parameter for RPC test methods (default: test_param)
+--duration DURATION              # Processing duration in seconds (default: 5)
+```
+
+#### Exception Testing Options
+
+```bash
+--raise-exception                # Make test raise an exception
+--exception-type TYPE            # Type of exception to raise:
+                                # - exception: Python Exception
+                                # - usererror: Odoo UserError  
+                                # - imqerror: IMQError
+                                # - imqretryable: IMQRetryableError
+                                # - imqterminate: IMQTerminateException
+--exception-step STEP            # Step name for FIFO test exceptions (e.g., fifo_step3)
+--delay-param DELAY              # Delay in seconds for IMQRetryableError (default: 0)
+--pass-imqerror-value           # Pass a value to IMQError/IMQRetryableError
+```
+
+#### FIFO Queue Options
+
+```bash
+--message-group GROUP            # Message group ID for FIFO queues (auto-generated if not provided)
+```
+
+#### Advanced Options
+
+```bash
+--debug-mode                     # Run in debug mode (synchronous execution)
+--enable-logging                # Enable logging for test messages
+--enable-console                # Enable console capture for test messages
+--user-id USER_ID               # User ID to run test as (default: system user)
+--context CONTEXT               # Additional context for message (JSON format)
+--delay DELAY                   # Delay between creating messages in seconds
+```
+
+#### Output Options
+
+```bash
+--verbose, -v                   # Verbose output showing progress
+--json-output                   # Output results in JSON format
+--log-level LEVEL               # Log level: DEBUG, INFO, WARNING, ERROR
+```
+
+#### Examples
+
+##### Basic Simple Message Test
+
+```bash
+# Create a simple test message
+bin/start_odoo imqtest --database $PGDATABASE --simple --queue default --verbose
+
+# Output:
+# Created simple message 1/1: ID=49682, MessageID=f2f1b01a-8559-4058-9e69-e16b8ec288fa
+# Successfully created 1 simple message(s) in queue 'default'
+#   - Message ID: 49682, Name: 'CLI Test Simple 1'
+```
+
+##### RPC Method Test with Custom Parameters
+
+```bash
+# Test RPC method with 30-second duration and custom parameter
+bin/start_odoo imqtest --database $PGDATABASE --rpc-method \
+  --queue default --param "production_data" --duration 30 --verbose
+```
+
+##### Exception Testing
+
+```bash
+# Test IMQRetryableError with 60-second delay
+bin/start_odoo imqtest --database $PGDATABASE --rpc-method \
+  --queue default --raise-exception --exception-type imqretryable \
+  --delay-param 60 --pass-imqerror-value
+```
+
+##### FIFO Test Sequence
+
+```bash
+# Create FIFO test sequence with exception on step 3
+bin/start_odoo imqtest --database $PGDATABASE --fifo-test \
+  --queue fifo_queue --raise-exception --exception-step fifo_step3 \
+  --exception-type usererror --message-group "test-batch-001"
+```
+
+##### Batch Message Creation
+
+```bash
+# Create 10 simple messages with 2-second delay between each
+bin/start_odoo imqtest --database $PGDATABASE --simple \
+  --queue default --count 10 --delay 2 --json-output > test_results.json
+```
+
+##### Custom Payload Testing
+
+```bash
+# Test with custom JSON payload
+bin/start_odoo imqtest --database $PGDATABASE --simple \
+  --queue default --payload '{"customer_id": 12345, "action": "process_order"}' \
+  --selector "OrderProcessor" --name "Order Processing Test"
+```
+
+##### Load Testing
+
+```bash
+# Create 100 messages quickly for load testing
+bin/start_odoo imqtest --database $PGDATABASE --simple \
+  --queue default --count 100 --json-output | jq '.[].id'
+```
+
+#### JSON Output Format
+
+When using `--json-output`, the command returns structured data:
+
+```json
+[
+  {
+    "id": 49684,
+    "message_id": "131da109-9290-4a7d-b480-ce4cc62029ce", 
+    "name": "CLI Test Simple 1",
+    "queue": "default",
+    "selector": "TestMessage",
+    "sequence": 1
+  },
+  {
+    "id": 49685,
+    "message_id": "87748c3a-0853-4fc7-8214-7d919f13a56b",
+    "name": "CLI Test Simple 2", 
+    "queue": "default",
+    "selector": "TestMessage",
+    "sequence": 2
+  }
+]
+```
+
+#### Integration with Testing Workflows
+
+##### CI/CD Pipeline Testing
+
+```bash
+#!/bin/bash
+# test_imq_pipeline.sh
+
+# Create test messages
+RESULT=$(bin/start_odoo imqtest --database test_db --simple --count 5 --json-output)
+MESSAGE_IDS=$(echo "$RESULT" | jq -r '.[].id')
+
+# Start worker to process them
+bin/start_odoo imqworker --database test_db --queue default --max-messages 5 &
+WORKER_PID=$!
+
+# Wait for processing and check results
+sleep 30
+kill $WORKER_PID
+
+# Verify all messages processed successfully
+for id in $MESSAGE_IDS; do
+  STATUS=$(bin/start_odoo shell --database test_db -c "
+    msg = env['imq.message'].browse($id)
+    print(msg.state)
+  ")
+  if [ "$STATUS" != "done" ]; then
+    echo "Message $id failed: $STATUS"
+    exit 1
+  fi
+done
+
+echo "All test messages processed successfully!"
+```
+
+##### Performance Testing
+
+```bash
+# Create load test with timing
+time bin/start_odoo imqtest --database prod_db --simple \
+  --queue performance_test --count 1000 --verbose
+
+# Monitor queue depth during test  
+while true; do
+  PENDING=$(bin/start_odoo shell --database prod_db -c "
+    count = env['imq.message'].search_count([('state', '=', 'pending')])
+    print(count)
+  ")
+  echo "Pending messages: $PENDING"
+  sleep 5
+done
+```
+
+#### Troubleshooting
+
+##### Common Issues
+
+1. **Database Connection Errors**
+   ```bash
+   # Verify database name and access
+   echo $PGDATABASE
+   bin/start_odoo shell --database $PGDATABASE -c "print('Connected successfully')"
+   ```
+
+2. **Queue Not Found**
+   ```bash
+   # List available queues
+   bin/start_odoo shell --database $PGDATABASE -c "
+   queues = env['imq.queue'].search([])
+   for q in queues:
+       print(f'{q.name} ({q.provider}, {q.q_type})')
+   "
+   ```
+
+3. **Permission Issues**
+   ```bash
+   # Test with specific user ID
+   bin/start_odoo imqtest --database $PGDATABASE --simple \
+     --queue default --user-id 1 --verbose
+   ```
+
+##### Debug Mode
+
+```bash
+# Run in debug mode for immediate execution
+bin/start_odoo imqtest --database $PGDATABASE --rpc-method \
+  --queue default --debug-mode --enable-logging --verbose
+```
+
 ### Running All Tests
 
 A comprehensive test suite is available to validate the IMQ Workers v3 implementation:

@@ -93,14 +93,22 @@ def format_memory_size(bytes_size):
 
 
 def validate_queue_pattern(pattern):
-    """Validate queue pattern is a valid regex
+    """Validate queue pattern is a valid regex or simple pattern
     
     Args:
         pattern (str): Queue pattern to validate
         
     Returns:
-        bool: True if valid regex, False otherwise
+        bool: True if valid pattern, False otherwise
     """
+    if not pattern or not isinstance(pattern, str):
+        return False
+        
+    # Allow simple patterns with wildcards
+    if '*' in pattern or pattern.isalnum() or '_' in pattern or '-' in pattern:
+        return True
+    
+    # Test as regex
     try:
         re.compile(pattern)
         return True

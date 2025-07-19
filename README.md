@@ -250,6 +250,364 @@ for item in items:
 2. Increase visibility timeout for long tasks
 3. Use multiple queues to separate workloads
 
+## Worker Command (`imqworker`)
+
+The IMQ Workers v3 system provides a standalone worker command that can process messages independently of Odoo's cron system.
+
+### Basic Usage
+
+```bash
+# Process messages from default queue
+bin/start_odoo imqworker --database $PGDATABASE --queue default
+
+# Process with queue pattern matching
+bin/start_odoo imqworker --database $PGDATABASE --queue "mpy.*" --max-messages 100
+
+# Process with memory limit and observability
+bin/start_odoo imqworker --database $PGDATABASE --queue default \
+  --max-rss-memory 1024M --observability-port 8080
+```
+
+### Message Targeting
+
+The `--message` parameter allows you to process a specific message by ID or MessageId. This is particularly useful for debugging, testing, or processing stuck messages:
+
+```bash
+# Process specific message by numeric ID
+bin/start_odoo imqworker --database $PGDATABASE --queue default --message 49737
+
+# Process specific message by MessageId (UUID)
+bin/start_odoo imqworker --database $PGDATABASE --queue default \
+  --message "8f3ec366-68c8-4945-87cc-aaf2cad5dd0f"
+```
+
+#### Message Targeting Features
+
+- **Flexible Input**: Accepts both numeric IDs and UUID MessageIds
+- **State Validation**: Only processes messages in `pending` or `retry` state
+- **Queue Requirement**: The queue parameter is still required for security
+- **Elegant Implementation**: Uses existing polling logic with optional message filtering
+- **Debug Support**: Combine with `--log-level DEBUG` to see SQL execution details
+
+#### Message Targeting Examples
+
+```bash
+# Debug specific message processing
+bin/start_odoo imqworker --database $PGDATABASE --queue default \
+  --message 49737 --max-messages 1 --log-level DEBUG
+
+# Process message and exit immediately  
+bin/start_odoo imqworker --database $PGDATABASE --queue default \
+  --message 49737 --max-messages 1 --worker-name "debug-worker"
+
+# Process message with observability for monitoring
+bin/start_odoo imqworker --database $PGDATABASE --queue default \
+  --message 49737 --observability-port 8080
+```
+
+### Command Options
+
+```bash
+# Required arguments
+--database, -d DATABASE    # Database name to connect to  
+--queue, -q PATTERN        # Queue name or regex pattern
+
+# Processing limits
+--max-messages N           # Exit after processing N messages (0=unlimited)
+--max-rss-memory SIZE      # Exit when RSS memory exceeds limit (e.g., 1024M)
+
+# Message targeting
+--message, -m ID           # Process specific message by ID or MessageId
+
+# Worker configuration  
+--worker-name, -w NAME     # Worker identifier for logging
+--log-level LEVEL          # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# Observability
+--observability-port PORT  # Port for liveness probe and metrics (0=disabled)
+--metrics-path PATH        # HTTP path for Prometheus metrics (default: /metrics)
+```
+
+## IMQ Dump Command (`imqdump`)
+
+The `imqdump` command provides a kubectl-style inspection tool for IMQ objects, allowing you to examine messages, queues, processors, and processing records in structured YAML or JSON format.
+
+### Basic Usage
+
+```bash
+# Dump message information in YAML format (default)
+bin/start_odoo imqdump --database $PGDATABASE --message 49737
+
+# Dump message with logs in JSON format
+bin/start_odoo imqdump --database $PGDATABASE --message 49737 --include-logs --json
+
+# Dump queue information
+bin/start_odoo imqdump --database $PGDATABASE --queue default
+
+# Dump processor by selector
+bin/start_odoo imqdump --database $PGDATABASE --processor TestMessage
+```
+
+### Object Types
+
+#### Messages (`--message`)
+
+Dump detailed message information including processing history and logs:
+
+```bash
+# By numeric ID
+bin/start_odoo imqdump --database $PGDATABASE --message 49737
+
+# By MessageId (UUID)  
+bin/start_odoo imqdump --database $PGDATABASE --message "8f3ec366-68c8-4945-87cc-aaf2cad5dd0f"
+
+# Include processing logs
+bin/start_odoo imqdump --database $PGDATABASE --message 49737 --include-logs
+```
+
+#### Queues (`--queue`)
+
+Dump queue configuration and statistics:
+
+```bash
+# Queue information with message counts by state
+bin/start_odoo imqdump --database $PGDATABASE --queue default
+```
+
+#### Processors (`--processor`)
+
+Dump message processor configuration:
+
+```bash
+# By numeric ID
+bin/start_odoo imqdump --database $PGDATABASE --processor 1
+
+# By selector name
+bin/start_odoo imqdump --database $PGDATABASE --processor TestMessage
+```
+
+#### Processing Records (`--processing`)
+
+Dump individual processing attempt information:
+
+```bash
+# Processing record with logs
+bin/start_odoo imqdump --database $PGDATABASE --processing 47495 --include-logs
+```
+
+#### Processing Logs (`--logs`)
+
+Dump processing logs in streaming format, similar to `kubectl logs`:
+
+```bash
+# Stream format - human-readable log output
+bin/start_odoo imqdump --database $PGDATABASE --logs 47497
+
+# JSON format - structured log data
+bin/start_odoo imqdump --database $PGDATABASE --logs 47497 --json
+
+# Save logs to file for analysis
+bin/start_odoo imqdump --database $PGDATABASE --logs 47497 --output processing_47497.log
+```
+
+### Output Formats
+
+#### YAML Format (Default)
+
+```yaml
+apiVersion: imq/v1
+kind: Message
+metadata:
+  id: 49737
+  messageId: 8f3ec366-68c8-4945-87cc-aaf2cad5dd0f
+  name: Message Targeting Test 2
+  createdAt: '2025-07-19T10:45:02.508176'
+spec:
+  queue:
+    id: 1
+    name: default
+    provider: pgsql
+    type: std
+  processor:
+    id: 1
+    name: TestMessage
+    selector: TestMessage
+    function: SimpleMessage_processor
+status:
+  state: done
+  attempt: 1
+  startTime: '2025-07-19T10:45:16.272511'
+  endTime: '2025-07-19T10:45:21.301887'
+  processing:
+  - id: 47495
+    workerType: sa-workerv3
+    state: done
+    result: '"processor returned string"'
+```
+
+#### JSON Format
+
+```bash
+# Output in JSON format
+bin/start_odoo imqdump --database $PGDATABASE --message 49737 --json
+```
+
+```json
+{
+  "apiVersion": "imq/v1",
+  "kind": "Message",
+  "metadata": {
+    "id": 49737,
+    "messageId": "8f3ec366-68c8-4945-87cc-aaf2cad5dd0f",
+    "name": "Message Targeting Test 2"
+  },
+  "status": {
+    "state": "done",
+    "workerType": "sa-workerv3"
+  }
+}
+```
+
+#### Processing Logs Format
+
+The `--logs` command provides a specialized streaming format for processing logs:
+
+```bash
+# Stream format output
+bin/start_odoo imqdump --database $PGDATABASE --logs 47497
+```
+
+```
+# Processing Logs for ID: 47497
+# Message: Run atask #imq.test_launcher(10,) (ID: 49739)
+# Worker Type: sa-workerv3
+# State: done
+# Attempt: 1
+# Start Time: 2025-07-19T10:58:08.090016
+# End Time: 2025-07-19T10:58:10.134718
+# Result: "a_task = test_param @ 2025-07-19 10:58:10.115141\n"
+# Total Log Entries: 3
+#
+# Log Stream:
+# -----------
+2025-07-19 10:58:08.090 IMQ_message_49739 INFO Task started with param=test_param
+2025-07-19 10:58:08.500 IMQ_message_49739 INFO Processing iteration #1
+2025-07-19 10:58:09.200 IMQ_message_49739 INFO Task completed successfully
+```
+
+```bash
+# JSON format provides structured data
+bin/start_odoo imqdump --database $PGDATABASE --logs 47497 --json
+```
+
+```json
+{
+  "apiVersion": "imq/v1",
+  "kind": "ProcessingLogs", 
+  "metadata": {
+    "processingId": 47497,
+    "messageId": 49739,
+    "messageName": "Run atask #imq.test_launcher(10,)",
+    "workerType": "sa-workerv3"
+  },
+  "spec": {
+    "processing": {
+      "state": "done",
+      "attempt": 1,
+      "startTime": "2025-07-19T10:58:08.090016",
+      "endTime": "2025-07-19T10:58:10.134718"
+    }
+  },
+  "logs": [
+    {
+      "id": 12345,
+      "timestamp": "2025-07-19T10:58:08.090016",
+      "loggerName": "IMQ_message_49739",
+      "level": "20",
+      "message": "Task started with param=test_param"
+    }
+  ]
+}
+```
+
+### Command Options
+
+```bash
+# Required arguments
+--database, -d DATABASE    # Database name to connect to
+
+# Object type (choose one)
+--message, -m ID          # Dump message by ID or MessageId
+--queue, -q NAME          # Dump queue by name  
+--processor, -p REF       # Dump processor by ID or selector
+--processing ID           # Dump processing record by ID
+--logs PROCESSING_ID      # Dump processing logs stream for processing ID
+
+# Output options
+--json                    # Output in JSON format (default: YAML)
+--output, -o FILE         # Output file path (default: stdout)
+--include-logs            # Include processing logs for messages/processing
+--verbose, -v             # Verbose output with debug information
+```
+
+### Use Cases
+
+#### Debugging Message Processing
+
+```bash
+# Check message state and processing history
+bin/start_odoo imqdump --database $PGDATABASE --message 49737
+
+# Examine detailed logs
+bin/start_odoo imqdump --database $PGDATABASE --message 49737 --include-logs
+
+# Stream processing logs for detailed debugging
+bin/start_odoo imqdump --database $PGDATABASE --logs 47497
+
+# Check what processor handles the message
+bin/start_odoo imqdump --database $PGDATABASE --processor TestMessage
+```
+
+#### Monitoring and Operations
+
+```bash
+# Export message data for analysis
+bin/start_odoo imqdump --database $PGDATABASE --message 49737 --json \
+  --output message_49737.json
+
+# Check queue health
+bin/start_odoo imqdump --database $PGDATABASE --queue default
+
+# Audit processing attempts
+bin/start_odoo imqdump --database $PGDATABASE --processing 47495 --include-logs
+
+# Tail processing logs for monitoring
+bin/start_odoo imqdump --database $PGDATABASE --logs 47497 --output /var/log/imq/processing_47497.log
+```
+
+#### CI/CD Integration
+
+```bash
+#!/bin/bash
+# Verify message processing in pipeline
+
+MESSAGE_ID=$(bin/start_odoo imqtest --database test_db --simple --json-output | jq -r '.[0].id')
+
+# Process the message
+bin/start_odoo imqworker --database test_db --queue default --message $MESSAGE_ID --max-messages 1
+
+# Verify it completed successfully
+FINAL_STATE=$(bin/start_odoo imqdump --database test_db --message $MESSAGE_ID --json | jq -r '.status.state')
+
+if [ "$FINAL_STATE" != "done" ]; then
+  echo "Message processing failed: $FINAL_STATE"
+  bin/start_odoo imqdump --database test_db --message $MESSAGE_ID --include-logs
+  exit 1
+fi
+
+echo "Message processed successfully!"
+```
+
 ## Testing
 
 ### IMQ Test CLI Command (`imqtest`)

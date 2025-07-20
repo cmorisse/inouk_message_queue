@@ -1,39 +1,116 @@
 # Inouk Message Queue (IMQ)
 
-A powerful asynchronous task processing system for Odoo that enables distributed processing using cloud message queues (AWS SQS) or PostgreSQL-based queuing.
+**The production-ready task queue system built for Odoo developers who need reliable asynchronous processing.**
 
-## Overview
+Turn any Odoo method into an async task with just one `@processor` annotation. Get enterprise-grade task processing with exactly-once delivery, automatic retries, comprehensive logging, and transparent scaling from PostgreSQL to AWS SQS.
 
-Inouk Message Queue (IMQ) allows you to:
-- Process heavyweight tasks asynchronously without blocking the user interface
-- Distribute work across multiple workers (Odoo processes, AWS Lambda, or any program)
-- Handle failures gracefully with automatic retries and comprehensive error tracking
-- Monitor and debug task execution with detailed logging
+## What IMQ Is
 
-## Features
+**IMQ is a task queue system** designed for business applications that require:
+- **Exactly-once processing** - No duplicate task execution
+- **Ordered task processing** - Sequential execution within queues  
+- **Reliable delivery** - Tasks are never lost, even during failures
+- **Business transaction safety** - Full integration with Odoo's database transactions
+- **Comprehensive audit trails** - Complete logging and monitoring of all task execution
 
-### 🚀 Multiple Queue Providers
-- **AWS SQS**: Both standard and FIFO queues with full feature support
-- **PostgreSQL**: Database-based queuing for simpler deployments
-- Easy switching between providers without code changes
+## What IMQ Is NOT
 
-### 🎯 Simple API
-- Decorate any function or method with `@processor` or `@processor_method`
-- Call `.run_async()` to enqueue tasks
-- Automatic serialization of Odoo models and complex data types
+IMQ is **not** a pub/sub system, event streaming platform, or real-time messaging solution. It's specifically designed for **reliable task processing** where business semantics and data consistency matter more than raw throughput.
 
-### 🛡️ Robust Error Handling
-- **IMQError**: Permanent failures (no retry)
-- **IMQRetryableError**: Automatic retries with configurable delays
-- **IMQTerminateException**: Graceful termination
-- Database transaction safety with automatic rollback
+## Why Choose IMQ?
 
-### 📊 Monitoring & Debugging
-- Comprehensive logging of all processing attempts
-- Console output capture during execution
-- Processing time tracking and statistics
-- Post-mortem debugging support
-- Integration with Slack, Teams, and Odoo chat for notifications
+### 🎯 **Effortless Odoo Integration**
+```python
+@processor('default')
+def my_heavy_task(env, data):
+    # Your business logic here
+    pass
+
+# That's it! Call anywhere in Odoo:
+my_heavy_task.run_async({'key': 'value'})
+```
+
+### 📊 **Complete Observability** 
+- **Automatic log capture** - Every print, log, and error is captured and stored
+- **Comprehensive GUI** - Monitor, debug, and replay tasks through Odoo's interface
+- **Processing history** - Full audit trail of all task attempts and outcomes
+- **Performance metrics** - Built-in Prometheus metrics and health endpoints
+
+### 🏗️ **Production-Ready Architecture**
+- **PostgreSQL-native HA** - Leverage your existing database infrastructure for high availability
+- **Transparent scaling** - Start with PostgreSQL, scale to AWS SQS without code changes
+- **Kubernetes-ready** - Production deployments with monitoring and autoscaling
+- **Battle-tested** - Used in production Odoo environments
+
+### 🛡️ **Robust & Reliable**
+- **Exactly-once delivery** - Business-critical tasks execute once and only once
+- **Automatic retries** - Configurable retry policies with exponential backoff
+- **Graceful error handling** - Distinguish between retryable and permanent failures
+- **Database transaction safety** - Tasks integrate seamlessly with Odoo's transaction model
+
+### 🔧 **Developer Experience**
+- **Zero configuration** - Works out of the box with PostgreSQL
+- **Rich debugging** - Inspect task state, logs, and execution history
+- **Flexible routing** - Route tasks to specific queues and workers
+- **Open source** - MIT licensed, community-driven development
+
+## Quick Start
+
+### 1. Install
+```bash
+# Add to your Odoo addons and install through Apps menu
+```
+
+### 2. Create a Task
+```python
+from odoo.addons.inouk_message_queue.api import processor
+
+@processor('default')  # One annotation is all you need
+def send_welcome_email(env, user_id):
+    user = env['res.users'].browse(user_id)
+    # Send email logic here
+    return f"Email sent to {user.email}"
+```
+
+### 3. Execute Asynchronously
+```python
+# In any Odoo method:
+send_welcome_email.run_async(user.id)
+# Task is queued and will be processed by workers
+```
+
+### 4. Monitor & Debug
+Navigate to **IMQ > Messages** in Odoo to see task execution, logs, and performance metrics.
+
+---
+
+## Technical Features
+
+### 🚀 Dual Queue Architecture
+- **PostgreSQL Provider**: Database-native queuing with ACID guarantees and HA support
+- **AWS SQS Provider**: Cloud-scale processing with standard and FIFO queues
+- **Transparent switching**: Change providers without modifying application code
+- **Hybrid deployments**: Mix providers for different queue types
+
+### 🎯 Developer-Friendly API
+- **One-line integration**: `@processor('queue_name')` decorator
+- **Automatic serialization**: Handles Odoo models, records, and complex Python objects
+- **Method processors**: `@processor_method` for class methods and model integration
+- **Flexible parameters**: Pass any JSON-serializable data to tasks
+
+### 🛡️ Advanced Error Handling
+- **IMQError**: Mark failures as permanent (no retry)
+- **IMQRetryableError**: Automatic retries with configurable delays and backoff
+- **IMQTerminateException**: Graceful worker termination
+- **Transaction safety**: Full integration with Odoo's database transaction model
+- **Dead letter handling**: Failed messages are preserved for analysis
+
+### 📊 Enterprise Monitoring
+- **Complete log capture**: Every print(), logger call, and exception is stored
+- **Processing history**: Full audit trail with timing, attempts, and outcomes  
+- **Performance metrics**: Built-in Prometheus metrics for production monitoring
+- **GUI integration**: Rich Odoo interface for task management and debugging
+- **Notification systems**: Slack, Teams, and Odoo chat integration for alerts
 
 ## Installation
 

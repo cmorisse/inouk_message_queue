@@ -15,6 +15,7 @@ This directory contains all tests for the IMQ Workers v3 implementation.
 ### Test Files
 - **`test_phase1.py`** - Original unittest-based tests (has import issues with relative imports)
 - **`test_phase1_simple.py`** - Simplified test implementation that works standalone
+- **`test_phase2_queue_processing.py`** - Comprehensive Phase 2 queue processing tests
 - **`run_tests.py`** - Test runner for all test suites
 - **`__init__.py`** - Package initialization
 
@@ -33,7 +34,11 @@ python3 tests/run_tests.py
 
 ### Run Specific Test Suite
 ```bash
+# Phase 1 tests (core infrastructure)
 python3 tests/test_phase1_simple.py
+
+# Phase 2 tests (queue processing)
+python3 tests/test_phase2_queue_processing.py
 ```
 
 ### Run Worker Tests
@@ -66,6 +71,14 @@ python3 tests/run_tests.py
 - ✅ **CLI Structure** - Argument parsing, validation, error handling
 - ✅ **Prometheus Metrics** - Metrics creation, export functionality
 
+### Phase 2 Tests Cover:
+- ✅ **Queue Pattern Validation** - Regex pattern validation and error handling
+- ✅ **Queue Pattern Matching** - Actual regex matching against queue names
+- ✅ **Queue Discovery Simulation** - Queue filtering by pattern logic
+- ✅ **Round-Robin Queue Selection** - Load balancing algorithm with health checks
+- ✅ **Queue Health Monitoring** - Failure tracking and timeout recovery
+- ✅ **Queue Statistics Tracking** - Performance metrics and processing stats
+
 ### Phase 3 Tests Cover:
 - ✅ **Resource Limits** - Message count and memory limit enforcement
 - ✅ **Graceful Shutdown** - SIGTERM and SIGINT signal handling
@@ -79,7 +92,6 @@ python3 tests/run_tests.py
 - ✅ **Worker Stop Control** - Tests parameter parsing and hostname matching logic
 
 ### Future Tests (Planned):
-- **Phase 2** - Queue processing and regex matching
 - **Phase 4** - Kubernetes integration and observability
 - **Integration Tests** - End-to-end worker functionality
 - **Performance Tests** - Throughput and resource usage benchmarks
@@ -124,6 +136,15 @@ All Phase 1 tests currently pass:
 - ✅ CLI Structure
 - ✅ Prometheus Metrics
 
+### Phase 2 Tests
+All Phase 2 tests currently pass:
+- ✅ Queue Pattern Validation (18/18 test cases)
+- ✅ Queue Pattern Matching (27/27 test cases)
+- ✅ Queue Discovery Simulation (5/5 scenarios)
+- ✅ Round-Robin Queue Selection (8/8 test cases)
+- ✅ Queue Health Monitoring (7/7 test cases)
+- ✅ Queue Statistics Tracking (5/5 test cases)
+
 ### Phase 3 & Worker Tests
 All Phase 3 and worker tests currently pass:
 - ✅ Resource Limit Testing (comprehensive automated tests)
@@ -131,7 +152,7 @@ All Phase 3 and worker tests currently pass:
 - ✅ Implementation Verification (validates all features present)
 - ✅ Worker Stop Control (parameter parsing and hostname matching)
 
-**Total: 9/9 test suites passing 🎉**
+**Total: 11/11 test suites passing 🎉**
 
 ## Worker Stop Control Testing
 
@@ -156,3 +177,63 @@ The test script provides complete configuration examples for:
 - Mixed environment configurations
 
 Run `python3 tests/workers/test_worker_stop_parameters.py` for full verification.
+
+## Phase 2 Queue Processing Testing
+
+The Phase 2 test suite provides comprehensive coverage of the queue processing functionality:
+
+### Test Suite Breakdown
+
+1. **Queue Pattern Validation** (18 test cases)
+   - Tests valid regex patterns: `default.*`, `queue[0-9]+`, `(urgent|normal)`
+   - Tests invalid patterns: empty strings, malformed regex, unclosed brackets
+   - Tests edge cases: wildcard patterns, escaped characters
+
+2. **Queue Pattern Matching** (27 test cases)
+   - Tests exact matching vs substring matching behavior
+   - Tests anchored patterns: `^default$`, `^prod.*$`
+   - Tests complex patterns: alternation, character classes, wildcards
+
+3. **Queue Discovery Simulation** (5 scenarios)
+   - Tests filtering queues by pattern
+   - Tests with mock queue data: default, urgent, muppy-prod, muppy-test, batch-processing
+   - Validates pattern-to-queue mapping logic
+
+4. **Round-Robin Queue Selection** (8 test cases)
+   - Tests load balancing across healthy queues
+   - Tests wrapping behavior when reaching end of queue list
+   - Tests handling of unhealthy queues (skipping)
+   - Tests edge case: no healthy queues available
+
+5. **Queue Health Monitoring** (7 test cases)
+   - Tests failure threshold tracking (3 failures → unhealthy)
+   - Tests timeout-based recovery after failures
+   - Tests success-based recovery (resets failure count)
+   - Tests state transitions: healthy → unhealthy → recovered
+
+6. **Queue Statistics Tracking** (5 test cases)
+   - Tests initialization of queue statistics
+   - Tests success/failure counting
+   - Tests average processing time calculation
+   - Tests health summary generation
+
+### Running Phase 2 Tests
+
+```bash
+# Run complete Phase 2 test suite
+python3 tests/test_phase2_queue_processing.py
+
+# Expected output: 6/6 test suites passed
+```
+
+### Test Coverage
+
+The Phase 2 tests provide simulation-based testing of the queue processing logic without requiring a full Odoo environment. All core algorithms are validated:
+
+- ✅ **Regex Pattern Engine** - Validates queue pattern matching
+- ✅ **Queue Discovery** - Tests filtering and selection logic  
+- ✅ **Load Balancing** - Tests round-robin algorithm
+- ✅ **Health Monitoring** - Tests failure tracking and recovery
+- ✅ **Statistics** - Tests performance metric collection
+
+This ensures the queue processing functionality works correctly before deployment to production environments.

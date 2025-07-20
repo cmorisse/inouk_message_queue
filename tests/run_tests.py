@@ -40,6 +40,7 @@ def main():
     
     test_files = [
         ("test_phase1_simple.py", "Phase 1 Implementation Tests"),
+        ("test_phase2_queue_processing.py", "Phase 2 Queue Processing Tests"),
         # Add more test files here as they are created
     ]
     

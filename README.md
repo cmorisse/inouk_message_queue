@@ -1717,4 +1717,4 @@ When contributing:
 
 ## Support
 
-For questions or support, please contact the author via Twitter @cmorisse.
+For questions or support, please contact the author @cmorisse.

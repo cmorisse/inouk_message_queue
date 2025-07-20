@@ -1,0 +1,227 @@
+# RBAC Configuration for IMQ Workers
+# Service Account, Role, and RoleBinding for workers
+---
+# Service Account for basic deployment
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: imq-worker
+  namespace: default
+  labels:
+    app: imq-worker
+
+---
+# Service Account for production deployment
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: imq-worker-production
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    environment: production
+
+---
+# ClusterRole for IMQ workers (if they need cluster-wide permissions)
+# Most workers don't need this - included as example
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: imq-worker-cluster-role
+  labels:
+    app: imq-worker
+rules:
+# Example: Read ConfigMaps across namespaces
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+# Example: Read Secrets in specific namespaces
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+  resourceNames: ["imq-config", "aws-credentials"]
+
+---
+# Role for namespace-specific permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: imq-worker-role
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+rules:
+# Read ConfigMaps in namespace
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+# Read Secrets (specific ones only)
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+  resourceNames: ["odoo-secrets", "aws-secrets", "muppy-secrets"]
+# Read pod information (for worker identification)
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get"]
+# Create events (for logging Kubernetes events)
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+---
+# RoleBinding for production namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: imq-worker-rolebinding
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: imq-worker-role
+subjects:
+- kind: ServiceAccount
+  name: imq-worker-production
+  namespace: muppy-workers
+
+---
+# NetworkPolicy for IMQ workers (optional, for network segmentation)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: imq-worker-network-policy
+  namespace: muppy-workers
+spec:
+  podSelector:
+    matchLabels:
+      app: imq-worker
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow Prometheus scraping
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow health checks from kubelet
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow PostgreSQL database
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow external PostgreSQL (if not in cluster)
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/8  # Adjust for your network
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow AWS SQS API
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 169.254.169.254/32  # Block metadata service
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# PodSecurityPolicy (deprecated in K8s 1.21+, use Pod Security Standards instead)
+# Included for reference if using older Kubernetes versions
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: imq-worker-psp
+  labels:
+    app: imq-worker
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+  - ALL
+  volumes:
+  - 'configMap'
+  - 'emptyDir'
+  - 'projected'
+  - 'secret'
+  - 'downwardAPI'
+  - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAs'
+    ranges:
+    - min: 1000
+      max: 65535
+  runAsGroup:
+    rule: 'MustRunAs'
+    ranges:
+    - min: 1000
+      max: 65535
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+    - min: 1000
+      max: 65535
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+    - min: 1000
+      max: 65535
+  readOnlyRootFilesystem: false  # Odoo needs write access
+
+---
+# Priority Classes for different worker types
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000
+globalDefault: false
+description: "High priority class for critical IMQ workers"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: default-priority
+value: 500
+globalDefault: false
+description: "Default priority class for standard IMQ workers"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: batch
+value: 100
+globalDefault: false
+description: "Low priority class for batch IMQ workers"

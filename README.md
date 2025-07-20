@@ -873,6 +873,87 @@ curl -s http://localhost:8080/status | jq '.status.queues[]'
 curl -s http://localhost:8080/status | jq '.status.runtime.last_message_at'
 ```
 
+## Kubernetes Deployment (Beta)
+
+> ⚠️ **Beta Warning**: The Kubernetes deployment examples and configurations are currently in **beta**. While they follow best practices and have been tested, they may require adjustments for your specific production environment. Please thoroughly test in non-production environments first.
+
+### Overview
+
+IMQ Workers v3 are designed to run natively in Kubernetes environments, providing:
+- Horizontal scaling with HPA (Horizontal Pod Autoscaler)
+- Native health checks and observability
+- Prometheus metrics integration
+- Graceful shutdown handling
+- Resource management and limits
+
+### Deployment Examples
+
+We provide comprehensive Kubernetes manifests in the [`k8s/examples/`](k8s/examples/) directory:
+
+- **[Basic Deployment](k8s/examples/deployment-basic.yaml)**: Simple 2-replica deployment for getting started
+- **[Production Deployment](k8s/examples/deployment-production.yaml)**: Full production setup with autoscaling, monitoring, and security
+- **[Multi-Queue Deployment](k8s/examples/deployment-multiqueue.yaml)**: Separate worker pools for different queue priorities
+- **[Jobs & CronJobs](k8s/examples/job-examples.yaml)**: One-time and scheduled batch processing
+
+### Quick Start
+
+```bash
+# Create namespace
+kubectl create namespace muppy-workers
+
+# Create secrets (edit the template first!)
+kubectl apply -f k8s/examples/secrets-template.yaml
+
+# Deploy basic workers
+kubectl apply -f k8s/examples/deployment-basic.yaml
+
+# Check deployment
+kubectl get pods -n muppy-workers
+kubectl logs -l app=imq-worker -n muppy-workers
+```
+
+### Monitoring Integration
+
+Deploy Prometheus ServiceMonitor for automatic metrics discovery:
+
+```bash
+kubectl apply -f k8s/examples/servicemonitor.yaml
+```
+
+Available metrics endpoints:
+- `/metrics` - Prometheus metrics
+- `/livez` - Liveness probe
+- `/readyz` - Readiness probe  
+- `/statusz` - Detailed worker status
+
+### Key Features
+
+1. **Container-native design**: No dependency on cron, runs as long-lived processes
+2. **Observability built-in**: Prometheus metrics, structured logging, health endpoints
+3. **Resource aware**: Memory and CPU limits with graceful shutdown
+4. **Queue flexibility**: Process multiple queues with regex patterns
+5. **Security**: Non-root user, dropped capabilities, security contexts
+
+### Documentation
+
+For complete Kubernetes deployment documentation, see:
+- 📚 **[Kubernetes Deployment Guide](k8s/README.md)** - Comprehensive guide with examples
+- 🔧 **[RBAC Configuration](k8s/examples/rbac.yaml)** - Security and access control
+- 📊 **[Monitoring Setup](k8s/examples/servicemonitor.yaml)** - Prometheus and alerting
+- 🔐 **[Secrets Management](k8s/examples/secrets-template.yaml)** - Secure configuration
+
+### Beta Considerations
+
+While the Kubernetes deployment is functional and follows best practices, please note:
+
+- Test thoroughly in your environment before production use
+- Resource limits and requests may need tuning for your workload
+- Network policies should be adjusted for your security requirements
+- Consider using GitOps tools (Flux, ArgoCD) for production deployments
+- Monitor closely during initial rollout
+
+For questions or issues with Kubernetes deployments, please open an issue on our repository.
+
 ## IMQ Dump Command (`imqdump`)
 
 The `imqdump` command provides a kubectl-style inspection tool for IMQ objects, allowing you to examine messages, queues, processors, and processing records in structured YAML or JSON format.

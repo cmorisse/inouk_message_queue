@@ -177,16 +177,59 @@ queue.write({
     'region': 'us-east-1',
     'key': 'your-access-key',
     'secret': 'your-secret-key',
-    'database_bound_q': True,  # Prefix queue name with database name
+    'database_bound_q': True,  # Prefix queue name with Odoo database name
 })
 ```
 
+### Worker Types
+
+IMQ provides two types of workers for processing messages:
+
+#### Legacy Cron Workers (v2)
+- **Runs inside Odoo**: Execute as standard Odoo scheduled actions (cron jobs)
+- **Easy setup**: No additional infrastructure required - works in any Odoo instance
+- **Lower performance**: Limited by Odoo's cron execution model
+- **Best for**: Development, testing, and low-volume production environments
+
+#### Standalone Workers (v3) - Recommended
+- **Dedicated processes**: Run as separate processes outside of Odoo's web server
+- **High performance**: Optimized for throughput with dedicated processing threads
+- **Advanced features**: Pattern matching, round-robin processing, health monitoring
+- **Production ready**: Kubernetes support, Prometheus metrics, graceful shutdowns
+- **Best for**: Production environments requiring reliability and scale
+
+#### Choosing Worker Type
+
+| Feature | Cron Workers (v2) | Standalone Workers (v3) |
+|---------|-------------------|------------------------|
+| Setup complexity | Simple | Moderate |
+| Performance | Lower | Higher |
+| Resource usage | Shared with Odoo | Dedicated |
+| Monitoring | Basic | Advanced (Prometheus) |
+| Queue patterns | Fixed queues | Regex patterns |
+| Kubernetes ready | No | Yes |
+| Recommended for | Development/Testing | Production |
+
 ### Worker Configuration
 
+#### Cron Worker Setup
 Workers are configured as Odoo cron jobs:
 1. Navigate to **Settings > Technical > Automation > Scheduled Actions**
 2. Configure the IMQ worker cron job
 3. Set execution frequency based on your needs
+
+#### Standalone Worker Setup
+Deploy workers using the CLI:
+```bash
+# Process a single queue
+bin/start_odoo imqworker --database=mydb --queue=default
+
+# Process multiple queues with pattern
+bin/start_odoo imqworker --database=mydb --queue="high_priority_*" --max-messages=1000
+
+# Run with monitoring enabled
+bin/start_odoo imqworker --database=mydb --queue=default --observability-port=9090
+```
 
 ### Worker Control via System Parameters
 

@@ -3,6 +3,27 @@
 ## Overview
 Implement standalone CLI workers for IMQ that run independently of Odoo's ir.cron system, designed for high-performance message processing in Kubernetes environments.
 
+## Worker Types in IMQ
+
+IMQ supports two types of workers for processing messages:
+
+### Legacy Cron Workers (v2)
+- **Architecture**: Run as Odoo scheduled actions (ir.cron) within the Odoo server process
+- **Performance**: Lower throughput due to cron execution model and shared resources
+- **Setup**: Simple - just configure a scheduled action in Odoo
+- **Use Case**: Development, testing, and low-volume production environments
+- **Limitations**: No pattern matching, limited monitoring, no graceful shutdown
+
+### Standalone Workers (v3) - Recommended
+- **Architecture**: Dedicated processes running outside Odoo's web server
+- **Performance**: High throughput with optimized message processing
+- **Setup**: Deploy using CLI command with various configuration options
+- **Use Case**: Production environments requiring reliability and scale
+- **Features**: Queue pattern matching, health monitoring, Prometheus metrics, graceful shutdown
+
+### Migration Path
+Organizations typically start with Cron Workers for simplicity and migrate to Standalone Workers as their message volume grows. Both worker types can coexist in the same environment, allowing for gradual migration.
+
 ## Key Requirements (from spec)
 - Single process/thread per worker
 - REGEX-based queue selection with round-robin processing

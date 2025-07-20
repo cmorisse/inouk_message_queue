@@ -870,17 +870,16 @@ class MpyStringIO(StringIO):
             # Log to database (when console capture is enabled)
             try:
                 with api.Environment.manage():
-                    with self._log_cr.registry.cursor() as cr:
-                        env = api.Environment(cr, self._uid, {})
-                        env['imq.message_processing_log'].sudo().create({
-                            'message_id': self._message_id,
-                            'active_message_id': self._message_id,
-                            'processing_id': self._processing_id,
-                            'logger_name': "Console",
-                            'log_level': None,
-                            'log_message': full_output.rstrip('\n')
-                        })
-                        cr.commit()
+                    env = api.Environment(self._log_cr, self._uid, {})
+                    env['imq.message_processing_log'].sudo().create({
+                        'message_id': self._message_id,
+                        'active_message_id': self._message_id,
+                        'processing_id': self._processing_id,
+                        'logger_name': "Console",
+                        'log_level': None,
+                        'log_message': full_output.rstrip('\n')
+                    })
+                    self._log_cr.commit()
             except Exception as e:
                 _logger.exception("Failed to log console output: %s", e)
         else:
@@ -891,17 +890,16 @@ class MpyStringIO(StringIO):
         if self._mpy_buffer:
             try:
                 with api.Environment.manage():
-                    with self._log_cr.registry.cursor() as cr:
-                        env = api.Environment(cr, self._uid, {})
-                        env['imq.message_processing_log'].sudo().create({
-                            'message_id': self._message_id,
-                            'active_message_id': self._message_id,
-                            'processing_id': self._processing_id,
-                            'logger_name': "Console",
-                            'log_level': None,
-                            'log_message': self._mpy_buffer
-                        })
-                        cr.commit()
+                    env = api.Environment(self._log_cr, self._uid, {})
+                    env['imq.message_processing_log'].sudo().create({
+                        'message_id': self._message_id,
+                        'active_message_id': self._message_id,
+                        'processing_id': self._processing_id,
+                        'logger_name': "Console",
+                        'log_level': None,
+                        'log_message': self._mpy_buffer
+                    })
+                    self._log_cr.commit()
             except Exception as e:
                 _logger.exception("Failed to log final console output: %s", e)
         super().close()

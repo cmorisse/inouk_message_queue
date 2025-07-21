@@ -41,7 +41,7 @@ class IMQWorker(Command):
         
         # Observability
         parser.add_argument('--observability-port', type=int, default=0,
-                          help='Port for liveness probe and metrics HTTP server (0=disabled)')
+                          help='Port for liveness probe and metrics HTTP server (Default is 0=disabled)')
         parser.add_argument('--metrics-path', type=str, default='/metrics',
                           help='HTTP path for Prometheus metrics endpoint')
         

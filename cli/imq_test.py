@@ -40,6 +40,8 @@ class IMQTest(Command):
                                help='Create FIFO test sequence')
         test_group.add_argument('--list-processors', action='store_true',
                                help='List available test processors')
+        test_group.add_argument('--reset-queue', action='store_true',
+                               help='Reset (delete all messages from) the specified queue')
         
         # Message configuration
         parser.add_argument('--queue', '-q', default='default',
@@ -122,6 +124,8 @@ class IMQTest(Command):
                 
                     if parsed_args.list_processors:
                         return self._list_processors(env, parsed_args)
+                    elif parsed_args.reset_queue:
+                        return self._reset_queue(env, parsed_args)
                     elif parsed_args.simple:
                         return self._create_simple_messages(env, parsed_args)
                     elif parsed_args.rpc_method:
@@ -177,6 +181,47 @@ class IMQTest(Command):
                 print("-" * 80)
                 
         return 0
+    
+    def _reset_queue(self, env, args):
+        """Reset (delete all messages from) the specified queue"""
+        # Find the queue
+        queue_model = env['imq.queue']
+        queue_record = queue_model.search([('name', '=', args.queue)], limit=1)
+        if not queue_record:
+            print(f"Error: Queue '{args.queue}' not found")
+            return 1
+        
+        # Find all messages in the queue
+        messages = env['imq.message'].search([('queue_id.name', '=', args.queue)])
+        count = len(messages)
+        
+        if count == 0:
+            if args.verbose or not args.json_output:
+                print(f"Queue '{args.queue}' is already empty (0 messages)")
+            if args.json_output:
+                print(json.dumps({"queue": args.queue, "deleted_count": 0, "status": "already_empty"}))
+            return 0
+        
+        # Delete all messages
+        if args.verbose:
+            print(f"Deleting {count} message(s) from queue '{args.queue}'...")
+        
+        try:
+            messages.unlink()
+            env.cr.commit()
+            
+            if args.json_output:
+                print(json.dumps({"queue": args.queue, "deleted_count": count, "status": "success"}))
+            else:
+                print(f"Successfully reset queue '{args.queue}': {count} message(s) deleted")
+            return 0
+            
+        except Exception as e:
+            if args.json_output:
+                print(json.dumps({"queue": args.queue, "deleted_count": 0, "status": "error", "error": str(e)}))
+            else:
+                print(f"Error resetting queue '{args.queue}': {e}")
+            return 1
     
     def _create_simple_messages(self, env, args):
         """Create simple test messages"""

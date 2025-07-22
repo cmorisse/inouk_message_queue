@@ -497,6 +497,7 @@ bin/start_odoo imqworker --database $PGDATABASE --queue default \
 # Observability
 --observability-port PORT  # Port for liveness probe and metrics (0=disabled)
 --metrics-path PATH        # HTTP path for Prometheus metrics (default: /metrics)
+--queue-depth-caching-period-s SECONDS  # Queue depth metrics caching period (default: 30)
 ```
 
 ## Advanced Observability
@@ -648,6 +649,7 @@ curl http://localhost:8080/status
     "queues": [
       {
         "name": "production-orders",
+        "depth": 45,
         "processed": 150,
         "failed": 2,
         "avg_duration": "1.8s"
@@ -663,6 +665,44 @@ curl http://localhost:8080/status
 ```
 
 **Always returns `200` status code**
+
+#### Queue Depth in Status Response
+
+The `queues[].depth` field shows the **real-time backlog** of processable messages per queue:
+
+**Definition**: Messages where:
+- `state` is in (`'pending'`, `'retry'`) 
+- AND (`planned_time` IS NULL OR `planned_time` <= NOW())
+
+**Operational Significance**:
+- **depth = 0**: Queue is current, no backlog
+- **depth > 0**: Messages waiting for processing
+- **Trending up**: Potential capacity/performance issues
+- **High sustained depth**: Scaling trigger
+
+**Example Response with Queue Depth**:
+```json
+{
+  "status": {
+    "queues": [
+      {
+        "name": "high-priority",
+        "depth": 12,
+        "processed": 1250,
+        "failed": 3,
+        "avg_duration": "0.8s"
+      },
+      {
+        "name": "background-tasks",
+        "depth": 0,
+        "processed": 97,
+        "failed": 0,
+        "avg_duration": "2.1s"
+      }
+    ]
+  }
+}
+```
 
 ### Liveness Probe Endpoint (`/livez`)
 
@@ -707,6 +747,14 @@ curl http://localhost:8080/metrics
 - `imq_worker_queue_messages_processed_total{queue="default"}` - Messages per queue
 - `imq_worker_queue_messages_failed_total{queue="default"}` - Failures per queue
 - `imq_worker_queue_message_duration_seconds{queue="default"}` - Duration per queue
+- `imq_worker_queue_depth{queue="default"}` - Current queue depth per queue
+
+**Queue Depth Metrics:**
+- `imq_worker_queue_depth{queue="default"}` - Current processable message count per queue
+
+**Queue Depth Definition**: Messages where `state ∈ ('pending','retry')` AND `(planned_time IS NULL OR planned_time <= NOW())`
+
+**Note**: Queue depth metrics are cached and updated every 30 seconds by default (configurable via `--queue-depth-caching-period-s`).
 
 ### Error Handling
 
@@ -784,6 +832,53 @@ spec:
             cpu: "250m"
 ```
 
+#### Horizontal Pod Autoscaler (HPA)
+
+Scale workers automatically based on queue depth using the new queue depth metrics:
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: imq-worker-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: imq-worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Pods
+    pods:
+      metric:
+        name: imq_worker_queue_depth
+      target:
+        type: AverageValue
+        averageValue: 20  # Scale when avg queue depth > 20 per pod
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60   # Quick scale-up for queue backlogs
+      policies:
+      - type: Percent
+        value: 100  # Double pods when scaling up
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Conservative scale-down
+      policies:
+      - type: Percent
+        value: 50   # Reduce by half when scaling down
+        periodSeconds: 60
+```
+
+**HPA Configuration Notes:**
+- **Target Metric**: `imq_worker_queue_depth` - Uses our new queue depth metric
+- **Scaling Trigger**: When average queue depth > 20 messages per pod
+- **Aggressive Scale-Up**: Quick response to queue backlogs (100% increase)
+- **Conservative Scale-Down**: Prevents thrashing (50% decrease, 5min stabilization)
+- **Min/Max Replicas**: Always maintain 2 pods, scale up to 10 maximum
+
 ### Monitoring Setup
 
 #### Prometheus ServiceMonitor
@@ -826,6 +921,18 @@ imq_worker_rss_memory_bytes / imq_worker_max_rss_memory_bytes * 100
 
 # Wait time percentage (worker efficiency)
 imq_worker_wait_time_percent
+
+# Queue depth by queue name
+imq_worker_queue_depth
+
+# Total queue depth across all queues
+sum(imq_worker_queue_depth)
+
+# Queue depth trend (5-minute rate)
+increase(imq_worker_queue_depth[5m])
+
+# Queue utilization ratio (depth vs processing capacity)
+imq_worker_queue_depth / (rate(imq_worker_messages_processed_total[5m]) * 300)
 ```
 
 #### Alerting Rules
@@ -865,6 +972,33 @@ groups:
       severity: warning
     annotations:
       summary: "IMQ Worker memory usage above 90%"
+      
+  - alert: IMQQueueDepthHigh
+    expr: imq_worker_queue_depth > 100
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "IMQ Queue depth high: {{ $labels.queue }}"
+      description: "Queue {{ $labels.queue }} has {{ $value }} pending messages"
+      
+  - alert: IMQQueueDepthCritical
+    expr: imq_worker_queue_depth > 1000
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "IMQ Queue depth critical: {{ $labels.queue }}"
+      description: "Queue {{ $labels.queue }} has {{ $value }} pending messages - immediate attention required"
+      
+  - alert: IMQQueueDepthTrending
+    expr: increase(imq_worker_queue_depth[10m]) > 50
+    for: 3m
+    labels:
+      severity: warning
+    annotations:
+      summary: "IMQ Queue depth rapidly increasing"
+      description: "Queue {{ $labels.queue }} depth increased by {{ $value }} messages in 10 minutes"
 ```
 
 ### Operational Workflows

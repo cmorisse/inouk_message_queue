@@ -44,6 +44,8 @@ class IMQWorker(Command):
                           help='Port for liveness probe and metrics HTTP server (Default is 0=disabled)')
         parser.add_argument('--metrics-path', type=str, default='/metrics',
                           help='HTTP path for Prometheus metrics endpoint')
+        parser.add_argument('--queue-depth-caching-period-s', type=int, default=30,
+                          help='Queue depth metrics caching period in seconds (Default: 30)')
         
         # Message targeting
         parser.add_argument('--message', '-m', type=str, default=None,
@@ -67,6 +69,10 @@ class IMQWorker(Command):
             
         if not parsed_args.metrics_path.startswith('/'):
             print("Error: --metrics-path must start with '/'", file=sys.stderr)
+            return 1
+            
+        if parsed_args.queue_depth_caching_period_s < 1:
+            print("Error: --queue-depth-caching-period-s must be >= 1 second", file=sys.stderr)
             return 1
             
         # Validate message ID format if provided
@@ -99,7 +105,8 @@ class IMQWorker(Command):
                 log_level=parsed_args.log_level,
                 observability_port=parsed_args.observability_port,
                 metrics_path=parsed_args.metrics_path,
-                target_message_id=parsed_args.message
+                target_message_id=parsed_args.message,
+                queue_depth_caching_period_s=parsed_args.queue_depth_caching_period_s
             )
             
             # Run worker

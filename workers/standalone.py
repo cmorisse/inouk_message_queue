@@ -38,6 +38,9 @@ class StandaloneWorker(BaseWorker):
         # Message targeting
         self.target_message_id = kwargs.get('target_message_id')
         
+        # Queue depth caching configuration
+        self.queue_depth_caching_period_s = kwargs.get('queue_depth_caching_period_s', 30)
+        
         # State tracking
         self.processed_count = 0
         self.should_stop = False
@@ -53,7 +56,7 @@ class StandaloneWorker(BaseWorker):
         
         # Initialize components
         self.memory_monitor = MemoryMonitor(self.max_rss_memory)
-        self.metrics_collector = MetricsCollector(self.worker_name)
+        self.metrics_collector = MetricsCollector(self.worker_name, self.queue_depth_caching_period_s)
         self.observability_server = ObservabilityServer(
             kwargs.get('observability_port', 0),
             self.metrics_collector,
@@ -450,6 +453,10 @@ class StandaloneWorker(BaseWorker):
                     # Access all fields while cursor is still open
                     queue_info = [(q.id, q.name, q.provider) for q in queues]
                     
+                    # Store queue information for monitoring/health checker
+                    # Convert ORM objects to simple data structures that can be accessed outside cursor context
+                    self.queues = [{'id': q.id, 'name': q.name, 'provider': q.provider} for q in queues]
+                    
                     # Initialize queue statistics
                     self._initialize_queue_stats(queue_info)
             
@@ -532,7 +539,7 @@ class StandaloneWorker(BaseWorker):
                 
                 # Update metrics periodically
                 if self.processed_count % 10 == 0 or consecutive_empty_polls % 50 == 0:
-                    self.metrics_collector.update_metrics(self.memory_monitor)
+                    self.metrics_collector.update_metrics(self.memory_monitor, self)
                     # Update activity during metrics update to provide regular heartbeat
                     self.observability_server.update_last_activity()
                 
@@ -541,7 +548,7 @@ class StandaloneWorker(BaseWorker):
                     self._log_status_summary()
             
             # Final metrics update and status log
-            self.metrics_collector.update_metrics(self.memory_monitor)
+            self.metrics_collector.update_metrics(self.memory_monitor, self)
             self._log_status_summary()
             
             self.logger.info(f"Worker shutting down. Processed {self.processed_count} messages")
@@ -714,6 +721,48 @@ class StandaloneWorker(BaseWorker):
                         self.stop_stream_capture()
                     except:
                         pass
+    
+    def get_queue_depths(self):
+        """Get queue depths for all monitored queues
+        
+        Returns:
+            dict: Queue name -> depth mapping
+        """
+        queue_depths = {}
+        
+        try:
+            # Get registry and query queue depths
+            with api.Environment.manage():
+                registry = Registry(self.database)
+                with registry.cursor() as cr:
+                    env = api.Environment(cr, SUPERUSER_ID, {})
+                    
+                    # Query queue depths for all queues we're monitoring
+                    if hasattr(self, 'queues') and self.queues:
+                        for queue_info in self.queues:
+                            queue_id = queue_info['id']
+                            queue_name = queue_info['name']
+                            
+                            # SQL to count messages matching our queue depth definition
+                            sql = """
+                                SELECT COUNT(*)
+                                FROM imq_message
+                                WHERE queue_id = %s
+                                  AND state IN ('pending', 'retry')
+                                  AND (planned_time IS NULL OR planned_time <= NOW())
+                            """
+                            cr.execute(sql, (queue_id,))
+                            result = cr.fetchone()
+                            queue_depths[queue_name] = result[0] if result else 0
+                            
+                    self.logger.debug(f"Queue depths: {queue_depths}")
+                    
+        except Exception as e:
+            self.logger.error(f"Error getting queue depths: {e}", exc_info=True)
+            # Return empty dict on error
+            return {}
+            
+        return queue_depths
     
     def get_status(self):
         """Get current worker status

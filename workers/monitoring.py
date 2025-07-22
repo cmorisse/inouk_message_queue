@@ -85,7 +85,7 @@ class MemoryMonitor:
 class MetricsCollector:
     """Collect and expose Prometheus metrics"""
     
-    def __init__(self, worker_name):
+    def __init__(self, worker_name, queue_depth_caching_period_s=30):
         self.worker_name = worker_name
         self.start_time = time.time()
         self.wait_start_time = None
@@ -93,6 +93,11 @@ class MetricsCollector:
         
         # Per-queue average tracking
         self.queue_totals = defaultdict(lambda: {'count': 0, 'total_time': 0})
+        
+        # Queue depth caching configuration
+        self.queue_depth_caching_period_s = queue_depth_caching_period_s
+        self.queue_depth_cache = {}
+        self.queue_depth_last_update = 0
         
         if not HAS_PROMETHEUS:
             _logger.warning("prometheus_client not available, metrics will not be collected")
@@ -137,6 +142,11 @@ class MetricsCollector:
         self.queue_processing_duration = Summary('imq_worker_queue_message_duration_seconds',
                                                'Message processing duration per queue',
                                                ['queue'])
+        
+        # Queue depth metrics
+        self.queue_depth = Gauge('imq_worker_queue_depth',
+                                'Current queue depth per queue',
+                                ['queue'])
     
     def start_waiting(self):
         """Mark start of waiting period"""
@@ -170,7 +180,7 @@ class MetricsCollector:
         self.queue_totals[queue_name]['count'] += 1
         self.queue_totals[queue_name]['total_time'] += duration
     
-    def update_metrics(self, memory_monitor):
+    def update_metrics(self, memory_monitor, worker_ref=None):
         """Update current metric values"""
         if not HAS_PROMETHEUS:
             return
@@ -190,6 +200,40 @@ class MetricsCollector:
         self.rss_memory.set(memory_monitor.get_rss_bytes())
         if memory_monitor.max_rss_bytes:
             self.max_rss_memory.set(memory_monitor.max_rss_bytes)
+            
+        # Update queue depth metrics if worker reference provided
+        if worker_ref:
+            self.update_queue_depth_metrics(worker_ref)
+    
+    def update_queue_depth_metrics(self, worker_ref):
+        """Update queue depth metrics with caching
+        
+        Args:
+            worker_ref: Reference to the worker instance that has get_queue_depths method
+        """
+        if not HAS_PROMETHEUS:
+            return
+            
+        current_time = time.time()
+        
+        # Check if we need to update the cache
+        if (current_time - self.queue_depth_last_update) >= self.queue_depth_caching_period_s:
+            try:
+                # Get fresh queue depths from worker
+                if hasattr(worker_ref, 'get_queue_depths'):
+                    new_queue_depths = worker_ref.get_queue_depths()
+                    self.queue_depth_cache = new_queue_depths
+                    self.queue_depth_last_update = current_time
+                    _logger.debug(f"Updated queue depth cache: {new_queue_depths}")
+                else:
+                    _logger.warning("Worker does not have get_queue_depths method")
+            except Exception as e:
+                _logger.error(f"Error updating queue depth metrics: {e}", exc_info=True)
+                # Keep using cached values on error
+        
+        # Update Prometheus metrics with cached values
+        for queue_name, depth in self.queue_depth_cache.items():
+            self.queue_depth.labels(queue=queue_name).set(depth)
     
     def get_average_duration(self):
         """Get global average message processing duration"""
@@ -345,11 +389,24 @@ class HealthChecker:
         processed_count = getattr(self.worker, 'processed_count', 0)
         processing_rate = (processed_count / (uptime / 60)) if uptime > 0 else 0
         
+        # Get queue depths if available
+        queue_depths = {}
+        if hasattr(self.worker, 'get_queue_depths'):
+            try:
+                queue_depths = self.worker.get_queue_depths()
+            except Exception as e:
+                _logger.warning(f"Failed to get queue depths: {e}")
+        
         # Get queue information
         queues_info = []
         if hasattr(self.worker, 'queues'):
             for queue in getattr(self.worker, 'queues', []):
-                queue_name = getattr(queue, 'name', 'unknown')
+                # Handle both dict and object formats for compatibility
+                if isinstance(queue, dict):
+                    queue_name = queue.get('name', 'unknown')
+                else:
+                    queue_name = getattr(queue, 'name', 'unknown')
+                    
                 avg_duration = self.metrics_collector.get_queue_average_duration(queue_name)
                 queue_totals = self.metrics_collector.queue_totals.get(queue_name, {'count': 0, 'total_time': 0})
                 
@@ -357,7 +414,8 @@ class HealthChecker:
                     "name": queue_name,
                     "processed": queue_totals['count'],
                     "failed": 0,  # TODO: Add failed count tracking
-                    "avg_duration": f"{avg_duration:.1f}s"
+                    "avg_duration": f"{avg_duration:.1f}s",
+                    "depth": queue_depths.get(queue_name, 0)  # Add queue depth
                 })
         
         return {

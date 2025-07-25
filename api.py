@@ -107,10 +107,10 @@ def unwrap_odoo_model(env, obj):
         if obj.type == 'Environment':
             return env
         elif obj.type == 'model':
-            odoo_obj = env[obj.model].with_context(active_test=False).search([('id', 'in', obj.ids)])
+            odoo_obj = env[obj.model].search([('id', 'in', obj.ids)])
             return odoo_obj
         elif obj.type == 'method':
-            odoo_obj = env[obj.model].with_context(active_test=False).search([('id', 'in', obj.ids)])
+            odoo_obj = env[obj.model].search([('id', 'in', obj.ids)])
             return getattr(odoo_obj, obj.method_name)
         else:
             raise UserError("Unwrap of Odoo '%s' not implemented.")

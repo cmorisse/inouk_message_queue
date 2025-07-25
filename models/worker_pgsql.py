@@ -45,6 +45,7 @@ WHERE id = (
             queue_id = %s
         AND state in ('pending', 'retry')
         AND ( planned_time IS NULL OR planned_time < NOW() )
+        AND (%s IS NULL OR id = %s OR queue_message_id = %s)
     ORDER BY enqueued_time  
     FOR UPDATE SKIP LOCKED LIMIT 1
 )
@@ -67,6 +68,7 @@ WHERE id = (
         LAG(im.id) OVER ( PARTITION BY im."group" ORDER BY im.id ) AS prev_id
         FROM imq_message AS im
         WHERE im.queue_id = %s
+            AND (%s IS NULL OR im.id = %s OR im.queue_message_id = %s)
         GROUP BY im."group", im.id, im.name, im.state
     )
     SELECT id FROM sq1
@@ -97,29 +99,59 @@ class IMQWorkerSQS(models.AbstractModel):
     """Processes messages in imq.queue"""
     _inherit = 'imq.worker'
 
-    def get_message__pgsql(self, queue_obj, wait_time=0):
+    def get_message__pgsql(self, queue_obj, wait_time=0, target_message_id=None):
         """Query Q for next message to process.
 
         :param queue_obj: required imq.queue object to query.
         :param wait_time: number of seconds to block on queue. Must be 0 with ir.cron IMQ Worker
+        :param target_message_id: optional specific message ID to target
         :return: a SQS message object or None
         """
+        # Convert target_message_id for SQL parameters
+        msg_id_param = None
+        if target_message_id:
+            msg_id_param = int(target_message_id) if target_message_id.isdigit() else None
+        
+        # Debug logging for message targeting
+        if target_message_id:
+            _logger.debug("Target message filtering: target_message_id=%s, msg_id_param=%s", 
+                         target_message_id, msg_id_param)
+        
         _db_cnx = odoo.sql_db.db_connect(self.env.cr.dbname)
         with _db_cnx.cursor() as cr:
             cr.autocommit = True
             if queue_obj.q_type == 'std':
-                self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_std, (queue_obj.id,))
+                sql_params = (
+                    queue_obj.id,                    # queue_id
+                    target_message_id,               # message filter check (NULL or value)
+                    msg_id_param,                    # numeric ID match
+                    target_message_id                # MessageId UUID match
+                )
+                _logger.debug("Executing SQL query with params: %s", sql_params)
+                
+                self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_std, sql_params)
                 _row = self.env.cr.fetchone()
                 cr.commit()
                 _msg_id = _row and _row[0] or None
+                
+                _logger.debug("SQL result: _row=%s, _msg_id=%s", _row, _msg_id)
 
             elif queue_obj.q_type == 'fifo':
-                _logger.debug("Polling queue '%s'.", queue_obj.id)
-                self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_fifo, (queue_obj.id,))
+                sql_params = (
+                    queue_obj.id,                    # queue_id
+                    target_message_id,               # message filter check (NULL or value)
+                    msg_id_param,                    # numeric ID match
+                    target_message_id                # MessageId UUID match
+                )
+                _logger.debug("Polling FIFO queue '%s' for message: %s with params: %s", 
+                             queue_obj.id, target_message_id, sql_params)
+                
+                self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_fifo, sql_params)
                 _row = self.env.cr.fetchone()
                 cr.commit()
                 _msg_id = _row and _row[0] or None
-                _logger.debug("Found message: %s to process.", _msg_id)
+                
+                _logger.debug("FIFO result: _row=%s, _msg_id=%s", _row, _msg_id)
             else:
                 raise Exception("Unsupported Queue type:'%s' for get_message__pgsql()" % queue_obj.q_type)
 

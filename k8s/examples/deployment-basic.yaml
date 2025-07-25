@@ -1,0 +1,158 @@
+# Basic IMQ Workers v3 Deployment
+# This is a minimal deployment for getting started with standalone workers
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imq-worker-basic
+  labels:
+    app: imq-worker
+    component: message-processor
+    queue: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: imq-worker
+      queue: default
+  template:
+    metadata:
+      labels:
+        app: imq-worker
+        queue: default
+      annotations:
+        # Force pod restart on config changes
+        kubectl.kubernetes.io/restartedAt: "2024-01-01T00:00:00Z"
+    spec:
+      containers:
+      - name: imq-worker
+        image: your-registry/muppy:latest
+        command: ["bin/start_odoo"]
+        args:
+          - "imq-worker"
+          - "--database=$(DATABASE_NAME)"
+          - "--queue=default"
+          - "--max-messages=1000"
+          - "--max-rss-memory=512M"
+          - "--observability-port=8080"
+          - "--log-level=INFO"
+        env:
+        # Database connection
+        - name: DATABASE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: database
+        - name: PGHOST
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-host
+        - name: PGPORT
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-port
+              optional: true
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-user
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-password
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: database
+        
+        # Resource limits
+        resources:
+          limits:
+            memory: "768Mi"  # Higher than --max-rss-memory for safety
+            cpu: "500m"
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 2
+        
+        # Observability port
+        ports:
+        - containerPort: 8080
+          name: observability
+          protocol: TCP
+        
+        # Graceful shutdown
+        terminationGracePeriodSeconds: 30
+        
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false  # Odoo needs write access
+      
+      # Pod-level configuration
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      
+      # Service account (if using RBAC)
+      serviceAccountName: imq-worker
+      
+      # Node affinity (optional)
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - imq-worker
+              topologyKey: kubernetes.io/hostname
+
+---
+# Service for observability endpoints
+apiVersion: v1
+kind: Service
+metadata:
+  name: imq-worker-basic-metrics
+  labels:
+    app: imq-worker
+    queue: default
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: observability
+    protocol: TCP
+  selector:
+    app: imq-worker
+    queue: default
+  type: ClusterIP

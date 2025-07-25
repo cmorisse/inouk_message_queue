@@ -433,12 +433,22 @@ class IMQWorker(models.AbstractModel):
         """
         host_name = socket.gethostname()
         queue_name = queue_name or 'default'
-        stopped_workers_nodes = self.env["ir.config_parameter"].sudo().get_param("imq.STOP_WORKERS", "").split(',')
+        # Check for new parameter first, then fall back to old parameter for backward compatibility
+        stopped_workers_nodes = self.env["ir.config_parameter"].sudo().get_param("imq.STOP_CRON_WORKERS", "").split(',')
+        
+        # Backward compatibility: check old parameter if new one is empty
+        if not stopped_workers_nodes or (len(stopped_workers_nodes) == 1 and stopped_workers_nodes[0] == ''):
+            old_param = self.env["ir.config_parameter"].sudo().get_param("imq.STOP_WORKERS", "")
+            if old_param:
+                stopped_workers_nodes = old_param.split(',')
+                _logger.warning(
+                    "Using deprecated parameter 'imq.STOP_WORKERS'. Please migrate to 'imq.STOP_CRON_WORKERS' for cron workers."
+                )
 
         if host_name in stopped_workers_nodes or '*' in stopped_workers_nodes:
             _logger.debug(
                 "[WorkerCron=%s,Q=%s,Wn=%s,Wp=%s,threadid=%s] leaving process_message_queue() since "
-                "host_name:%s is present in system parameter 'imq.STOP_WORKERS'.",
+                "host_name:%s is present in system parameter 'imq.STOP_CRON_WORKERS' or 'imq.STOP_WORKERS'.",
                 os.getpid(),
                 queue_name,
                 worker_name,

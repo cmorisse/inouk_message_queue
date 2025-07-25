@@ -7,5 +7,34 @@
             <field name="description">This queue is created by default when 'Inouk Message Queue' module installs.
             </field>
         </record>
+        
+        <record id="imq_queue__debug" model="imq.queue">
+            <field name="name">imq-debug</field>
+            <field name="provider">pgsql</field>
+            <field name="q_type">std</field>
+            <field name="active" eval="True"/>
+            <field name="visibility_timeout">300</field>
+            <field name="description">**TESTING QUEUE - DO NOT USE FOR PRODUCTION OR USER MESSAGES**
+
+This queue is reserved exclusively for IMQ testing and development purposes.
+All messages in this queue may be deleted without notice during test execution.
+
+⚠️  WARNING: This queue is automatically reset by test suites
+⚠️  WARNING: Do not send production or user messages to this queue
+⚠️  WARNING: Messages may be lost during testing
+
+Used by:
+- test_queue_depth_metrics.sh (queue depth metrics testing)
+- run_tests.sh (general IMQ testing)
+- CI/CD pipelines and automated test suites
+- Development and debugging tools (imqtest, imqdump)
+- Performance benchmarking and load testing
+
+Technical specifications:
+- PostgreSQL provider for reliable deterministic testing
+- Standard queue type for predictable message ordering
+- 5-minute visibility timeout optimized for test cycles
+- Automatically managed by test frameworks</field>
+        </record>
     </data>
 </openerp>

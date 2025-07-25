@@ -1,0 +1,226 @@
+# ServiceMonitor for Prometheus Operator
+# This enables automatic discovery and scraping of IMQ worker metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: imq-worker-metrics
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    prometheus: kube-prometheus  # Match your Prometheus operator selector
+spec:
+  selector:
+    matchLabels:
+      app: imq-worker
+  endpoints:
+  - port: observability
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    scheme: http
+    honorLabels: true
+    relabelings:
+    # Add instance label based on pod name
+    - sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: instance
+    # Add namespace label
+    - sourceLabels: [__meta_kubernetes_namespace]
+      targetLabel: namespace
+    # Add queue pattern label from pod labels
+    - sourceLabels: [__meta_kubernetes_pod_label_queue_pattern]
+      targetLabel: queue_pattern
+      regex: (.+)
+      replacement: ${1}
+    # Add environment label
+    - sourceLabels: [__meta_kubernetes_pod_label_environment]
+      targetLabel: environment
+      regex: (.+)
+      replacement: ${1}
+    metricRelabelings:
+    # Drop noisy histogram buckets if needed
+    - sourceLabels: [__name__]
+      regex: 'imq_worker_processing_duration_bucket'
+      action: drop
+      # Uncomment above lines if you want to reduce metric cardinality
+  namespaceSelector:
+    matchNames:
+    - muppy-workers
+  jobLabel: imq-worker
+
+---
+# PrometheusRule for alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: imq-worker-alerts
+  namespace: muppy-workers
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: imq-worker.rules
+    interval: 30s
+    rules:
+    # Worker availability
+    - alert: IMQWorkerDown
+      expr: up{job="imq-worker"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        team: platform
+      annotations:
+        summary: "IMQ Worker is down"
+        description: "IMQ Worker {{ $labels.instance }} has been down for more than 5 minutes."
+        runbook_url: "https://wiki.example.com/runbooks/imq-worker-down"
+    
+    # High error rate
+    - alert: IMQWorkerHighErrorRate
+      expr: |
+        (
+          sum(rate(imq_worker_messages_failed_total[5m])) by (queue, instance)
+          /
+          sum(rate(imq_worker_messages_processed_total[5m])) by (queue, instance)
+        ) > 0.1
+      for: 10m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: "High error rate in IMQ Worker"
+        description: "IMQ Worker {{ $labels.instance }} processing queue {{ $labels.queue }} has error rate above 10% (current: {{ $value | humanizePercentage }})"
+    
+    # Worker memory pressure
+    - alert: IMQWorkerHighMemory
+      expr: |
+        imq_worker_memory_rss_bytes / imq_worker_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: "IMQ Worker high memory usage"
+        description: "IMQ Worker {{ $labels.instance }} is using {{ $value | humanizePercentage }} of its memory limit"
+    
+    # Queue processing latency
+    - alert: IMQWorkerHighProcessingTime
+      expr: |
+        histogram_quantile(0.95, 
+          sum(rate(imq_worker_processing_duration_bucket[5m])) by (queue, le)
+        ) > 60
+      for: 15m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: "High message processing time"
+        description: "95th percentile processing time for queue {{ $labels.queue }} is {{ $value }}s (threshold: 60s)"
+    
+    # Worker idle (no work)
+    - alert: IMQWorkerIdle
+      expr: |
+        sum(rate(imq_worker_messages_processed_total[10m])) by (instance) == 0
+        and
+        up{job="imq-worker"} == 1
+      for: 30m
+      labels:
+        severity: info
+        team: platform
+      annotations:
+        summary: "IMQ Worker is idle"
+        description: "IMQ Worker {{ $labels.instance }} has not processed any messages in 30 minutes"
+    
+    # Queue backlog (requires custom metric from queue monitoring)
+    - alert: IMQQueueBacklog
+      expr: |
+        imq_queue_pending_messages > 1000
+      for: 15m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: "High message backlog in queue"
+        description: "Queue {{ $labels.queue }} has {{ $value }} pending messages"
+
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: imq-worker-dashboard
+  namespace: muppy-workers
+  labels:
+    grafana_dashboard: "true"  # For automatic dashboard discovery
+data:
+  imq-worker-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "IMQ Workers v3 Dashboard",
+        "uid": "imq-workers-v3",
+        "timezone": "browser",
+        "refresh": "30s",
+        "panels": [
+          {
+            "title": "Worker Status",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+            "targets": [
+              {
+                "expr": "up{job='imq-worker'}",
+                "legendFormat": "{{ instance }}"
+              }
+            ],
+            "type": "graph"
+          },
+          {
+            "title": "Messages Processed Rate",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+            "targets": [
+              {
+                "expr": "sum(rate(imq_worker_messages_processed_total[5m])) by (queue)",
+                "legendFormat": "{{ queue }}"
+              }
+            ],
+            "type": "graph"
+          },
+          {
+            "title": "Error Rate",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+            "targets": [
+              {
+                "expr": "sum(rate(imq_worker_messages_failed_total[5m])) by (queue)",
+                "legendFormat": "{{ queue }}"
+              }
+            ],
+            "type": "graph"
+          },
+          {
+            "title": "Memory Usage",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+            "targets": [
+              {
+                "expr": "imq_worker_memory_rss_bytes / 1024 / 1024",
+                "legendFormat": "{{ instance }} RSS"
+              },
+              {
+                "expr": "imq_worker_memory_limit_bytes / 1024 / 1024",
+                "legendFormat": "{{ instance }} Limit"
+              }
+            ],
+            "type": "graph",
+            "yaxes": [{"format": "short", "label": "MB"}]
+          },
+          {
+            "title": "Processing Duration (95th percentile)",
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(imq_worker_processing_duration_bucket[5m])) by (queue, le))",
+                "legendFormat": "{{ queue }}"
+              }
+            ],
+            "type": "graph",
+            "yaxes": [{"format": "s"}]
+          }
+        ]
+      }
+    }

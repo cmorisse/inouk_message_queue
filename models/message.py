@@ -188,7 +188,7 @@ class IMQMessage(models.Model):
     def do_archive(self):
         self.write({'state': 'archived'})
     
-    def create_processing_object(self):
+    def create_processing_object(self, worker_type='cron-workerv2'):
         self.ensure_one()
         new_processing_obj = self.env['imq.message_processing'].sudo().create({
             'message_id': self.id,
@@ -197,6 +197,7 @@ class IMQMessage(models.Model):
             'start_time_microseconds': self.start_time_microseconds,
             'end_time': None,
             'end_time_microseconds': None,
+            'worker_type': worker_type,
             'result': None,
             'state': self.state,
             'queue_id': self.queue_id.id,

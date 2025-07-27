@@ -29,13 +29,13 @@ class IMQMessageProcessing(models.Model):
 
 
     start_time = fields.Datetime(
-        help=_("Timestamp processing of message started."),
+        help="Timestamp processing of message started.",
         readonly=True
     )
     start_time_microseconds = fields.Integer(readonly=True)
 
     end_time = fields.Datetime(
-        help=_("Timestamp processing of message finished."),
+        help="Timestamp processing of message finished.",
         readonly=True)
     end_time_microseconds = fields.Integer(readonly=True)
 

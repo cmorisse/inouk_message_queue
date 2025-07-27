@@ -71,15 +71,15 @@ class IMQMessage(models.Model):
     queue_message_id_history = fields.Text()
     user_id = fields.Many2one('res.users', _("User"),
                               default = lambda o: o.env.user.id,
-                              help=_("User owner of the Message. This defines "
-                                     "the security restriction of executed "
-                                     "processing."))
-    code = fields.Char(help=_("Python expression that will be executed to "
-                              "launch message processing. This is informational "
-                              "only. Use fields in 'Exec. params. tab to "
-                              "manually create messages."))
-    context = fields.Text(help=_("pickled context dict"))
-    payload = fields.Text(help=_("dict {'args': ..., 'kwargs': ...} pickled."))
+                              help="User owner of the Message. This defines "
+                                   "the security restriction of executed "
+                                   "processing.")
+    code = fields.Char(help="Python expression that will be executed to "
+                            "launch message processing. This is informational "
+                            "only. Use fields in 'Exec. params. tab to "
+                            "manually create messages.")
+    context = fields.Text(help="pickled context dict")
+    payload = fields.Text(help="dict {'args': ..., 'kwargs': ...} pickled.")
     raw_message_body = fields.Text()
     processing_id = fields.Many2one('imq.message_processing', 
                                     "Message Processing",
@@ -90,20 +90,20 @@ class IMQMessage(models.Model):
                                   compute='_calc_attempt_vs_max_as_text')
 
     planned_time = fields.Datetime(
-        help=_("When should this message be processed.")
+        help="When should this message be processed."
     )
     enqueued_time = fields.Datetime(
-        help=_("Timestamp when message has been sent to queue."),
+        help="Timestamp when message has been sent to queue.",
         readonly=True
     )
     enqueued_time_microseconds = fields.Integer()
 
     start_time = fields.Datetime(
-        help=_("Time when processing has started on this message"),
+        help="Time when processing has started on this message",
         readonly=True
     )
     start_time_microseconds = fields.Integer()
-    end_time = fields.Datetime(help=_("Processing end or failure time."),
+    end_time = fields.Datetime(help="Processing end or failure time.",
                                readonly=True)
     end_time_microseconds = fields.Integer()
     result = fields.Text(readonly=True)
@@ -120,10 +120,11 @@ class IMQMessage(models.Model):
     state = fields.Selection(IMQ_MESSAGE_STATES, default='new')
 
     max_number_of_attempts = fields.Integer(default=MAX_ATTEMPTS)
-    ikpdb_debug = fields.Boolean("IKPdb debug",
-                                 default=False,
-                                 help=_("Will open IKPdb in post mortem mode "
-                                        "if an exception is raised."))
+    ikpdb_debug = fields.Boolean(
+        string="IKPdb debug",
+        default=False,
+        help="Will open IKPdb in post mortem mode if an exception is raised."
+    )
     _sql_constraints = [
         (
             'remote_id_uniq', 

@@ -101,7 +101,7 @@ class IMQWorker(models.AbstractModel):
                       message_obj.queue_message_id, 
                       message_obj.name)
 
-        run_context = jsonpickle.decode(message_obj.context or "{}")
+        run_context = jsonpickle.decode(message_obj.context or '{}')
         run_context['_imq_message_id'] = message_obj.queue_message_id
         if worker_param:
             run_context['_imq_worker_param'] = worker_param
@@ -119,6 +119,8 @@ class IMQWorker(models.AbstractModel):
 
         start_timestamp = datetime.datetime.now()
         raised = None
+        retry_delay_s = None
+
         try:
             # create a new environment dedicated to function execution
             # thus we gather all information stored in message env
@@ -310,6 +312,7 @@ class IMQWorker(models.AbstractModel):
             returned_value = traceback.format_exception(exc_type, 
                                                         exc_value, 
                                                         exc_traceback)
+
             returned_value = "\n".join(returned_value)
             if message_obj.attempt >= message_obj.max_number_of_attempts:
                 state = 'failed'
@@ -336,8 +339,12 @@ class IMQWorker(models.AbstractModel):
                         icon=":warning:",
                         message_obj=message_obj
                     )
-                state = 'retry' 
-                # Task will retry after visibility timeout
+                state = 'retry'   # Task will retry after visibility timeout or delay
+                if hasattr(imq_rerr, 'delay') and imq_rerr.delay:
+                    retry_delay_s = imq_rerr.delay
+                elif msg_processor_obj.retry_delay_s:
+                    retry_delay_s = msg_processor_obj.retry_delay_s
+
             run_cursor.rollback()
             run_env.clear()  # invalidates and purges todos
 
@@ -396,10 +403,15 @@ class IMQWorker(models.AbstractModel):
                 result = json.dumps(returned_value, indent=4)
             except:
                 result = str(returned_value)
-        return {
+
+        _r = {
             'result': result,
             'state': state
         }
+        if retry_delay_s:
+            _r['planned_time'] = fields.Datetime.to_string(datetime.datetime.now() + datetime.timedelta(seconds=retry_delay_s))
+
+        return _r
 
     def change_message_visibility(self, queue_obj, message_obj, _message):
         """ Update message visibility with timeout defined in processor
@@ -421,12 +433,22 @@ class IMQWorker(models.AbstractModel):
         """
         host_name = socket.gethostname()
         queue_name = queue_name or 'default'
-        stopped_workers_nodes = self.env["ir.config_parameter"].sudo().get_param("imq.STOP_WORKERS", "").split(',')
+        # Check for new parameter first, then fall back to old parameter for backward compatibility
+        stopped_workers_nodes = self.env["ir.config_parameter"].sudo().get_param("imq.STOP_CRON_WORKERS", "").split(',')
+        
+        # Backward compatibility: check old parameter if new one is empty
+        if not stopped_workers_nodes or (len(stopped_workers_nodes) == 1 and stopped_workers_nodes[0] == ''):
+            old_param = self.env["ir.config_parameter"].sudo().get_param("imq.STOP_WORKERS", "")
+            if old_param:
+                stopped_workers_nodes = old_param.split(',')
+                _logger.warning(
+                    "Using deprecated parameter 'imq.STOP_WORKERS'. Please migrate to 'imq.STOP_CRON_WORKERS' for cron workers."
+                )
 
         if host_name in stopped_workers_nodes or '*' in stopped_workers_nodes:
             _logger.debug(
                 "[WorkerCron=%s,Q=%s,Wn=%s,Wp=%s,threadid=%s] leaving process_message_queue() since "
-                "host_name:%s is present in system parameter 'imq.STOP_WORKERS'.",
+                "host_name:%s is present in system parameter 'imq.STOP_CRON_WORKERS' or 'imq.STOP_WORKERS'.",
                 os.getpid(),
                 queue_name,
                 worker_name,
@@ -458,6 +480,7 @@ class IMQWorker(models.AbstractModel):
         if not queue_obj.active:
             _logger.warning("Queue '%s' is not active. Exiting.", queue_name)
             return
+        _logger.debug("Polling queue '%s'/%s for new message.", queue_name, queue_obj.id)
 
         processing_start_timestamp = datetime.datetime.now()
 
@@ -508,6 +531,8 @@ class IMQWorker(models.AbstractModel):
             result_dict['end_time'] = end_timestamp
             result_dict['end_time_microseconds'] = end_timestamp.microsecond
             message_obj.write(result_dict)
+            if 'planned_time' in result_dict:
+                del result_dict['planned_time']
             processing_obj.write(result_dict)
             message_obj.flush_recordset() ; self.env.cr.commit()
 
@@ -546,9 +571,9 @@ class IMQWorker(models.AbstractModel):
         return
 
     def start_log_capture(
-            self, message_obj, processing_obj, log_level=None, 
-            log_format="%(asctime)s %(name)s %(levelname)s %(message)s"
-        ):
+        self, message_obj, processing_obj, log_level=None, 
+        log_format="%(asctime)s %(name)s %(levelname)s %(message)s"
+    ):
         """Start capturing log output to a string buffer.
 
         See. http://docs.python.org/release/2.6/library/logging.html
@@ -607,7 +632,10 @@ class IMQLogHandler(logging.Handler):
     
     def emit(self, record):
         try:
-            _msg = record.msg % record.args
+            if record.args:
+                _msg = record.msg % record.args
+            else:
+                _msg = record.msg
         except Exception as e1: 
             _logger.exception(e1)
             _msg = "Failed to log:%s with %s" % (str(record.msg), str(record.args))

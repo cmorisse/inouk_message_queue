@@ -13,8 +13,11 @@
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
-                            <button class="oe_stat_button" type="object" string="Refresh" icon="fa-refresh" name="refresh" />
-
+                            <button class="oe_stat_button"
+                                    type="object"
+                                    string="Refresh"
+                                    icon="fa-refresh"
+                                    name="btn_refresh" />
                         </div>
                         <div class="oe_title">
                             <h1><field name="name" /></h1>
@@ -25,6 +28,7 @@
                                 <field name="selector" required_condition="type != 'rpc'" invisible="type != 'simple'" />
 
                                 <field name="max_attempt" />
+                                <field name="retry_delay_s" />
                             </group>
                             <group>
                                 <field name="module" required="True" />

@@ -42,6 +42,12 @@ class IMQMessageProcessing(models.Model):
     result = fields.Text(readonly=True)
     log_ids = fields.One2many('imq.message_processing_log', 'processing_id')
     state = fields.Selection(IMQ_MESSAGE_STATES, default='new')
+    
+    worker_type = fields.Selection([
+        ('cron-workerv2', 'Cron Worker v2'),
+        ('sa-workerv3', 'Standalone Worker v3'),
+    ], string='Worker Type', default='cron-workerv2', readonly=True,
+       help='Type of worker that processed this message')
 
     # duplicated to ease analysis
     queue_id = fields.Many2one('imq.queue', 

@@ -14,6 +14,8 @@
                     <field name="log_level" />
                     <field name="log_message" />
 
+                    <filter name="filter_logs" string="Logs Only" domain="[('log_level','!=', False)]" />
+
                     <group string="Group by...">
                         <filter name="group_by_message_id" string="Message" domain="[]" context="{'group_by': 'message_id'}" help="Group logs by Message" />
                         <filter name="group_by_processing_id" string="Execution" domain="[]" context="{'group_by': 'processing_id'}" help="Group logs by Processing" />

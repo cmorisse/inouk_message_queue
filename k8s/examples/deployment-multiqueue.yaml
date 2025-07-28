@@ -1,0 +1,400 @@
+# Multi-Queue IMQ Workers Deployment
+# Deploy separate worker pools for different queue patterns
+---
+# High-priority queue workers
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imq-worker-high-priority
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    priority: high
+    queue-pattern: "high-priority"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: imq-worker
+      priority: high
+  template:
+    metadata:
+      labels:
+        app: imq-worker
+        priority: high
+        queue-pattern: "high-priority"
+    spec:
+      containers:
+      - name: imq-worker
+        image: your-registry/muppy:latest
+        command: ["bin/start_odoo"]
+        args:
+          - "imq-worker"
+          - "--database=$(DATABASE_NAME)"
+          - "--queue=high-priority"
+          - "--max-messages=0"  # No limit, continuous processing
+          - "--max-rss-memory=512M"
+          - "--observability-port=8080"
+          - "--worker-name=high-$(HOSTNAME)"
+          - "--log-level=INFO"
+        env:
+        - name: DATABASE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: database
+        - name: PGHOST
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-host
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-user
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-password
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: database
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          limits:
+            memory: "768Mi"
+            cpu: "1000m"
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        ports:
+        - containerPort: 8080
+          name: observability
+      priorityClassName: high-priority  # Kubernetes priority class
+      terminationGracePeriodSeconds: 30
+
+---
+# Default queue workers with regex pattern
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imq-worker-default
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    priority: default
+    queue-pattern: "default.*"
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: imq-worker
+      priority: default
+  template:
+    metadata:
+      labels:
+        app: imq-worker
+        priority: default
+        queue-pattern: "default.*"
+    spec:
+      containers:
+      - name: imq-worker
+        image: your-registry/muppy:latest
+        command: ["bin/start_odoo"]
+        args:
+          - "imq-worker"
+          - "--database=$(DATABASE_NAME)"
+          - "--queue=default.*"  # Process all queues starting with 'default'
+          - "--max-messages=2000"
+          - "--max-rss-memory=1024M"
+          - "--observability-port=8080"
+          - "--worker-name=default-$(HOSTNAME)"
+          - "--log-level=INFO"
+        env:
+        - name: DATABASE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: database
+        - name: PGHOST
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-host
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-user
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-password
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: database
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          limits:
+            memory: "1536Mi"
+            cpu: "500m"
+          requests:
+            memory: "512Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        ports:
+        - containerPort: 8080
+          name: observability
+      terminationGracePeriodSeconds: 45
+
+---
+# Batch processing workers (runs during off-hours)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imq-worker-batch
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    priority: batch
+    queue-pattern: "batch.*"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: imq-worker
+      priority: batch
+  template:
+    metadata:
+      labels:
+        app: imq-worker
+        priority: batch
+        queue-pattern: "batch.*"
+    spec:
+      containers:
+      - name: imq-worker
+        image: your-registry/muppy:latest
+        command: ["bin/start_odoo"]
+        args:
+          - "imq-worker"
+          - "--database=$(DATABASE_NAME)"
+          - "--queue=batch.*"
+          - "--max-messages=10000"  # Process many messages then exit
+          - "--max-rss-memory=2048M"  # Higher memory for batch jobs
+          - "--observability-port=8080"
+          - "--worker-name=batch-$(HOSTNAME)"
+          - "--log-level=INFO"
+        env:
+        - name: DATABASE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: database
+        - name: PGHOST
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-host
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-user
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: db-password
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: odoo-secrets
+              key: database
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          limits:
+            memory: "3072Mi"
+            cpu: "2000m"
+          requests:
+            memory: "1024Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        ports:
+        - containerPort: 8080
+          name: observability
+      priorityClassName: batch  # Lower priority
+      terminationGracePeriodSeconds: 120  # Longer for batch jobs
+      # Toleration for batch nodes
+      tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "batch"
+        effect: "NoSchedule"
+      # Prefer batch nodes
+      nodeSelector:
+        workload-type: batch
+
+---
+# Services for each deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: imq-worker-high-priority-metrics
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    priority: high
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: observability
+  selector:
+    app: imq-worker
+    priority: high
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: imq-worker-default-metrics
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    priority: default
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: observability
+  selector:
+    app: imq-worker
+    priority: default
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: imq-worker-batch-metrics
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    priority: batch
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: observability
+  selector:
+    app: imq-worker
+    priority: batch
+  type: ClusterIP
+
+---
+# Separate HPA for each deployment type
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: imq-worker-high-priority-hpa
+  namespace: muppy-workers
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: imq-worker-high-priority
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60  # More aggressive scaling
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60  # Faster scale up
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: imq-worker-default-hpa
+  namespace: muppy-workers
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: imq-worker-default
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

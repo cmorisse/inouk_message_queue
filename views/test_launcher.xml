@@ -71,10 +71,11 @@
                                         <field name="pass_imqerror_value" />
                                     </group>
                                     <group class="ik_lw240">
-                                        <field name="should_raise_exception" />
-                                        <field name="should_raise_exception_type" />
-                                        <field name="should_raise_exception_stepname" />
-                                        <field name="should_raise_exception_latch" />
+                                        <field name="should_raise_exception"/>
+                                        <field name="should_raise_exception_type"/>
+                                        <field name="delay_param"/>
+                                        <field name="should_raise_exception_stepname"/>
+                                        <field name="should_raise_exception_latch"/>
                                     </group>
                                     
                                 </group>

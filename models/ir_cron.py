@@ -44,12 +44,6 @@ class ir_cron(models.Model):
         cls._imq_process_job(db, cron_cr, job)
         return
 
-    @api.model
-    def _callback(self, cron_name, server_action_id, job_id):
-        """ Overload to pass cron_id """
-        self = self.with_context(cron_id=job_id)
-        return super()._callback(cron_name, server_action_id, job_id)
-
     @classmethod
     #def _imq_process_job(cls, job_cr, job, cron_cr):
     def _imq_process_job(cls, db, cron_cr, job):
@@ -78,7 +72,7 @@ class ir_cron(models.Model):
             now = fields.Datetime.now()
             cron._callback(job['cron_name'], job['ir_actions_server_id'],)
 
-            # Odoo 18 removec numbervall
+            # Odoo 18 removed numbercall
             # numbercall = job['numbercall']
             # if numbercall > 0:
             #     numbercall -= 1
@@ -86,6 +80,7 @@ class ir_cron(models.Model):
             #     addsql = ', active=False'
             # else:
             #     addsql = ''
+            addsql = ''
 
             cron_cr.execute(
                 "UPDATE ir_cron SET lastcall=%s"+addsql+" WHERE id=%s",(

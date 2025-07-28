@@ -63,7 +63,7 @@
                     <field name="processor_id"/>
                     <field name="processing_time"/>
                     <field name="state"/>
-                </tree>
+                </list>
             </field>
         </record>
 

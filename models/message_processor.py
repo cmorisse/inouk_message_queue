@@ -49,6 +49,10 @@ class IMQMessageProcessor(models.Model):
         help="Name of function called by processor. Eg. SimpleMessage_processor"
     )
     max_attempt = fields.Integer(default=MAX_ATTEMPTS)
+    retry_delay_s = fields.Integer(
+        "Retry Exception delay (s)",
+        help="Delay used to defer retry when IMQRetryableException is raised."
+    )        
     is_method = fields.Boolean(default=False,
                                help="Checked if function is a method, unchecked if it is"
                                     " a pure function.") 
@@ -92,10 +96,9 @@ class IMQMessageProcessor(models.Model):
         (
             'processor_uniq', 
             'UNIQUE(type, selector, module, function)', 
-            _("Processor must be unique !")
+            "Processor must be unique !"
         )
     ]
-
     def btn_refresh(self):
         self._calc_name()
 

@@ -1,75 +1,64 @@
+<?xml version='1.0' encoding='utf-8'?>
 <odoo>
     <data>
 
-        <!-- Tree view -->
+        
         <record id="imq_test_launcher__tree_view" model="ir.ui.view">
             <field name="name">imq_test_launcher.tree.view</field>
             <field name="model">imq.test_launcher</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
-                <tree string="IMQ Task launchers">
-                    <field name="queue_id"/>
-                    <field name="name"/>
-                    <field name="debug_mode"/>
-                    <field name="processing_duration_s"/>
-                    <field name="should_raise_exception"  string="Raise Exc."/>
-                    <field name="should_raise_exception_type"/>
-                    <field name="should_raise_exception_stepname" string="Exc. Step"/>
-                    <field name="should_raise_exception_latch"  string="Exc. Latch"/>
+                <list string="IMQ Task launchers">
+                    <field name="queue_id" />
+                    <field name="name" />
+                    <field name="debug_mode" />
+                    <field name="processing_duration_s" />
+                    <field name="should_raise_exception" string="Raise Exc." />
+                    <field name="should_raise_exception_type" />
+                    <field name="should_raise_exception_stepname" string="Exc. Step" />
+                    <field name="should_raise_exception_latch" string="Exc. Latch" />
 
-                    <field name="param"/>
-                    <field name="launch_result"/>
-                </tree>
+                    <field name="param" />
+                    <field name="launch_result" />
+                </list>
             </field>
         </record>
 
-        <!-- Form view -->
+        
         <record id="imq_test_launcher__form_view" model="ir.ui.view">
             <field name="name">imq_test_launcher.form.view</field>
             <field name="model">imq.test_launcher</field>
-            <field name="priority" eval="15"/>
+            <field name="priority" eval="15" />
             <field name="arch" type="xml">
                 <form>
                     <header>
-                        <button string="Send Async RPC Call" 
-                                type="object" 
-                                class="btn-warning" 
-                                invisible="type == 'simple'" 
-                                name="send_rpc_message"/>
-                        <button string="Send Simple Message" 
-                                type="object" 
-                                class="btn-warning" 
-                                invisible="type == 'rpc'" 
-                                name="send_simple_message"/>
-                        <button string="Launch FIFO Task Group" 
-                                type="object" 
-                                class="btn-warning" 
-                                invisible="queue_type != 'fifo'" 
-                                name="launch_fifo_test"/>
+                        <button string="Send Async RPC Call" type="object" class="btn-warning" invisible="type == 'simple'" name="send_rpc_message" />
+                        <button string="Send Simple Message" type="object" class="btn-warning" invisible="type == 'rpc'" name="send_simple_message" />
+                        <button string="Launch FIFO Task Group" type="object" class="btn-warning" invisible="queue_type != 'fifo'" name="launch_fifo_test" />
                     </header>
                     <sheet>
                         <div class="oe_title">
                             <h1>
-                                <field name="name"/>
+                                <field name="name" />
                             </h1>
                         </div>
                         <group>
                             <group>
-                                <field name="type"/>
+                                <field name="type" />
                                 <field name="message_group" />
                             </group>
                             <group>
-                                <field name="queue_id" required="True"/>
+                                <field name="queue_id" required="True" />
                                 <field name="queue_type" />
 
                             </group>
                             
                         </group>
                         <notebook>
-                            <page string="result" >
+                            <page string="result">
                                 <group>
-                                    <field name="launch_result"/>
-                                    <field name="process_result"/>
+                                    <field name="launch_result" />
+                                    <field name="process_result" />
                                 </group>
                                 
                             </page>
@@ -77,13 +66,14 @@
                                 <group>
                                     <group class="ik_lw190">
                                         <field name="rpc_test_method" />
-                                        <field name="processing_duration_s"/>
-                                        <field name="param"/>
-                                        <field name="pass_imqerror_value"/>
+                                        <field name="processing_duration_s" />
+                                        <field name="param" />
+                                        <field name="pass_imqerror_value" />
                                     </group>
                                     <group class="ik_lw240">
                                         <field name="should_raise_exception"/>
                                         <field name="should_raise_exception_type"/>
+                                        <field name="delay_param"/>
                                         <field name="should_raise_exception_stepname"/>
                                         <field name="should_raise_exception_latch"/>
                                     </group>
@@ -94,8 +84,8 @@
                             <page string="Simple" invisible="type != 'simple'">
                                 <group col="4" colspan="4">
 
-                                    <field name="selector" colspan="4"/>
-                                    <field name="payload" colspan="4"/>
+                                    <field name="selector" colspan="4" />
+                                    <field name="payload" colspan="4" />
                                     <div colspan="4" class="oe_grey">Payload must be a valid json object. If payload is a dict with a key: "should_raise_error". 
                                     TestMessage processor will raise an Exception.
                                     </div>
@@ -120,9 +110,7 @@
         <record id="imq_test_launcher__act_window" model="ir.actions.act_window">
             <field name="name">Launch Test messages</field>
             <field name="res_model">imq.test_launcher</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
         </record>
     </data>
 </odoo>
-
-

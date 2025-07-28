@@ -1,8 +1,8 @@
-<?xml version="1.0" ?>
+<?xml version='1.0' encoding='utf-8'?>
 <openerp>
     <data noupdate="1">
         <record id="ir_rule__imq_message_for_user" model="ir.rule">
-            <field name="model_id" ref="inouk_message_queue.model_imq_message"/>
+            <field name="model_id" ref="inouk_message_queue.model_imq_message" />
             <field name="name">IMQ - Message for user</field>
             <field name="perm_create" eval="0" />
             <field name="perm_read" eval="1" />
@@ -10,19 +10,19 @@
             <field name="perm_unlink" eval="0" />
             <field name="active" eval="1" />
             <field name="domain_force">[('user_id','=',user.id)]</field>
-            <field name="groups" eval="[(4, ref('inouk_message_queue.group_user'))]"/>
+            <field name="groups" eval="[(4, ref('inouk_message_queue.group_user'))]" />
         </record>
     </data>
     <data noupdate="1">
         <record id="ir_rule____imq_message_for_admin" model="ir.rule">
-            <field name="model_id" ref="inouk_message_queue.model_imq_message"/>
+            <field name="model_id" ref="inouk_message_queue.model_imq_message" />
             <field name="name">IMQ - Message for Admin</field>
             <field name="perm_create" eval="1" />
             <field name="perm_read" eval="1" />
             <field name="perm_write" eval="1" />
             <field name="perm_unlink" eval="1" />
             <field name="active" eval="1" />
-            <field name="groups" eval="[(4, ref('inouk_message_queue.group_admin'))]"/>
+            <field name="groups" eval="[(4, ref('inouk_message_queue.group_admin'))]" />
         </record>
     </data>
 </openerp>

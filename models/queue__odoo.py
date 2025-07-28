@@ -12,6 +12,7 @@ import slackdown
 
 import odoo
 from odoo import models, fields, api
+from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT
 from odoo.tools.translate import _
 from odoo.tools.safe_eval import safe_eval
 
@@ -47,7 +48,8 @@ class IMQOdooQueue(models.Model):
             if record.use_odoo_notifications:
                 body_html = slackdown.render(message or "")
                 if message_obj:
-                    obj_url = f'Message: <a href="{message_obj.get_form_url()}">{message_obj.name}</a>'
+                    _now = datetime.datetime.now().strftime(DEFAULT_SERVER_DATETIME_FORMAT)
+                    obj_url = f'<b>Message: </b><a href="{message_obj.get_form_url()}">{message_obj.name}</a> <br> <b>At: </b>{_now} UTC'
                     body_html += obj_url
                 if user_obj is None:
                     user_obj = self.env.user

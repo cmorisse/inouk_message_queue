@@ -108,7 +108,7 @@ class IMQQueue(models.Model):
         (
             'name_queue_uniq', 
             'UNIQUE(name)', 
-            _("Queue name must be unique among all queue providers.")
+            "Queue name must be unique among all queue providers."
         )
     ]
 

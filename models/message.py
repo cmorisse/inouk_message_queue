@@ -75,9 +75,9 @@ class IMQMessage(models.Model):
                                      "the security restriction of executed "
                                      "processing.")
     code = fields.Char(help="Python expression that will be executed to "
-                              "launch message processing. This is informational "
-                              "only. Use fields in 'Exec. params. tab to "
-                              "manually create messages.")
+                            "launch message processing. This is informational "
+                            "only. Use fields in 'Exec. params. tab to "
+                            "manually create messages.")
     context = fields.Text(help="pickled context dict")
     payload = fields.Text(help="dict {'args': ..., 'kwargs': ...} pickled.")
     raw_message_body = fields.Text()
@@ -123,10 +123,11 @@ class IMQMessage(models.Model):
     state = fields.Selection(IMQ_MESSAGE_STATES, default='new')
 
     max_number_of_attempts = fields.Integer(default=MAX_ATTEMPTS)
-    ikpdb_debug = fields.Boolean("IKPdb debug",
-                                 default=False,
-                                 help="Will open IKPdb in post mortem mode "
-                                        "if an exception is raised.")
+    ikpdb_debug = fields.Boolean(
+        string="IKPdb debug",
+        default=False,
+        help="Will open IKPdb in post mortem mode if an exception is raised."
+    )
     _sql_constraints = [
         (
             'remote_id_uniq', 
@@ -136,7 +137,7 @@ class IMQMessage(models.Model):
 
     def get_formview_id(self, access_uid=None):
         self.ensure_one()
-        return self.env.ref('inouk_message_queue.imq_message__form_view').id
+        return self.env.ref('inouk_message_queue.imq_message__formview').id
 
     def get_default_action(self, access_uid=None):
         self.ensure_one()
@@ -191,7 +192,7 @@ class IMQMessage(models.Model):
     def do_archive(self):
         self.write({'state': 'archived'})
     
-    def create_processing_object(self):
+    def create_processing_object(self, worker_type='cron-workerv2'):
         self.ensure_one()
         new_processing_obj = self.env['imq.message_processing'].sudo().create({
             'message_id': self.id,
@@ -200,6 +201,7 @@ class IMQMessage(models.Model):
             'start_time_microseconds': self.start_time_microseconds,
             'end_time': None,
             'end_time_microseconds': None,
+            'worker_type': worker_type,
             'result': None,
             'state': self.state,
             'queue_id': self.queue_id.id,

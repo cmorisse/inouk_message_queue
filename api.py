@@ -33,8 +33,14 @@ class IMQError(UserError):
 
 class IMQRetryableError(UserError):
     """ Rollback, statut = "Retry", Retry automatique """
-    pass
-
+    def __init__(self, message, delay=None, results=None):
+        """ 
+        :param results: Any obj or string
+        :param delay: Optional delay in s to defer retry.
+        """
+        super().__init__(message)
+        self.results = results
+        self.delay = delay
 
 class IMQTerminateException(UserError):
     """ Rollback, statut = "Terminated", Pas de retry """
@@ -303,7 +309,11 @@ def enqueue(runnable, *args, **kwargs):
     message_deduplication_id = kwargs.get('_imq_message_deduplication_id', None)
     if '_imq_message_deduplication_id' in kwargs:
         del kwargs['_imq_message_deduplication_id']
-    
+
+    _imq_raise_on_duplicate = kwargs.get('_imq_raise_on_duplicate', None)
+    if '_imq_raise_on_duplicate' in kwargs:
+        del kwargs['_imq_raise_on_duplicate']
+
     message_name = extract_message_name(runnable, args, kwargs)
     if '_imq_message_name' in kwargs:
         del kwargs['_imq_message_name']  # We pass all "_imq" params via context
@@ -401,7 +411,8 @@ def enqueue(runnable, *args, **kwargs):
         message_body_values, 
         message_group=message_group, 
         message_deduplication_id=message_deduplication_id, 
-        message_attributes=message_attributes
+        message_attributes=message_attributes,
+        raise_on_duplicate=_imq_raise_on_duplicate,
     )
     return response
 
@@ -472,8 +483,11 @@ def send_message(
 ):
     """ Sends a Simple message to any Queue.
     :param env: A valid Odoo env
-    :param queue: Queue name prefix of the queue to use or queue obj
+    :param queue: Queue name prefix of the queue to use or queue obj. Use 'default' or None for default queue.
     """
+    if queue is None:
+        queue = 'default'
+
     if isinstance(queue, str):
         queue_obj = env['imq.queue'].search([('name', '=', queue)])
         if not queue_obj:

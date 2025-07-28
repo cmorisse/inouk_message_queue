@@ -1,0 +1,290 @@
+# Job and CronJob Examples for IMQ Workers
+---
+# One-time job to process a specific queue until empty
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: imq-queue-drain-job
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    job-type: queue-drain
+spec:
+  parallelism: 3  # Run 3 pods in parallel
+  completions: 3  # Complete when 3 pods finish
+  backoffLimit: 2  # Retry failed pods twice
+  activeDeadlineSeconds: 3600  # 1 hour timeout
+  ttlSecondsAfterFinished: 86400  # Clean up after 24 hours
+  template:
+    metadata:
+      labels:
+        app: imq-worker
+        job-type: queue-drain
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: imq-worker
+        image: your-registry/muppy:latest
+        command: ["bin/start_odoo"]
+        args:
+          - "imq-worker"
+          - "--database=$(DATABASE_NAME)"
+          - "--queue=migration-tasks"  # Specific queue to drain
+          - "--max-messages=0"  # Process until queue is empty
+          - "--max-rss-memory=2048M"
+          - "--observability-port=8080"
+          - "--worker-name=drain-$(POD_NAME)"
+          - "--log-level=INFO"
+        env:
+        - name: DATABASE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: database
+        - name: PGHOST
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: db-host
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: db-user
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: db-password
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: database
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          limits:
+            memory: "3072Mi"
+            cpu: "2000m"
+          requests:
+            memory: "1024Mi"
+            cpu: "500m"
+
+---
+# CronJob for scheduled batch processing
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: imq-nightly-batch
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    job-type: scheduled-batch
+spec:
+  schedule: "0 2 * * *"  # Run at 2 AM daily
+  concurrencyPolicy: Forbid  # Don't run if previous job is still running
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  suspend: false  # Set to true to disable
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 14400  # 4 hours timeout
+      ttlSecondsAfterFinished: 172800  # Clean up after 48 hours
+      template:
+        metadata:
+          labels:
+            app: imq-worker
+            job-type: scheduled-batch
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: imq-worker
+            image: your-registry/muppy:latest
+            command: ["bin/start_odoo"]
+            args:
+              - "imq-worker"
+              - "--database=$(DATABASE_NAME)"
+              - "--queue=nightly-batch"
+              - "--max-messages=10000"  # Process up to 10k messages
+              - "--max-rss-memory=4096M"
+              - "--observability-port=8080"
+              - "--worker-name=batch-$(POD_NAME)"
+              - "--log-level=INFO"
+            env:
+            - name: DATABASE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: muppy-secrets
+                  key: database
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: muppy-secrets
+                  key: db-host
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: muppy-secrets
+                  key: db-user
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: muppy-secrets
+                  key: db-password
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: muppy-secrets
+                  key: database
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            resources:
+              limits:
+                memory: "6144Mi"
+                cpu: "4000m"
+              requests:
+                memory: "2048Mi"
+                cpu: "1000m"
+          # Run on nodes with more resources
+          nodeSelector:
+            workload-type: batch
+          tolerations:
+          - key: "batch-processing"
+            operator: "Equal"
+            value: "true"
+            effect: "NoSchedule"
+
+---
+# Job for processing a specific message (debugging/testing)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: imq-process-message-49665  # Include message ID in name
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    job-type: single-message
+spec:
+  completions: 1
+  backoffLimit: 0  # No retries
+  ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+  template:
+    metadata:
+      labels:
+        app: imq-worker
+        job-type: single-message
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: imq-worker
+        image: your-registry/muppy:latest
+        command: ["bin/start_odoo"]
+        args:
+          - "imq-worker"
+          - "--database=$(DATABASE_NAME)"
+          - "--queue=muppy"  # Must specify the queue containing the message
+          - "--message=49665"  # Process specific message ID
+          - "--observability-port=8080"
+          - "--log-level=DEBUG"  # Debug logging for troubleshooting
+        env:
+        - name: DATABASE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: database
+        - name: PGHOST
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: db-host
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: db-user
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: db-password
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: database
+        resources:
+          limits:
+            memory: "1024Mi"
+            cpu: "500m"
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+
+---
+# CronJob for cleanup/maintenance tasks
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: imq-cleanup-old-messages
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    job-type: maintenance
+spec:
+  schedule: "0 4 * * 0"  # Run at 4 AM every Sunday
+  concurrencyPolicy: Replace  # Replace running job with new one
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: cleanup
+            image: your-registry/muppy:latest
+            command: ["bin/start_odoo"]
+            args:
+              - "shell"
+              - "-d"
+              - "$(DATABASE_NAME)"
+              - "-c"
+              - "etc/odoo.buildit.cfg"
+              - "--no-http"
+            env:
+            - name: DATABASE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: muppy-secrets
+                  key: database
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: muppy-secrets
+                  key: db-host
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: muppy-secrets
+                  key: db-user
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: muppy-secrets
+                  key: db-password
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: muppy-secrets
+                  key: database
+            - name: CLEANUP_SCRIPT
+              value: |
+                # Python script to cleanup old messages
+                env['imq.message'].cleanup_old_messages(days=30)
+                env.cr.commit()
+            stdin: true
+            stdinOnce: true

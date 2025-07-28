@@ -1,0 +1,319 @@
+# Production IMQ Workers v3 Deployment
+# This deployment includes all production features: monitoring, autoscaling, multiple queues
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imq-worker-production
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    component: message-processor
+    environment: production
+    queue-pattern: "muppy.*"
+spec:
+  replicas: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 2
+  selector:
+    matchLabels:
+      app: imq-worker
+      environment: production
+  template:
+    metadata:
+      labels:
+        app: imq-worker
+        environment: production
+        queue-pattern: "muppy.*"
+      annotations:
+        # Prometheus scraping
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+        # Force restart on config changes
+        kubectl.kubernetes.io/restartedAt: "2024-01-01T00:00:00Z"
+    spec:
+      containers:
+      - name: imq-worker
+        image: your-registry/muppy:v13.0.1
+        imagePullPolicy: IfNotPresent
+        command: ["bin/start_odoo"]
+        args:
+          - "imq-worker"
+          - "--database=$(DATABASE_NAME)"
+          - "--queue=muppy.*"  # Process all muppy queues
+          - "--max-messages=5000"
+          - "--max-rss-memory=1024M"
+          - "--observability-port=8080"
+          - "--worker-name=$(HOSTNAME)"
+          - "--log-level=INFO"
+        
+        env:
+        # Database connection
+        - name: DATABASE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: database
+        - name: PGHOST
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: db-host
+        - name: PGPORT
+          value: "5432"
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: db-user
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: db-password
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: muppy-secrets
+              key: database
+        
+        # Worker identification
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        # Optional: AWS SQS configuration
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-secrets
+              key: access-key-id
+              optional: true
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-secrets
+              key: secret-access-key
+              optional: true
+        - name: AWS_DEFAULT_REGION
+          value: "us-west-2"
+        
+        # Resource limits - production sizing
+        resources:
+          limits:
+            memory: "1536Mi"  # 1.5x the worker limit for safety
+            cpu: "1000m"
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+        
+        # Health checks - production tuned
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 8080
+          initialDelaySeconds: 90  # Longer startup time in production
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 2
+          successThreshold: 1
+        
+        # Startup probe for slower environments
+        startupProbe:
+          httpGet:
+            path: /livez
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 18  # 3 minutes total
+          successThreshold: 1
+        
+        # Observability port
+        ports:
+        - containerPort: 8080
+          name: observability
+          protocol: TCP
+        
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          seccompProfile:
+            type: RuntimeDefault
+        
+        # Volume mounts for logs (optional)
+        volumeMounts:
+        - name: worker-logs
+          mountPath: /opt/muppy/logs
+        - name: tmp
+          mountPath: /tmp
+      
+      # Volumes
+      volumes:
+      - name: worker-logs
+        emptyDir:
+          sizeLimit: 1Gi
+      - name: tmp
+        emptyDir:
+          sizeLimit: 512Mi
+      
+      # Pod-level configuration
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 60  # Longer for production
+      
+      # Service account with RBAC
+      serviceAccountName: imq-worker-production
+      
+      # Image pull secrets
+      imagePullSecrets:
+      - name: registry-secret
+      
+      # Node selection and affinity
+      nodeSelector:
+        node-type: worker
+      
+      affinity:
+        # Prefer different nodes
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - imq-worker
+              topologyKey: kubernetes.io/hostname
+        
+        # Prefer nodes in different zones
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - imq-worker
+              topologyKey: topology.kubernetes.io/zone
+      
+      # Tolerations for dedicated worker nodes
+      tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "imq-worker"
+        effect: "NoSchedule"
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: imq-worker-production-hpa
+  namespace: muppy-workers
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: imq-worker-production
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  # Scale based on CPU usage
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  # Scale based on memory usage
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  # Scale based on custom metrics (if available)
+  - type: Pods
+    pods:
+      metric:
+        name: imq_worker_wait_time_percent
+      target:
+        type: AverageValue
+        averageValue: "20"  # Scale up if workers are idle >20%
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 300  # 5 minutes
+      policies:
+      - type: Percent
+        value: 100  # Double pods
+        periodSeconds: 60
+      - type: Pods
+        value: 4
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 600  # 10 minutes
+      policies:
+      - type: Percent
+        value: 10  # Reduce by 10%
+        periodSeconds: 60
+      selectPolicy: Min
+
+---
+# Service for observability endpoints
+apiVersion: v1
+kind: Service
+metadata:
+  name: imq-worker-production-metrics
+  namespace: muppy-workers
+  labels:
+    app: imq-worker
+    environment: production
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: observability
+    protocol: TCP
+  selector:
+    app: imq-worker
+    environment: production
+  type: ClusterIP
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: imq-worker-production-pdb
+  namespace: muppy-workers
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: imq-worker
+      environment: production

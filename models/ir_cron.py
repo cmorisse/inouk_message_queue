@@ -71,26 +71,15 @@ class ir_cron(models.Model):
             # instead of August 1st!
             now = fields.Datetime.now()
             cron._callback(job['cron_name'], job['ir_actions_server_id'],)
+
+            # Odoo 18 removed numbercall
             # numbercall = job['numbercall']
-
-#        with api.Environment.manage():
-#            try:
-#                ir_cron = api.Environment(
-#                    job_cr, 
-#                    job['user_id'], 
-#                    {
-#                        'lastcall': fields.Datetime.from_string(job['lastcall'])
-#                    }
-#                )[cls._name]               
-#            now = fields.Datetime.context_timestamp(cron, datetime.datetime.now())
-#            cron._callback(job['cron_name'], job['ir_actions_server_id'], job['id'])
-            cron._callback(job['cron_name'], job['ir_actions_server_id'])
-
             # if numbercall > 0:
             #     numbercall -= 1
             # if not numbercall:
             #     addsql = ', active=False'
             # else:
+            #     addsql = ''
             addsql = ''
 
             cron_cr.execute(

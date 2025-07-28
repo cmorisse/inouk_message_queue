@@ -39,13 +39,21 @@ class IMQWorkerSQS(models.AbstractModel):
     """Processes messages in imq.queue"""
     _inherit = 'imq.worker'
 
-    def get_message__aws_sqs(self, queue_obj, wait_time=0):
+    def get_message__aws_sqs(self, queue_obj, wait_time=0, target_message_id=None):
         """Query Q for next message to process.
 
         :param queue_obj: required imq.queue object to query.
         :param wait_time: number of seconds to block on queue. Must be 0 with ir.cron IMQ Worker
+        :param target_message_id: specific message ID to target (not supported for SQS)
         :return: a SQS message object or None
+        :raises: UserError if target_message_id is specified (SQS doesn't support message targeting)
         """
+        if target_message_id:
+            raise UserError(
+                f"Message targeting (--message {target_message_id}) is not supported for AWS SQS queues. "
+                f"SQS retrieves messages in queue order and cannot select specific messages by ID. "
+                f"Use PostgreSQL provider for message targeting functionality."
+            )
         sqs_resource = boto3.resource(
             'sqs',
             region_name=queue_obj.region,

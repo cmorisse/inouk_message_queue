@@ -32,16 +32,18 @@ def check_message_duplicate(odoo_env, queue_obj, message_deduplication_id, raise
     _dedup_interval = queue_obj.deduplication_interval_s
     odoo_env.cr.execute(CHECK_MESSAGE_DUPLICATE_SQL,(_dedup_interval, message_deduplication_id))
     if odoo_env.cr.rowcount:
-        _msg = _("Message with Deduplication Id:'%s' is duplicated within a %ss time "
-                    "interval.") % (
+        _msg = ("Message with Deduplication Id:'%s' is duplicated within a %ss time "
+               "interval. (raise_on_duplicate=%s)") % (
                     message_deduplication_id,
-                    _dedup_interval
+                    _dedup_interval,
+                    raise_on_duplicate
                 )
         
         if raise_on_duplicate:
             raise UserError(_msg)
     
         else:
+            _logger.warning("IMQ Ignored Message. %s", _msg)
             return {
                 "error_code": "MESSAGE_IS_DUPLICATED",
                 "error_message": _msg,
@@ -52,7 +54,7 @@ def check_message_duplicate(odoo_env, queue_obj, message_deduplication_id, raise
 
 def send_message__pgsql(
     queue_obj, message_name, message_body_values, message_group=None, 
-    message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=True
+    message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=False
 ):
     """ Send a simple message to .
     :param queue_obj: An Odoo Queue object

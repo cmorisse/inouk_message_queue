@@ -222,13 +222,13 @@ Workers are configured as Odoo cron jobs:
 Deploy workers using the CLI:
 ```bash
 # Process a single queue
-bin/start_odoo imqworker --database=mydb --queue=default
+bin/start_odoo imq-worker --database $PGDATABASE --queue=default
 
 # Process multiple queues with pattern
-bin/start_odoo imqworker --database=mydb --queue="high_priority_*" --max-messages=1000
+bin/start_odoo imq-worker --database $PGDATABASE --queue="high_priority_*" --max-messages=1000
 
 # Run with monitoring enabled
-bin/start_odoo imqworker --database=mydb --queue=default --observability-port=9090
+bin/start_odoo imq-worker --database $PGDATABASE --queue=default --observability-port=9090
 ```
 
 ### Worker Control via System Parameters
@@ -419,7 +419,7 @@ for item in items:
 2. Increase visibility timeout for long tasks
 3. Use multiple queues to separate workloads
 
-## Worker Command (`imqworker`)
+## Worker Command (`imq-worker`)
 
 The IMQ Workers v3 system provides a standalone worker command that can process messages independently of Odoo's cron system.
 
@@ -427,13 +427,13 @@ The IMQ Workers v3 system provides a standalone worker command that can process 
 
 ```bash
 # Process messages from default queue
-bin/start_odoo imqworker --database $PGDATABASE --queue default
+bin/start_odoo imq-worker --database $PGDATABASE --queue default
 
 # Process with queue pattern matching
-bin/start_odoo imqworker --database $PGDATABASE --queue "mpy.*" --max-messages 100
+bin/start_odoo imq-worker --database $PGDATABASE --queue "mpy.*" --max-messages 100
 
 # Process with memory limit and observability
-bin/start_odoo imqworker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queue default \
   --max-rss-memory 1024M --observability-port 8080
 ```
 
@@ -445,10 +445,10 @@ The `--message` parameter allows you to process a specific message by ID or Mess
 
 ```bash
 # Process specific message by numeric ID
-bin/start_odoo imqworker --database $PGDATABASE --queue default --message 49737
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --message 49737
 
 # Process specific message by MessageId (UUID)
-bin/start_odoo imqworker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queue default \
   --message "8f3ec366-68c8-4945-87cc-aaf2cad5dd0f"
 ```
 
@@ -464,15 +464,15 @@ bin/start_odoo imqworker --database $PGDATABASE --queue default \
 
 ```bash
 # Debug specific message processing
-bin/start_odoo imqworker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queue default \
   --message 49737 --max-messages 1 --log-level DEBUG
 
 # Process message and exit immediately  
-bin/start_odoo imqworker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queue default \
   --message 49737 --max-messages 1 --worker-name "debug-worker"
 
 # Process message with observability for monitoring
-bin/start_odoo imqworker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queue default \
   --message 49737 --observability-port 8080
 ```
 
@@ -508,7 +508,7 @@ IMQ Workers v3 provides comprehensive observability features designed for modern
 
 ```bash
 # Start worker with observability on port 8080
-bin/start_odoo imqworker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queue default \
   --observability-port 8080 --worker-name "production-worker"
 ```
 
@@ -797,7 +797,7 @@ spec:
         image: myapp:latest
         command: ["bin/start_odoo"]
         args:
-          - "imqworker"
+          - "imq-worker"
           - "--database=$(DATABASE_NAME)"
           - "--queue=production.*"
           - "--max-messages=1000"
@@ -1053,7 +1053,7 @@ curl -s http://localhost:8080/status | jq '
 MONITOR_PID=$!
 
 # Create load test messages
-bin/start_odoo imqtest --database $PGDATABASE --simple \
+bin/start_odoo imq-test --database $PGDATABASE --simple \
   --queue production --count 1000 --delay 0.1
 
 # Monitor processing
@@ -1095,7 +1095,7 @@ nc -zv localhost 8080
 docker logs <worker-container>
 
 # Verify worker is still running
-ps aux | grep imqworker
+ps aux | grep imq-worker
 ```
 
 #### High Memory Usage Alerts
@@ -1208,24 +1208,24 @@ While the Kubernetes deployment is functional and follows best practices, please
 
 For questions or issues with Kubernetes deployments, please open an issue on our repository.
 
-## IMQ Dump Command (`imqdump`)
+## IMQ Control Command (`imq-ctl`)
 
-The `imqdump` command provides a kubectl-style inspection tool for IMQ objects, allowing you to examine messages, queues, processors, and processing records in structured YAML or JSON format.
+The `imq-ctl` command provides a kubectl-style management tool for IMQ objects, allowing you to examine messages, queues, processors, and processing records in structured YAML or JSON format.
 
 ### Basic Usage
 
 ```bash
-# Dump message information in YAML format (default)
-bin/start_odoo imqdump --database $PGDATABASE --message 49737
+# Describe message information in YAML format (default)
+bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737
 
-# Dump message with logs in JSON format
-bin/start_odoo imqdump --database $PGDATABASE --message 49737 --include-logs --json
+# Describe message with logs in JSON format
+bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737 --include-logs --output json
 
-# Dump queue information
-bin/start_odoo imqdump --database $PGDATABASE --queue default
+# Describe queue information
+bin/start_odoo imq-ctl --database $PGDATABASE describe queue default
 
-# Dump processor by selector
-bin/start_odoo imqdump --database $PGDATABASE --processor TestMessage
+# Describe processor by selector
+bin/start_odoo imq-ctl --database $PGDATABASE describe processor TestMessage
 ```
 
 ### Object Types
@@ -1236,13 +1236,13 @@ Dump detailed message information including processing history and logs:
 
 ```bash
 # By numeric ID
-bin/start_odoo imqdump --database $PGDATABASE --message 49737
+bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737
 
 # By MessageId (UUID)  
-bin/start_odoo imqdump --database $PGDATABASE --message "8f3ec366-68c8-4945-87cc-aaf2cad5dd0f"
+bin/start_odoo imq-ctl --database $PGDATABASE describe message "8f3ec366-68c8-4945-87cc-aaf2cad5dd0f"
 
 # Include processing logs
-bin/start_odoo imqdump --database $PGDATABASE --message 49737 --include-logs
+bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737 --include-logs
 ```
 
 #### Queues (`--queue`)
@@ -1251,7 +1251,7 @@ Dump queue configuration and statistics:
 
 ```bash
 # Queue information with message counts by state
-bin/start_odoo imqdump --database $PGDATABASE --queue default
+bin/start_odoo imq-ctl --database $PGDATABASE describe queue default
 ```
 
 #### Processors (`--processor`)
@@ -1260,10 +1260,10 @@ Dump message processor configuration:
 
 ```bash
 # By numeric ID
-bin/start_odoo imqdump --database $PGDATABASE --processor 1
+bin/start_odoo imq-ctl --database $PGDATABASE describe processor 1
 
 # By selector name
-bin/start_odoo imqdump --database $PGDATABASE --processor TestMessage
+bin/start_odoo imq-ctl --database $PGDATABASE describe processor TestMessage
 ```
 
 #### Processing Records (`--processing`)
@@ -1272,7 +1272,7 @@ Dump individual processing attempt information:
 
 ```bash
 # Processing record with logs
-bin/start_odoo imqdump --database $PGDATABASE --processing 47495 --include-logs
+bin/start_odoo imq-ctl --database $PGDATABASE describe processing 47495 --include-logs
 ```
 
 #### Processing Logs (`--logs`)
@@ -1281,13 +1281,13 @@ Dump processing logs in streaming format, similar to `kubectl logs`:
 
 ```bash
 # Stream format - human-readable log output
-bin/start_odoo imqdump --database $PGDATABASE --logs 47497
+bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497
 
 # JSON format - structured log data
-bin/start_odoo imqdump --database $PGDATABASE --logs 47497 --json
+bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --json
 
 # Save logs to file for analysis
-bin/start_odoo imqdump --database $PGDATABASE --logs 47497 --output processing_47497.log
+bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --output processing_47497.log
 ```
 
 ### Output Formats
@@ -1329,7 +1329,7 @@ status:
 
 ```bash
 # Output in JSON format
-bin/start_odoo imqdump --database $PGDATABASE --message 49737 --json
+bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737 --json
 ```
 
 ```json
@@ -1354,7 +1354,7 @@ The `--logs` command provides a specialized streaming format for processing logs
 
 ```bash
 # Stream format output
-bin/start_odoo imqdump --database $PGDATABASE --logs 47497
+bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497
 ```
 
 ```
@@ -1377,7 +1377,7 @@ bin/start_odoo imqdump --database $PGDATABASE --logs 47497
 
 ```bash
 # JSON format provides structured data
-bin/start_odoo imqdump --database $PGDATABASE --logs 47497 --json
+bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --json
 ```
 
 ```json
@@ -1436,33 +1436,33 @@ bin/start_odoo imqdump --database $PGDATABASE --logs 47497 --json
 
 ```bash
 # Check message state and processing history
-bin/start_odoo imqdump --database $PGDATABASE --message 49737
+bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737
 
 # Examine detailed logs
-bin/start_odoo imqdump --database $PGDATABASE --message 49737 --include-logs
+bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737 --include-logs
 
 # Stream processing logs for detailed debugging
-bin/start_odoo imqdump --database $PGDATABASE --logs 47497
+bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497
 
 # Check what processor handles the message
-bin/start_odoo imqdump --database $PGDATABASE --processor TestMessage
+bin/start_odoo imq-ctl --database $PGDATABASE describe processor TestMessage
 ```
 
 #### Monitoring and Operations
 
 ```bash
 # Export message data for analysis
-bin/start_odoo imqdump --database $PGDATABASE --message 49737 --json \
+bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737 --json \
   --output message_49737.json
 
 # Check queue health
-bin/start_odoo imqdump --database $PGDATABASE --queue default
+bin/start_odoo imq-ctl --database $PGDATABASE describe queue default
 
 # Audit processing attempts
-bin/start_odoo imqdump --database $PGDATABASE --processing 47495 --include-logs
+bin/start_odoo imq-ctl --database $PGDATABASE describe processing 47495 --include-logs
 
 # Tail processing logs for monitoring
-bin/start_odoo imqdump --database $PGDATABASE --logs 47497 --output /var/log/imq/processing_47497.log
+bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --output /var/log/imq/processing_47497.log
 ```
 
 #### CI/CD Integration
@@ -1471,17 +1471,17 @@ bin/start_odoo imqdump --database $PGDATABASE --logs 47497 --output /var/log/imq
 #!/bin/bash
 # Verify message processing in pipeline
 
-MESSAGE_ID=$(bin/start_odoo imqtest --database test_db --simple --json-output | jq -r '.[0].id')
+MESSAGE_ID=$(bin/start_odoo imq-test --database $PGDATABASE --simple --json-output | jq -r '.[0].id')
 
 # Process the message
-bin/start_odoo imqworker --database test_db --queue default --message $MESSAGE_ID --max-messages 1
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --message $MESSAGE_ID --max-messages 1
 
 # Verify it completed successfully
-FINAL_STATE=$(bin/start_odoo imqdump --database test_db --message $MESSAGE_ID --json | jq -r '.status.state')
+FINAL_STATE=$(bin/start_odoo imq-ctl --database $PGDATABASE describe message $MESSAGE_ID --output json | jq -r '.status.state')
 
 if [ "$FINAL_STATE" != "done" ]; then
   echo "Message processing failed: $FINAL_STATE"
-  bin/start_odoo imqdump --database test_db --message $MESSAGE_ID --include-logs
+  bin/start_odoo imq-ctl --database $PGDATABASE describe message $MESSAGE_ID --include-logs
   exit 1
 fi
 
@@ -1490,30 +1490,30 @@ echo "Message processed successfully!"
 
 ## Testing
 
-### IMQ Test CLI Command (`imqtest`)
+### IMQ Test CLI Command (`imq-test`)
 
-The `imqtest` command provides a powerful CLI interface for creating and testing IMQ messages. It offers complete feature parity with the GUI test launcher and is perfect for debugging, automation, and load testing.
+The `imq-test` command provides a powerful CLI interface for creating and testing IMQ messages. It offers complete feature parity with the GUI test launcher and is perfect for debugging, automation, and load testing.
 
 #### Quick Start
 
 ```bash
 # List available test processors
-bin/start_odoo imqtest --database $PGDATABASE --list-processors
+bin/start_odoo imq-test --database $PGDATABASE --list-processors
 
 # Create a simple test message
-bin/start_odoo imqtest --database $PGDATABASE --simple --queue default --verbose
+bin/start_odoo imq-test --database $PGDATABASE --simple --queue default --verbose
 
 # Create an RPC method test with custom parameters
-bin/start_odoo imqtest --database $PGDATABASE --rpc-method --queue default --param "test_data" --duration 10
+bin/start_odoo imq-test --database $PGDATABASE --rpc-method --queue default --param "test_data" --duration 10
 
 # Create multiple messages with JSON output
-bin/start_odoo imqtest --database $PGDATABASE --simple --queue default --count 5 --json-output
+bin/start_odoo imq-test --database $PGDATABASE --simple --queue default --count 5 --json-output
 ```
 
 #### Command Syntax
 
 ```bash
-bin/start_odoo imqtest [OPTIONS] TEST_TYPE
+bin/start_odoo imq-test [OPTIONS] TEST_TYPE
 ```
 
 #### Required Arguments
@@ -1589,7 +1589,7 @@ bin/start_odoo imqtest [OPTIONS] TEST_TYPE
 
 ```bash
 # Create a simple test message
-bin/start_odoo imqtest --database $PGDATABASE --simple --queue default --verbose
+bin/start_odoo imq-test --database $PGDATABASE --simple --queue default --verbose
 
 # Output:
 # Created simple message 1/1: ID=49682, MessageID=f2f1b01a-8559-4058-9e69-e16b8ec288fa
@@ -1601,7 +1601,7 @@ bin/start_odoo imqtest --database $PGDATABASE --simple --queue default --verbose
 
 ```bash
 # Test RPC method with 30-second duration and custom parameter
-bin/start_odoo imqtest --database $PGDATABASE --rpc-method \
+bin/start_odoo imq-test --database $PGDATABASE --rpc-method \
   --queue default --param "production_data" --duration 30 --verbose
 ```
 
@@ -1609,7 +1609,7 @@ bin/start_odoo imqtest --database $PGDATABASE --rpc-method \
 
 ```bash
 # Test IMQRetryableError with 60-second delay
-bin/start_odoo imqtest --database $PGDATABASE --rpc-method \
+bin/start_odoo imq-test --database $PGDATABASE --rpc-method \
   --queue default --raise-exception --exception-type imqretryable \
   --delay-param 60 --pass-imqerror-value
 ```
@@ -1618,7 +1618,7 @@ bin/start_odoo imqtest --database $PGDATABASE --rpc-method \
 
 ```bash
 # Create FIFO test sequence with exception on step 3
-bin/start_odoo imqtest --database $PGDATABASE --fifo-test \
+bin/start_odoo imq-test --database $PGDATABASE --fifo-test \
   --queue fifo_queue --raise-exception --exception-step fifo_step3 \
   --exception-type usererror --message-group "test-batch-001"
 ```
@@ -1627,7 +1627,7 @@ bin/start_odoo imqtest --database $PGDATABASE --fifo-test \
 
 ```bash
 # Create 10 simple messages with 2-second delay between each
-bin/start_odoo imqtest --database $PGDATABASE --simple \
+bin/start_odoo imq-test --database $PGDATABASE --simple \
   --queue default --count 10 --delay 2 --json-output > test_results.json
 ```
 
@@ -1635,7 +1635,7 @@ bin/start_odoo imqtest --database $PGDATABASE --simple \
 
 ```bash
 # Test with custom JSON payload
-bin/start_odoo imqtest --database $PGDATABASE --simple \
+bin/start_odoo imq-test --database $PGDATABASE --simple \
   --queue default --payload '{"customer_id": 12345, "action": "process_order"}' \
   --selector "OrderProcessor" --name "Order Processing Test"
 ```
@@ -1644,7 +1644,7 @@ bin/start_odoo imqtest --database $PGDATABASE --simple \
 
 ```bash
 # Create 100 messages quickly for load testing
-bin/start_odoo imqtest --database $PGDATABASE --simple \
+bin/start_odoo imq-test --database $PGDATABASE --simple \
   --queue default --count 100 --json-output | jq '.[].id'
 ```
 
@@ -1682,11 +1682,11 @@ When using `--json-output`, the command returns structured data:
 # test_imq_pipeline.sh
 
 # Create test messages
-RESULT=$(bin/start_odoo imqtest --database test_db --simple --count 5 --json-output)
+RESULT=$(bin/start_odoo imq-test --database $PGDATABASE --simple --count 5 --json-output)
 MESSAGE_IDS=$(echo "$RESULT" | jq -r '.[].id')
 
 # Start worker to process them
-bin/start_odoo imqworker --database test_db --queue default --max-messages 5 &
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-messages 5 &
 WORKER_PID=$!
 
 # Wait for processing and check results
@@ -1695,7 +1695,7 @@ kill $WORKER_PID
 
 # Verify all messages processed successfully
 for id in $MESSAGE_IDS; do
-  STATUS=$(bin/start_odoo shell --database test_db -c "
+  STATUS=$(bin/start_odoo shell --database $PGDATABASE -c "
     msg = env['imq.message'].browse($id)
     print(msg.state)
   ")
@@ -1712,12 +1712,12 @@ echo "All test messages processed successfully!"
 
 ```bash
 # Create load test with timing
-time bin/start_odoo imqtest --database prod_db --simple \
+time bin/start_odoo imq-test --database $PGDATABASE --simple \
   --queue performance_test --count 1000 --verbose
 
 # Monitor queue depth during test  
 while true; do
-  PENDING=$(bin/start_odoo shell --database prod_db -c "
+  PENDING=$(bin/start_odoo shell --database $PGDATABASE -c "
     count = env['imq.message'].search_count([('state', '=', 'pending')])
     print(count)
   ")
@@ -1750,7 +1750,7 @@ done
 3. **Permission Issues**
    ```bash
    # Test with specific user ID
-   bin/start_odoo imqtest --database $PGDATABASE --simple \
+   bin/start_odoo imq-test --database $PGDATABASE --simple \
      --queue default --user-id 1 --verbose
    ```
 
@@ -1758,7 +1758,7 @@ done
 
 ```bash
 # Run in debug mode for immediate execution
-bin/start_odoo imqtest --database $PGDATABASE --rpc-method \
+bin/start_odoo imq-test --database $PGDATABASE --rpc-method \
   --queue default --debug-mode --enable-logging --verbose
 ```
 
@@ -1774,7 +1774,7 @@ A comprehensive test suite is available to validate the IMQ Workers v3 implement
 The test script performs the following checks:
 
 1. **Module Loading Test**: Verifies the module loads without errors in Odoo
-2. **CLI Command Registration Test**: Confirms the `imqworker` command is properly registered
+2. **CLI Command Registration Test**: Confirms the `imq-worker` command is properly registered
 3. **CLI Help Test**: Validates the command-line help system works
 4. **Worker Initialization Test**: Tests worker startup and database connection
 5. **Unit Tests**: Runs basic import and utility function tests
@@ -1786,28 +1786,28 @@ The test script performs the following checks:
 #### Test CLI Command
 ```bash
 # Test command registration
-bin/start_odoo help | grep imqworker
+bin/start_odoo help | grep imq-worker
 
 # Test help system
-bin/start_odoo imqworker --help
+bin/start_odoo imq-worker --help
 
 # Test worker with non-existent queue (should exit gracefully)
-bin/start_odoo imqworker --database mydb --queue test_queue --max-messages 1
+bin/start_odoo imq-worker --database $PGDATABASE --queue test_queue --max-messages 1
 ```
 
 #### Test Worker Functionality
 ```bash
 # Test with existing queue
-bin/start_odoo imqworker --database mydb --queue default --max-messages 5
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-messages 5
 
 # Test with memory limit
-bin/start_odoo imqworker --database mydb --queue default --max-rss-memory 512M
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-rss-memory 512M
 
 # Test with regex pattern
-bin/start_odoo imqworker --database mydb --queue "mpy.*" --max-messages 10
+bin/start_odoo imq-worker --database $PGDATABASE --queue "mpy.*" --max-messages 10
 
 # Test with observability (metrics and health checks)
-bin/start_odoo imqworker --database mydb --queue default --observability-port 8080
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --observability-port 8080
 ```
 
 ### Test Results

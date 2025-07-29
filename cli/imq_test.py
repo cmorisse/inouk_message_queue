@@ -15,12 +15,12 @@ _logger = logging.getLogger(__name__)
 
 class IMQTest(Command):
     """Create test messages for IMQ worker testing"""
-    name = 'imqtest'
+    name = 'imq-test'
     
     def run(self, args):
         """Main entry point for the CLI command"""
         parser = argparse.ArgumentParser(
-            prog=f'{sys.argv[0]} imqtest',
+            prog=f'{sys.argv[0]} imq-test',
             description='Create test messages for IMQ worker testing'
         )
         
@@ -117,23 +117,22 @@ class IMQTest(Command):
         
         # Connect to database
         try:
-            with api.Environment.manage():
-                registry = Registry(parsed_args.database)
-                with registry.cursor() as cr:
-                    env = api.Environment(cr, SUPERUSER_ID, {})
-                
-                    if parsed_args.list_processors:
-                        return self._list_processors(env, parsed_args)
-                    elif parsed_args.reset_queue:
-                        return self._reset_queue(env, parsed_args)
-                    elif parsed_args.simple:
-                        return self._create_simple_messages(env, parsed_args)
-                    elif parsed_args.rpc_method:
-                        return self._create_rpc_messages(env, parsed_args, 'method')
-                    elif parsed_args.rpc_function:
-                        return self._create_rpc_messages(env, parsed_args, 'function')
-                    elif parsed_args.fifo_test:
-                        return self._create_fifo_test(env, parsed_args)
+            registry = Registry(parsed_args.database)
+            with registry.cursor() as cr:
+                env = api.Environment(cr, SUPERUSER_ID, {})
+            
+                if parsed_args.list_processors:
+                    return self._list_processors(env, parsed_args)
+                elif parsed_args.reset_queue:
+                    return self._reset_queue(env, parsed_args)
+                elif parsed_args.simple:
+                    return self._create_simple_messages(env, parsed_args)
+                elif parsed_args.rpc_method:
+                    return self._create_rpc_messages(env, parsed_args, 'method')
+                elif parsed_args.rpc_function:
+                    return self._create_rpc_messages(env, parsed_args, 'function')
+                elif parsed_args.fifo_test:
+                    return self._create_fifo_test(env, parsed_args)
                     
         except Exception as e:
             print(f"Error: {e}")

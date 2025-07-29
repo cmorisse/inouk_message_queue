@@ -27,6 +27,11 @@ class TestPhase1Implementation(unittest.TestCase):
     
     def test_worker_utils(self):
         """Test worker utility functions"""
+        # Add parent directory to path to import worker_utils
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+        
         from worker_utils.worker_utils import (
             parse_memory_limit, format_duration, format_memory_size,
             validate_queue_pattern, get_worker_name, safe_int

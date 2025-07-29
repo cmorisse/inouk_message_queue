@@ -58,13 +58,13 @@ elif result == 'failed':
 
 ### Test Case 1: Normal Processing
 ```bash
-bin/start_odoo imqworker --database $PGDATABASE --queue default --max-messages 1
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-messages 1
 ```
 **Result:** ✅ Successfully processed message, queue marked healthy
 
 ### Test Case 2: Empty Queue
 ```bash
-timeout 30s bin/start_odoo imqworker --database $PGDATABASE --queue health_check --max-messages 100
+timeout 30s bin/start_odoo imq-worker --database $PGDATABASE --queue health_check --max-messages 100
 ```
 **Result:** ✅ Queue remained healthy (1/1 healthy) after 30 seconds of empty polling
 

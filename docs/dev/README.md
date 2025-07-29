@@ -31,7 +31,7 @@ Technical specifications and implementation plans:
 
 ## Key Features Implemented
 
-- ✅ CLI command (`imqworker`) with full argument parsing
+- ✅ CLI command (`imq-worker`) with full argument parsing
 - ✅ Standalone worker class with signal handling
 - ✅ Memory monitoring and limits
 - ✅ Prometheus metrics collection
@@ -46,10 +46,10 @@ Technical specifications and implementation plans:
 ./run_tests.sh
 
 # Start standalone worker
-bin/start_odoo imqworker --database mydb --queue default --max-messages 100
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-messages 100
 
 # Worker with observability
-bin/start_odoo imqworker --database mydb --queue "mpy.*" --observability-port 8080
+bin/start_odoo imq-worker --database $PGDATABASE --queue "mpy.*" --observability-port 8080
 ```
 
 ## Contributing

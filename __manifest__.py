@@ -30,5 +30,8 @@
     'demo': [],
     'application': True,
     'auto_install': False,
-    'installable': True
+    'installable': True,
+    'external_dependencies': {
+        'python': ['psutil', 'prometheus_client'],
+    }
 }

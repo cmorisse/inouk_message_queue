@@ -439,26 +439,25 @@ class StandaloneWorker(BaseWorker):
         
         try:
             # Get registry and find queue IDs (not queue objects)
-            with api.Environment.manage():
-                registry = Registry(self.database)
-                with registry.cursor() as cr:
-                    env = api.Environment(cr, SUPERUSER_ID, {})
-                    queues = self._find_matching_queues(env)
+            registry = Registry(self.database)
+            with registry.cursor() as cr:
+                env = api.Environment(cr, SUPERUSER_ID, {})
+                queues = self._find_matching_queues(env)
+                
+                if not queues:
+                    self.logger.error("No queues found to process")
+                    return 1
                     
-                    if not queues:
-                        self.logger.error("No queues found to process")
-                        return 1
-                        
-                    # Store queue IDs and names for round-robin processing
-                    # Access all fields while cursor is still open
-                    queue_info = [(q.id, q.name, q.provider) for q in queues]
-                    
-                    # Store queue information for monitoring/health checker
-                    # Convert ORM objects to simple data structures that can be accessed outside cursor context
-                    self.queues = [{'id': q.id, 'name': q.name, 'provider': q.provider} for q in queues]
-                    
-                    # Initialize queue statistics
-                    self._initialize_queue_stats(queue_info)
+                # Store queue IDs and names for round-robin processing
+                # Access all fields while cursor is still open
+                queue_info = [(q.id, q.name, q.provider) for q in queues]
+                
+                # Store queue information for monitoring/health checker
+                # Convert ORM objects to simple data structures that can be accessed outside cursor context
+                self.queues = [{'id': q.id, 'name': q.name, 'provider': q.provider} for q in queues]
+                
+                # Initialize queue statistics
+                self._initialize_queue_stats(queue_info)
             
             # Main processing loop
             queue_index = 0
@@ -479,12 +478,11 @@ class StandaloneWorker(BaseWorker):
                 
                 # Check stop parameter periodically (every 10 iterations to avoid overhead)
                 if self.processed_count % 10 == 0:
-                    with api.Environment.manage():
-                        with registry.cursor() as cr:
-                            env = api.Environment(cr, SUPERUSER_ID, {})
-                            if self._check_stop_parameter(env):
-                                self.should_stop = True
-                                break
+                    with registry.cursor() as cr:
+                        env = api.Environment(cr, SUPERUSER_ID, {})
+                        if self._check_stop_parameter(env):
+                            self.should_stop = True
+                            break
                 
                 # Select next healthy queue
                 queue_selection = self._select_next_queue(queue_info, queue_index)
@@ -575,152 +573,151 @@ class StandaloneWorker(BaseWorker):
         Returns:
             str: 'processed' if message was processed, 'empty' if no message available, 'failed' if processing failed
         """
-        with api.Environment.manage():
-            with registry.cursor() as cr:
-                env = api.Environment(cr, SUPERUSER_ID, {})
+        with registry.cursor() as cr:
+            env = api.Environment(cr, SUPERUSER_ID, {})
+            
+            # Get queue object in this context
+            queue = env['imq.queue'].browse(queue_id)
+            if not queue.exists():
+                self.logger.error(f"Queue {queue_name} (ID: {queue_id}) no longer exists")
+                return 'failed'
+            
+            # Get next message
+            message = self.get_message(env, queue, 0, self.target_message_id)
+            if not message:
+                return 'empty'
+            
+            # Store as current message for signal handler
+            self.current_message = message
+            
+            try:
+                # Store and process message
+                start_time = time.time()
+                start_timestamp = datetime.datetime.now()
+                message_obj = self.store_message(env, queue, message, start_timestamp)
                 
-                # Get queue object in this context
-                queue = env['imq.queue'].browse(queue_id)
-                if not queue.exists():
-                    self.logger.error(f"Queue {queue_name} (ID: {queue_id}) no longer exists")
+                if message_obj:
+                    self.logger.info(f"Starting to process message - ID: {message_obj.id}, Name: '{message_obj.name}', Queue: {queue_name}")
+                
+                if not message_obj:
+                    self.logger.warning(f"Failed to store message from queue {queue_name}")
                     return 'failed'
                 
-                # Get next message
-                message = self.get_message(env, queue, 0, self.target_message_id)
-                if not message:
-                    return 'empty'
+                # Update message attempt counter
+                message_obj.write({"attempt": message_obj.attempt + 1})
                 
-                # Store as current message for signal handler
-                self.current_message = message
+                # Create processing object (used for logging in advanced configurations)
+                _processing_obj = message_obj.create_processing_object(worker_type='sa-workerv3')
                 
+                # Update message visibility if needed
+                self.change_message_visibility(env, queue, message_obj, message)
+                
+                # Flush and commit message storage
+                message_obj.flush_recordset()
+                cr.commit()
+                
+                # Set up logging BEFORE processing (critical timing fix)
+                processor_obj = message_obj.processor_id
+                if message_obj.logging_activated and processor_obj.capture_log:
+                    self.start_log_capture(
+                        env,
+                        message_obj,
+                        _processing_obj,
+                        log_level=processor_obj.log_level,
+                        log_format=processor_obj.log_format
+                    )
+                
+                # Set up console capture if configured
+                if message_obj.capture_console:
+                    self.start_stream_capture(env, message_obj, _processing_obj)
+                
+                # Process the message (logging now captures execution)
+                result = self.process_message(env, message_obj, message, {})
+                processing_duration = time.time() - start_time
+                
+                # Update message with processing result (this is the missing piece!)
+                end_timestamp = datetime.datetime.now()
+                
+                # Create a copy for message update to avoid modifying the original
+                message_update = result.copy()
+                message_update['end_time'] = end_timestamp
+                message_update['end_time_microseconds'] = end_timestamp.microsecond
+                
+                # Write result back to message object to update state
+                message_obj.write(message_update)
+                
+                # Also update the processing object if it exists
+                if _processing_obj:
+                    # Remove planned_time from processing object update
+                    processing_result = message_update.copy()
+                    if 'planned_time' in processing_result:
+                        del processing_result['planned_time']
+                    _processing_obj.write(processing_result)
+                
+                # Flush and commit the state update
+                message_obj.flush_recordset()
+                cr.commit()
+                
+                # Record metrics
+                success = result.get('state') == 'done'
+                self.metrics_collector.record_message_processed(
+                    queue_name, 
+                    processing_duration, 
+                    success=success
+                )
+                
+                # Log detailed message info
+                self.logger.info(f"Processed message - ID: {message_obj.id}, Name: '{message_obj.name}', Queue: {queue_name}, State: {result.get('state')}")
+                
+                # Update tracking attributes for health checker
+                self.last_message_time = time.time()
+                self.last_activity_time = time.time()
+                
+                # Stop logging capture
+                if message_obj.logging_activated and processor_obj.capture_log:
+                    self.stop_log_capture()
+                if message_obj.capture_console:
+                    self.stop_stream_capture()
+                
+                return 'processed'
+                
+            except Exception as e:
+                # Record failed message
+                processing_duration = time.time() - start_time
+                self.metrics_collector.record_message_processed(
+                    queue_name, 
+                    processing_duration, 
+                    success=False
+                )
+                
+                # Log detailed error information
+                self.logger.error(f"Error processing message from queue {queue_name}: {e}", exc_info=True)
+                if hasattr(e, '__class__'):
+                    self.logger.error(f"Exception type: {e.__class__.__name__}")
+                
+                # Try to update message state to failed if possible
                 try:
-                    # Store and process message
-                    start_time = time.time()
-                    start_timestamp = datetime.datetime.now()
-                    message_obj = self.store_message(env, queue, message, start_timestamp)
-                    
-                    if message_obj:
-                        self.logger.info(f"Starting to process message - ID: {message_obj.id}, Name: '{message_obj.name}', Queue: {queue_name}")
-                    
-                    if not message_obj:
-                        self.logger.warning(f"Failed to store message from queue {queue_name}")
-                        return 'failed'
-                    
-                    # Update message attempt counter
-                    message_obj.write({"attempt": message_obj.attempt + 1})
-                    
-                    # Create processing object (used for logging in advanced configurations)
-                    _processing_obj = message_obj.create_processing_object(worker_type='sa-workerv3')
-                    
-                    # Update message visibility if needed
-                    self.change_message_visibility(env, queue, message_obj, message)
-                    
-                    # Flush and commit message storage
-                    message_obj.flush()
-                    cr.commit()
-                    
-                    # Set up logging BEFORE processing (critical timing fix)
-                    processor_obj = message_obj.processor_id
-                    if message_obj.logging_activated and processor_obj.capture_log:
-                        self.start_log_capture(
-                            env,
-                            message_obj,
-                            _processing_obj,
-                            log_level=processor_obj.log_level,
-                            log_format=processor_obj.log_format
-                        )
-                    
-                    # Set up console capture if configured
-                    if message_obj.capture_console:
-                        self.start_stream_capture(env, message_obj, _processing_obj)
-                    
-                    # Process the message (logging now captures execution)
-                    result = self.process_message(env, message_obj, message, {})
-                    processing_duration = time.time() - start_time
-                    
-                    # Update message with processing result (this is the missing piece!)
-                    end_timestamp = datetime.datetime.now()
-                    
-                    # Create a copy for message update to avoid modifying the original
-                    message_update = result.copy()
-                    message_update['end_time'] = end_timestamp
-                    message_update['end_time_microseconds'] = end_timestamp.microsecond
-                    
-                    # Write result back to message object to update state
-                    message_obj.write(message_update)
-                    
-                    # Also update the processing object if it exists
-                    if _processing_obj:
-                        # Remove planned_time from processing object update
-                        processing_result = message_update.copy()
-                        if 'planned_time' in processing_result:
-                            del processing_result['planned_time']
-                        _processing_obj.write(processing_result)
-                    
-                    # Flush and commit the state update
-                    message_obj.flush()
-                    cr.commit()
-                    
-                    # Record metrics
-                    success = result.get('state') == 'done'
-                    self.metrics_collector.record_message_processed(
-                        queue_name, 
-                        processing_duration, 
-                        success=success
-                    )
-                    
-                    # Log detailed message info
-                    self.logger.info(f"Processed message - ID: {message_obj.id}, Name: '{message_obj.name}', Queue: {queue_name}, State: {result.get('state')}")
-                    
-                    # Update tracking attributes for health checker
-                    self.last_message_time = time.time()
-                    self.last_activity_time = time.time()
-                    
-                    # Stop logging capture
-                    if message_obj.logging_activated and processor_obj.capture_log:
-                        self.stop_log_capture()
-                    if message_obj.capture_console:
-                        self.stop_stream_capture()
-                    
-                    return 'processed'
-                    
-                except Exception as e:
-                    # Record failed message
-                    processing_duration = time.time() - start_time
-                    self.metrics_collector.record_message_processed(
-                        queue_name, 
-                        processing_duration, 
-                        success=False
-                    )
-                    
-                    # Log detailed error information
-                    self.logger.error(f"Error processing message from queue {queue_name}: {e}", exc_info=True)
-                    if hasattr(e, '__class__'):
-                        self.logger.error(f"Exception type: {e.__class__.__name__}")
-                    
-                    # Try to update message state to failed if possible
-                    try:
-                        if 'message_obj' in locals() and message_obj:
-                            message_obj.write({
-                                'state': 'failed',
-                                'result': str(e),
-                                'end_time': datetime.datetime.now()
-                            })
-                            message_obj.flush()
-                            cr.commit()
-                            self.logger.info(f"Updated message {message_obj.id} state to failed")
-                    except Exception as e2:
-                        self.logger.error(f"Failed to update message state: {e2}")
-                    
-                    return 'failed'
-                finally:
-                    self.current_message = None
-                    # Always clean up logging
-                    try:
-                        self.stop_log_capture()
-                        self.stop_stream_capture()
-                    except:
-                        pass
+                    if 'message_obj' in locals() and message_obj:
+                        message_obj.write({
+                            'state': 'failed',
+                            'result': str(e),
+                            'end_time': datetime.datetime.now()
+                        })
+                        message_obj.flush_recordset()
+                        cr.commit()
+                        self.logger.info(f"Updated message {message_obj.id} state to failed")
+                except Exception as e2:
+                    self.logger.error(f"Failed to update message state: {e2}")
+                
+                return 'failed'
+            finally:
+                self.current_message = None
+                # Always clean up logging
+                try:
+                    self.stop_log_capture()
+                    self.stop_stream_capture()
+                except:
+                    pass
     
     def get_queue_depths(self):
         """Get queue depths for all monitored queues
@@ -732,28 +729,27 @@ class StandaloneWorker(BaseWorker):
         
         try:
             # Get registry and query queue depths
-            with api.Environment.manage():
-                registry = Registry(self.database)
-                with registry.cursor() as cr:
-                    env = api.Environment(cr, SUPERUSER_ID, {})
-                    
-                    # Query queue depths for all queues we're monitoring
-                    if hasattr(self, 'queues') and self.queues:
-                        for queue_info in self.queues:
-                            queue_id = queue_info['id']
-                            queue_name = queue_info['name']
-                            
-                            # SQL to count messages matching our queue depth definition
-                            sql = """
-                                SELECT COUNT(*)
-                                FROM imq_message
-                                WHERE queue_id = %s
-                                  AND state IN ('pending', 'retry')
-                                  AND (planned_time IS NULL OR planned_time <= NOW())
-                            """
-                            cr.execute(sql, (queue_id,))
-                            result = cr.fetchone()
-                            queue_depths[queue_name] = result[0] if result else 0
+            registry = Registry(self.database)
+            with registry.cursor() as cr:
+                env = api.Environment(cr, SUPERUSER_ID, {})
+                
+                # Query queue depths for all queues we're monitoring
+                if hasattr(self, 'queues') and self.queues:
+                    for queue_info in self.queues:
+                        queue_id = queue_info['id']
+                        queue_name = queue_info['name']
+                        
+                        # SQL to count messages matching our queue depth definition
+                        sql = """
+                            SELECT COUNT(*)
+                            FROM imq_message
+                            WHERE queue_id = %s
+                              AND state IN ('pending', 'retry')
+                              AND (planned_time IS NULL OR planned_time <= NOW())
+                        """
+                        cr.execute(sql, (queue_id,))
+                        result = cr.fetchone()
+                        queue_depths[queue_name] = result[0] if result else 0
                             
                     self.logger.debug(f"Queue depths: {queue_depths}")
                     
@@ -918,17 +914,16 @@ class MpyStringIO(StringIO):
             
             # Log to database (when console capture is enabled)
             try:
-                with api.Environment.manage():
-                    env = api.Environment(self._log_cr, self._uid, {})
-                    env['imq.message_processing_log'].sudo().create({
+                env = api.Environment(self._log_cr, self._uid, {})
+                env['imq.message_processing_log'].sudo().create({
                         'message_id': self._message_id,
                         'active_message_id': self._message_id,
                         'processing_id': self._processing_id,
                         'logger_name': "Console",
                         'log_level': None,
                         'log_message': full_output.rstrip('\n')
-                    })
-                    self._log_cr.commit()
+                })
+                self._log_cr.commit()
             except Exception as e:
                 _logger.exception("Failed to log console output: %s", e)
         else:
@@ -938,17 +933,16 @@ class MpyStringIO(StringIO):
         """Close and flush any remaining buffer"""
         if self._mpy_buffer:
             try:
-                with api.Environment.manage():
-                    env = api.Environment(self._log_cr, self._uid, {})
-                    env['imq.message_processing_log'].sudo().create({
+                env = api.Environment(self._log_cr, self._uid, {})
+                env['imq.message_processing_log'].sudo().create({
                         'message_id': self._message_id,
                         'active_message_id': self._message_id,
                         'processing_id': self._processing_id,
                         'logger_name': "Console",
                         'log_level': None,
                         'log_message': self._mpy_buffer
-                    })
-                    self._log_cr.commit()
+                })
+                self._log_cr.commit()
             except Exception as e:
                 _logger.exception("Failed to log final console output: %s", e)
         super().close()

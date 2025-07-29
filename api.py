@@ -175,34 +175,28 @@ def find_or_create_processor(caller_env:api.Environment, function_name, module_n
     """
     USER_IMQ_ID = caller_env.ref('inouk_message_queue.user_imq').id
     try:
-        # With v13 we are now longer able to use a new environment 
-        # as old one content is reset.
-        #with api.Environment.manage(), caller_env.registry.cursor() as cr:
-            #new_env = api.Environment(cr, USER_IMQ_ID, {})
-        #with caller_env.registry.cursor() as new_cr:
-                        
-            processor_model = caller_env['imq.message_processor']                    
-            processor_obj = processor_model.search([
-                ('type', '=', 'rpc'),
-                ('module', '=', module_name),
-                ('function', '=', function_name),
-            ])
+        processor_model = caller_env['imq.message_processor']                    
+        processor_obj = processor_model.search([
+            ('type', '=', 'rpc'),
+            ('module', '=', module_name),
+            ('function', '=', function_name),
+        ])
+        if not processor_obj:
+            processor_obj = processor_model.with_user(USER_IMQ_ID).create({
+                'type': 'rpc',
+                'module': module_name,
+                'function': function_name,
+                'is_method': is_method,
+                'logging_activated': logging_activated,
+                'force_visibility_timeout': processor_visibility_timeout > 0,
+                'visibility_timeout': processor_visibility_timeout
+            })
             if not processor_obj:
-                processor_obj = processor_model.with_user(USER_IMQ_ID).create({
-                    'type': 'rpc',
-                    'module': module_name,
-                    'function': function_name,
-                    'is_method': is_method,
-                    'logging_activated': logging_activated,
-                    'force_visibility_timeout': processor_visibility_timeout > 0,
-                    'visibility_timeout': processor_visibility_timeout
-                })
-                if not processor_obj:
-                    raise Exception("Failed to created imq.message_processor for "
-                                    "module=%s, function=%s" % (
-                                        module_name,
-                                        function_name
-                                    ))
+                raise Exception("Failed to created imq.message_processor for "
+                                "module=%s, function=%s" % (
+                                    module_name,
+                                    function_name
+                                ))
     except:
         _logger.error(
             "Failed to created imq.message_processor for module=%s, function=%s", 

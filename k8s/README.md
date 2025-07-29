@@ -268,7 +268,7 @@ curl http://imq-worker-production-metrics:8080/metrics
 ```bash
 # Update image
 kubectl set image deployment/imq-worker-production \
-  imq-worker=your-registry/muppy:v13.0.2 \
+  imq-worker=your-registry/muppy:v18.0.2 \
   -n muppy-workers
 
 # Check rollout status
@@ -322,7 +322,7 @@ EOF
 # Process specific message
 kubectl create job imq-debug-12345 \
   --from=cronjob/imq-worker-template \
-  -- imq-worker --database=muppy_prod --queue=default --message=12345
+  -- imq-worker --database $PGDATABASE --queue=default --message=12345
 ```
 
 ## 🚨 Troubleshooting
@@ -370,5 +370,5 @@ kubectl create job imq-debug-12345 \
 | IMQ Workers v3 | 1.0.0+ |
 | Kubernetes | 1.19+ |
 | Prometheus Operator | 0.50+ |
-| Odoo | 13.0+ |
+| Odoo | 18.0+ |
 | PostgreSQL | 10+ |

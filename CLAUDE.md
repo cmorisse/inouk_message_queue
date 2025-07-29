@@ -6,9 +6,9 @@ This file provides guidance to Claude Code when working specifically with the IM
 
 ### Always Check README.md First
 When working with IMQ tools, ALWAYS consult `README.md` in this directory before attempting to use tools:
-- **imqdump**: Detailed usage examples and syntax in README.md
-- **imqtest**: Test command usage and options  
-- **imqworker**: Worker command line options and patterns
+- **imq-ctl**: Detailed usage examples and syntax in README.md
+- **imq-test**: Test command usage and options  
+- **imq-worker**: Worker command line options and patterns
 
 ### Pattern Recognition
 - **Tools starting with `imq`**: Always check `README.md` for documented usage
@@ -17,9 +17,9 @@ When working with IMQ tools, ALWAYS consult `README.md` in this directory before
 
 ### Key IMQ Tools Documentation
 All IMQ command-line tools are documented with examples in `README.md`:
-- `imqdump`: kubectl-style inspection tool for messages, queues, processors
-- `imqtest`: Testing framework for message processing
-- `imqworker`: Standalone worker with observability features
+- `imq-ctl`: kubectl-style inspection tool for messages, queues, processors
+- `imq-test`: Testing framework for message processing
+- `imq-worker`: Standalone worker with observability features
 
 ## IMQ Architecture Overview
 
@@ -44,23 +44,23 @@ All IMQ command-line tools are documented with examples in `README.md`:
 ### Testing
 - Use `./run_tests.sh` to run the complete test suite
 - Tests are in `tests/` directory
-- Use `imqtest` for creating test messages
+- Use `imq-test` for creating test messages
 
 ### Debugging
-- Use `imqdump` to inspect messages, queues, processors, and logs
+- Use `imq-ctl` to inspect messages, queues, processors, and logs
 - Monitor workers via observability endpoints
-- Check processing logs with `imqdump --logs`
+- Check processing logs with `imq-ctl logs`
 
 ### Common Operations
 ```bash
 # Inspect a message
-bin/start_odoo imqdump --database $PGDATABASE --message MESSAGE_ID
+bin/start_odoo imq-ctl --database $PGDATABASE describe message MESSAGE_ID
 
 # Check queue status
-bin/start_odoo imqdump --database $PGDATABASE --queue QUEUE_NAME  
+bin/start_odoo imq-ctl --database $PGDATABASE describe queue QUEUE_NAME  
 
 # Run worker with observability
-bin/start_odoo imqworker --database $PGDATABASE --queue PATTERN --observability-port 8080
+bin/start_odoo imq-worker --database $PGDATABASE --queue PATTERN --observability-port 8080
 
 # Check worker status
 curl http://localhost:8080/status | python3 -m json.tool

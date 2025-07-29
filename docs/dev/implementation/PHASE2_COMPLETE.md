@@ -53,7 +53,7 @@ Phase 2 of the IMQ Workers v3 implementation focused on advanced queue processin
 
 ### Pattern Matching Test
 ```bash
-bin/start_odoo imqworker --database $PGDATABASE --queue "*" --max-messages 2
+bin/start_odoo imq-worker --database $PGDATABASE --queue "*" --max-messages 2
 ```
 
 **Results:**

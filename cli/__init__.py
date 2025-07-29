@@ -2,7 +2,7 @@
 try:
     from .imq_worker import IMQWorker
     from .imq_test import IMQTest
-    from .imq_dump import IMQDump
+    from .imq_ctl import IMQCtl
 except ImportError as e:
     # Log import errors but don't fail module loading
     import logging

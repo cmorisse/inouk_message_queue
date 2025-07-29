@@ -11,7 +11,7 @@
 1. **Minimal Implementation**: Basic `imq_worker_queue_depth{queue="name"}` Gauge metric
 2. **Performance**: Caching/throttling with 30s default refresh period via CLI parameter
 3. **Documentation**: Critical (/metrics, /status) + Enhanced (Kubernetes examples) 
-4. **Testing**: Automated tests using `imqtest` and `imqdump`
+4. **Testing**: Automated tests using `imq-test` and `imq-ctl`
 5. **Scope**: Additive only, no backward compatibility concerns
 
 ## Implementation Steps
@@ -24,7 +24,7 @@
 - [x] Create step-by-step implementation plan
 
 ### ✅ STEP 1: Add Command Line Parameter
-**Goal**: Extend `imqworker` CLI with `--queue-depth-caching-period-s` parameter
+**Goal**: Extend `imq-worker` CLI with `--queue-depth-caching-period-s` parameter
 
 **Files to Modify**:
 - `cli/imq_worker.py` - Add argument parser option
@@ -40,8 +40,8 @@
 **Validation Commands**:
 ```bash
 # Test parameter acceptance
-bin/start_odoo imqworker --help | grep queue-depth-caching
-bin/start_odoo imqworker --database $PGDATABASE --queue default --queue-depth-caching-period-s 60 --max-messages 1
+bin/start_odoo imq-worker --help | grep queue-depth-caching
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --queue-depth-caching-period-s 60 --max-messages 1
 ```
 
 **Expected Result**: 
@@ -83,8 +83,8 @@ self.queue_depth_cache_period = cache_period_seconds
 **Validation Commands**:
 ```bash
 # Create test messages and verify caching behavior
-bin/start_odoo imqtest --database $PGDATABASE --simple --queue default --count 3
-bin/start_odoo imqworker --database $PGDATABASE --queue default --observability-port 8080 --max-messages 0 &
+bin/start_odoo imq-test --database $PGDATABASE --simple --queue default --count 3
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --observability-port 8080 --max-messages 0 &
 sleep 5
 curl -s http://localhost:8080/metrics | grep imq_worker_queue_depth
 # Process messages and verify depth decreases
@@ -127,8 +127,8 @@ kill %1
 **Validation Commands**:
 ```bash
 # Verify documentation accuracy against actual output
-bin/start_odoo imqtest --database $PGDATABASE --simple --queue default --count 5
-bin/start_odoo imqworker --database $PGDATABASE --queue default --observability-port 8080 --max-messages 0 &
+bin/start_odoo imq-test --database $PGDATABASE --simple --queue default --count 5
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --observability-port 8080 --max-messages 0 &
 curl -s http://localhost:8080/status | jq '.status.queues[].depth'
 curl -s http://localhost:8080/metrics | grep imq_worker_queue_depth
 # Compare with documented examples
@@ -192,7 +192,7 @@ kubectl explain horizontalpodautoscaler.spec.metrics --recursive | grep -A5 pods
 ---
 
 ### ✅ STEP 5: Comprehensive Testing Framework
-**Goal**: Create automated tests using imqtest and imqdump for queue depth functionality
+**Goal**: Create automated tests using imq-test and imq-ctl for queue depth functionality
 
 **Files Created**:
 - `tests/test_queue_depth_metrics.sh` - Complete integration test script with 7 tests
@@ -207,9 +207,9 @@ kubectl explain horizontalpodautoscaler.spec.metrics --recursive | grep -A5 pods
 - [x] Test status endpoint shows depth information
 - [x] Test metrics structure validation (help text, type, labels)
 - [x] Test parameter validation (accepts valid values, rejects invalid)
-- [x] Test imqdump integration for queue inspection
+- [x] Test imq-ctl integration for queue inspection
 - [x] Add imq-debug queue with comprehensive warnings for test-only usage
-- [x] Add `--reset-queue` command to imqtest for reliable queue cleanup
+- [x] Add `--reset-queue` command to imq-test for reliable queue cleanup
 
 **Test Script Structure**:
 ```bash
@@ -265,7 +265,7 @@ echo "✅ All queue depth metrics tests passed!"
 - [x] Tests demonstrate correct caching behavior (validated via cache period testing)
 - [x] Tests verify no performance regression (caching reduces database queries)
 - [x] Test output is clear and actionable (colored output with progress tracking)
-- [x] Reliable test isolation via imqtest --reset-queue command
+- [x] Reliable test isolation via imq-test --reset-queue command
 
 ---
 
@@ -283,8 +283,8 @@ echo "✅ All queue depth metrics tests passed!"
 **Validation Commands**:
 ```bash
 # Full integration test
-bin/start_odoo imqtest --database $PGDATABASE --rpc-method --queue production --count 50 --duration 2
-bin/start_odoo imqworker --database $PGDATABASE --queue "production.*" --observability-port 8080 &
+bin/start_odoo imq-test --database $PGDATABASE --rpc-method --queue production --count 50 --duration 2
+bin/start_odoo imq-worker --database $PGDATABASE --queue "production.*" --observability-port 8080 &
 # Monitor depth changes over time
 watch -n 5 "curl -s http://localhost:8080/metrics | grep imq_worker_queue_depth"
 ```
@@ -321,7 +321,7 @@ Each step must meet these criteria before proceeding:
 - Error handling for database connection issues
 
 ### Testing Strategy
-- Use existing IMQ testing tools (`imqtest`, `imqdump`)
+- Use existing IMQ testing tools (`imq-test`, `imq-ctl`)
 - Focus on integration testing over unit testing
 - Validate caching behavior explicitly
 - Test multiple queue scenarios

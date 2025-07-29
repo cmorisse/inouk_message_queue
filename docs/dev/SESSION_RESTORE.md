@@ -117,9 +117,9 @@ This document contains all information needed to restore and continue working on
 ## Testing Status
 
 ### ✅ Successful Tests
-1. **Single queue processing**: `bin/start_odoo imqworker --database $PGDATABASE --queue default --max-messages 1`
-2. **Multiple queue processing**: `bin/start_odoo imqworker --database $PGDATABASE --queue "*" --max-messages 2`
-3. **Empty queue handling**: `timeout 30s bin/start_odoo imqworker --database $PGDATABASE --queue health_check --max-messages 100`
+1. **Single queue processing**: `bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-messages 1`
+2. **Multiple queue processing**: `bin/start_odoo imq-worker --database $PGDATABASE --queue "*" --max-messages 2`
+3. **Empty queue handling**: `timeout 30s bin/start_odoo imq-worker --database $PGDATABASE --queue health_check --max-messages 100`
 4. **Integration tests**: All 7 tests passing
 
 ### Current Test Results
@@ -139,16 +139,16 @@ This document contains all information needed to restore and continue working on
 ### CLI Usage
 ```bash
 # Basic usage
-bin/start_odoo imqworker --database $PGDATABASE --queue default --max-messages 100
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-messages 100
 
 # Multiple queues with wildcard
-bin/start_odoo imqworker --database $PGDATABASE --queue "*" --max-messages 100
+bin/start_odoo imq-worker --database $PGDATABASE --queue "*" --max-messages 100
 
 # With memory limits
-bin/start_odoo imqworker --database $PGDATABASE --queue default --max-rss-memory 512M
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-rss-memory 512M
 
 # With observability
-bin/start_odoo imqworker --database $PGDATABASE --queue default --observability-port 8080
+bin/start_odoo imq-worker --database $PGDATABASE --queue default --observability-port 8080
 ```
 
 ## Development Environment
@@ -250,7 +250,7 @@ message_obj.write(result)  # This was the missing piece!
 
 ## Context for Claude
 - **Project**: IMQ Workers v3 - Standalone CLI workers for Odoo message queue processing
-- **Technology**: Python, Odoo 13, PostgreSQL, Docker, Kubernetes
+- **Technology**: Python, Odoo 18, PostgreSQL, Docker, Kubernetes
 - **Purpose**: Replace ir.cron-based workers with standalone processes for better scalability
 - **Status**: Phase 2 complete, ready for Phase 3 observability integration
 

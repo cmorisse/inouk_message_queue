@@ -13,9 +13,17 @@ def test_worker_utils():
     """Test worker utility functions"""
     print("Testing worker utilities...")
     
-    # Import directly from file (go up one directory from tests/)
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'utils'))
-    import worker_utils
+    try:
+        # Add parent directory to path
+        parent_dir = os.path.dirname(os.path.dirname(__file__))
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+        
+        # Import from worker_utils directory
+        from worker_utils import worker_utils
+    except ImportError as e:
+        print(f"  ✗ Failed to import worker_utils: {e}")
+        return False
     
     # Test memory limit parsing
     tests = [
@@ -73,8 +81,10 @@ def test_memory_monitoring():
         print(f"  ✓ Current VMS: {memory_info.vms / (1024 * 1024):.1f} MB")
         
         # Test memory limit parsing
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'utils'))
-        import worker_utils
+        parent_dir = os.path.dirname(os.path.dirname(__file__))
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+        from worker_utils import worker_utils
         
         limit_512m = worker_utils.parse_memory_limit('512M')
         limit_1g = worker_utils.parse_memory_limit('1G')
@@ -189,7 +199,7 @@ def test_directory_structure():
     required_dirs = [
         'cli',
         'workers', 
-        'utils'
+        'worker_utils'
     ]
     
     for dir_name in required_dirs:
@@ -208,8 +218,8 @@ def test_directory_structure():
         'workers/base.py',
         'workers/standalone.py',
         'workers/monitoring.py',
-        'utils/__init__.py',
-        'utils/worker_utils.py'
+        'worker_utils/__init__.py',
+        'worker_utils/worker_utils.py'
     ]
     
     for file_path in required_files:

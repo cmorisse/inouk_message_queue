@@ -192,7 +192,7 @@ class BaseWorker:
                         )(*payload['args'], **payload['kwargs'])
                         
                         # Flush and commit
-                        payload['self'].flush()
+                        payload['self'].flush_recordset()
                         run_cursor.commit()
                     else:
                         # Execute function
@@ -201,7 +201,7 @@ class BaseWorker:
                             msg_processor_obj.module, 
                             package=None
                         )
-                        message_obj.flush()
+                        message_obj.flush_recordset()
                         returned_value = getattr(
                             function_module, 
                             msg_processor_obj.function
@@ -210,7 +210,7 @@ class BaseWorker:
                         # Flush and commit
                         orm_object = extract_orm_object(payload['args'])
                         if orm_object:
-                            orm_object.flush()
+                            orm_object.flush_recordset()
                         run_cursor.commit()
 
                 else:  # message_type == 'simple'
@@ -233,7 +233,7 @@ class BaseWorker:
                         if message_obj.capture_console:
                             kwargs['_imq_stream'] = getattr(TLS, '_imq_stream', None)
                         
-                        message_obj.flush()
+                        message_obj.flush_recordset()
                         returned_value = getattr(
                             function_module, 
                             msg_processor_obj.function

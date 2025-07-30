@@ -162,10 +162,8 @@ class IMQWorker(models.AbstractModel):
                     )(*payload['args'], **payload['kwargs'])
 
                     # Purge
-                    #payload['self'].flush_all()
                     run_env.flush_all()
                     run_cursor.commit()
-                    #payload['self'].invalidate_cache()
 
                 else:
                     _logger.debug("Executing 'function'.")                    
@@ -494,8 +492,6 @@ class IMQWorker(models.AbstractModel):
             })
             processing_obj = message_obj.create_processing_object()
             self.change_message_visibility(queue_obj, message_obj, _message)
-            #message_obj.flush()
-            #self.env.flush_all()
             message_obj.flush_recordset()
             self.env.cr.commit() 
 

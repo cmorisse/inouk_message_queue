@@ -9,6 +9,6 @@
 "access_imq_message_processing_usr","IMQ - Message Processing for user","inouk_message_queue.model_imq_message_processing","inouk_message_queue.group_user",False,True,False,False
 "access_imq_worker_adm","IMQ - Worker for admin","inouk_message_queue.model_imq_worker","inouk_message_queue.group_admin","True","True","True","True"
 "access_imq_worker_usr","IMQ - Worker for user","inouk_message_queue.model_imq_worker","inouk_message_queue.group_user","False","True","False","False"
-"access_imq_test_launcher_adm","IMQ - Test Launcher for admin","inouk_message_queue.model_imq_test_launcher","","True","True","True","True"
+"access_imq_test_launcher_adm","IMQ - Test Launcher for admin","inouk_message_queue.model_imq_test_launcher","inouk_message_queue.group_admin","True","True","True","True"
 "access_imq_message_processing_log_adm","IMQ - Message Processing Log for Admin","inouk_message_queue.model_imq_message_processing_log",inouk_message_queue.group_admin,True,True,True,True
 "access_imq_message_processing_log_usr","IMQ - Message Processing Log for User","inouk_message_queue.model_imq_message_processing_log",inouk_message_queue.group_user,False,True,False,False

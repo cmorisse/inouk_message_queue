@@ -141,15 +141,17 @@ class IMQQueue(models.Model):
 
     def get_form_url(self):
         self.ensure_one()
-        web_base_url = self.env['ir.config_parameter'].get_param('web.base.url')
-        action_dict = self.get_formview_action()
-        action_dict['action_id'] = self.get_default_action().id
-        action_dict['web_base_url'] = web_base_url
+        web_base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        action_id = self.get_default_action().id
         # target:
-        # https://xsid-dev.inouk.ovh/web?debug#id=1&action=257&model=imq.test_launcher&view_type=form&menu_id=140
-        url_str = "{web_base_url}/web#id={res_id}&action={action_id}&model="\
-                  "{res_model}&view_type={view_type}".format(**action_dict)
-        _logger.debug("URL for %s = > %q", self, url_str)
+        # https://xsid-dev.inouk.ovh/odoo#id=1&action=257&model=imq.message&view_type=form
+        url_str = "{web_base_url}/odoo#id={res_id}&action={action_id}&model={res_model}&view_type=form".format(
+            web_base_url=web_base_url,
+            res_id=self.id,
+            action_id=action_id,
+            res_model=self._name
+        )
+        _logger.debug("get_form_url(%s) => %s", self,  url_str)
         return url_str
 
     @api.model

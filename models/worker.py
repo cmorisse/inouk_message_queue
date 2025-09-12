@@ -603,7 +603,7 @@ class IMQWorker(models.AbstractModel):
         :return: nothing
         """
         TLS.log_cursor = self.env.registry.cursor()
-        TLS.log_cursor.autocommit(True)
+        TLS.log_cursor.connection.autocommit = True
         TLS._imq_stream = MpyStringIO(
             message_obj.id, 
             processing_obj.id, 

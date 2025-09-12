@@ -822,7 +822,7 @@ class StandaloneWorker(BaseWorker):
             processing_obj: The processing object
         """
         TLS.log_cursor = env.registry.cursor()
-        TLS.log_cursor.autocommit(True)
+        TLS.log_cursor.connection.autocommit = True
         TLS._imq_stream = MpyStringIO(
             message_obj.id, 
             processing_obj.id, 

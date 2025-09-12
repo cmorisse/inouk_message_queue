@@ -119,7 +119,7 @@ class IMQQueue(models.Model):
 
     def _compute_admin_secret(self):
         for record in self:
-            if self.user_has_groups('inouk_message_queue.group_admin'):
+            if self.env.user.has_groups('inouk_message_queue.group_admin'):
                 record.admin_secret = self.secret
             else:
                 record.admin_secret = None

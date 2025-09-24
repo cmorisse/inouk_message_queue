@@ -7,7 +7,7 @@ import sys
 
 from odoo import models, fields, api
 from odoo.exceptions import UserError, MissingError
-from odoo.models import NewId
+from odoo.orm.identifiers import NewId
 from odoo.tools.translate import _
 from odoo.tools.safe_eval import safe_eval
 

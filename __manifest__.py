@@ -32,6 +32,6 @@
     'auto_install': False,
     'installable': True,
     'external_dependencies': {
-        'python': ['psutil', 'prometheus_client'],
+        'python': ['psutil', 'prometheus_client', 'passlib', 'jsonpickle', 'pyyaml'],
     }
 }

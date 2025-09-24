@@ -12,7 +12,7 @@
                     <filter name="filter_state_failed" string="Failed" domain="[('state','=', 'failed')]" help="Show only 'Failed' processings." />
                     <separator />
 
-                    <group string="Group by...">
+                    <group>
                         <filter name="group_by_queue_id"
                                 string="Queue"
                                 domain="[]"

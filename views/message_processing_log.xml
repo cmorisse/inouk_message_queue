@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<openerp>
+<odoo>
     <data>
         
         <record id="imq_message_processing_log__search_view" model="ir.ui.view">
@@ -16,7 +16,7 @@
 
                     <filter name="filter_logs" string="Logs Only" domain="[('log_level','!=', False)]" />
 
-                    <group string="Group by...">
+                    <group>
                         <filter name="group_by_message_id" string="Message" domain="[]" context="{'group_by': 'message_id'}" help="Group logs by Message" />
                         <filter name="group_by_processing_id" string="Execution" domain="[]" context="{'group_by': 'processing_id'}" help="Group logs by Processing" />
                         <filter name="group_by_logger_name" string="Logger name" domain="[]" context="{'group_by': 'logger_name'}" help="Group logs by Logger name" />
@@ -90,4 +90,4 @@
         </record>
     </data>
 
-</openerp>
+</odoo>

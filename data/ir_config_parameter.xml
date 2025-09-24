@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<openerp>
+<odoo>
     <data noupdate="1">
         <record id="icp__imq_stop_cron_workers_template" model="ir.config_parameter">
             <field name="key">imq.STOP_CRON_WORKERS_disabled</field>
@@ -27,4 +27,4 @@
             <field name="value">https://socb-imq.inouk.workers.dev/</field>
         </record>
     </data>
-</openerp>
+</odoo>

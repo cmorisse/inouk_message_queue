@@ -168,7 +168,7 @@
             <field name="model">imq.queue</field>
             <field name="priority" eval="15" />
             <field name="arch" type="xml">
-                <search>
+                <search string="Search queues">
                     <field name="name" />
                     <field name="provider" />
                     <field name="sqs_name" />
@@ -176,7 +176,7 @@
                     <field name="id" />
                     <separator />
                     <filter string="All" name="all" domain="['|', ('active', '=', False), ('active', '=', True)]" />
-                    <group expand="0" string="Group By">
+                    <group>
                         <filter string="Provider" name="provider" domain="[]" context="{'group_by':'provider'}" />
                     </group>
                     

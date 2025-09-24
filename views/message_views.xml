@@ -23,7 +23,7 @@
                     <separator />
                     <filter string="Retried" name="filter_retried" domain="[ ('attempt', '&gt;', 1) ]" />
 
-                    <group string="Group by...">
+                    <group>
                         <filter name="group_by_state" string="State" context="{'group_by': 'state'}" help="Group messages by state" />
                         <filter name="group_by_queue" string="Queue" context="{'group_by': 'queue_id'}" help="Group messages by Queue" />
                         <filter name="group_by_group" string="Group" context="{'group_by': 'group'}" help="Group messages by Group" />

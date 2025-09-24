@@ -6,7 +6,6 @@ import odoo
 from odoo.exceptions import UserError
 from odoo.tools.safe_eval import safe_eval
 from odoo import api, fields, models, tools, SUPERUSER_ID, _
-from odoo.modules import get_module_resource
 
 from odoo.addons.inouk_message_queue.api import (
     processor,

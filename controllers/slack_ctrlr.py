@@ -32,7 +32,7 @@ class IMQSlackControllerV2(Controller):
             return base_url_root
         raise Exception("Missing 'web.base_url' system parameter.")
 
-    @route('/imq/v1/socb/<string:queue_name>', methods=['POST'], type='json', auth='none', csrf=False, save_session=False)
+    @route('/imq/v1/socb/<string:queue_name>', methods=['POST'], type='jsonrpc', auth='none', csrf=False, save_session=False)
     def slack_oauth_callback(self, queue_name=None):
         """ Called by CF Worker once User has accepted to install app in a channel and CFW 
         has called Slack oauth_access.

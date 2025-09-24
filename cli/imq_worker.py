@@ -9,14 +9,14 @@ from odoo.cli import Command
 _logger = logging.getLogger(__name__)
 
 
-class IMQWorker(Command):
+class ImqWorker(Command):
     """Run IMQ worker to process messages from queues"""
-    name = 'imq-worker'
+    name = 'imq_worker'
     
     def run(self, args):
         """Main entry point for the CLI command"""
         parser = argparse.ArgumentParser(
-            prog=f'{sys.argv[0]} imq-worker',
+            prog=f'{sys.argv[0]} imq_worker',
             description='Run standalone IMQ worker for processing message queues'
         )
         

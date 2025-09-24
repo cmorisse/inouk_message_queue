@@ -13,14 +13,14 @@ from odoo.modules.registry import Registry
 _logger = logging.getLogger(__name__)
 
 
-class IMQTest(Command):
+class ImqTest(Command):
     """Create test messages for IMQ worker testing"""
-    name = 'imq-test'
+    name = 'imq_test'
     
     def run(self, args):
         """Main entry point for the CLI command"""
         parser = argparse.ArgumentParser(
-            prog=f'{sys.argv[0]} imq-test',
+            prog=f'{sys.argv[0]} imq_test',
             description='Create test messages for IMQ worker testing'
         )
         
@@ -467,9 +467,5 @@ class IMQTest(Command):
             print(f"Successfully created {len(created_messages)} FIFO test sequence(s) in queue '{args.queue}'")
             for msg in created_messages:
                 print(f"  - Test: '{msg['name']}', Group: '{msg['message_group']}', Steps: {msg['steps']}")
-                
+
         return 0
-
-
-# Register the command
-imq_test = IMQTest()

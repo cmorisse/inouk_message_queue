@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<openerp>
+<odoo>
     <data noupdate="1">
         <record id="imq_queue__default" model="imq.queue">
             <field name="name">default</field>
@@ -37,4 +37,4 @@ Technical specifications:
 - Automatically managed by test frameworks</field>
         </record>
     </data>
-</openerp>
+</odoo>

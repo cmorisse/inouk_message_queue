@@ -14,14 +14,14 @@ from odoo.modules.registry import Registry
 _logger = logging.getLogger(__name__)
 
 
-class IMQCtl(Command):
+class ImqCtl(Command):
     """IMQ Control - Kubernetes-style resource management for IMQ"""
-    name = 'imq-ctl'
+    name = 'imq_ctl'
     
     def run(self, args):
         """Main entry point for the CLI command"""
         parser = argparse.ArgumentParser(
-            prog=f'{sys.argv[0]} imq-ctl',
+            prog=f'{sys.argv[0]} imq_ctl',
             description='IMQ Control - Manage IMQ resources (queues, messages, processors)',
             formatter_class=argparse.RawDescriptionHelpFormatter,
             epilog="""
@@ -512,28 +512,35 @@ Examples:
             processor = env['imq.message_processor'].search([('id', '=', int(args.resource_name))], limit=1)
         else:
             processor = env['imq.message_processor'].search([('selector', '=', args.resource_name)], limit=1)
-        
+
         if not processor:
             print(f"Error: Processor '{args.resource_name}' not found", file=sys.stderr)
             return 1
-        
-        # Use existing imq-dump functionality
-        from .imq_dump import IMQDump
-        dump_tool = IMQDump()
-        
-        class FakeArgs:
-            def __init__(self):
-                self.processor = str(processor.id)
-                self.output = args.output
-        
-        fake_args = FakeArgs()
-        result = dump_tool._dump_processor(env, fake_args)
-        
+
+        # Build processor info directly
+        processor_info = {
+            'apiVersion': 'imq/v1',
+            'kind': 'Processor',
+            'metadata': {
+                'id': processor.id,
+                'name': processor.name,
+                'createdAt': self._format_datetime(processor.create_date),
+                'updatedAt': self._format_datetime(processor.write_date)
+            },
+            'spec': {
+                'selector': processor.selector,
+                'function': processor.function,
+                'module': processor.module,
+                'isMethod': processor.is_method,
+                'active': processor.active if hasattr(processor, 'active') else True
+            }
+        }
+
         if args.output == 'yaml':
-            print(yaml.dump(result, default_flow_style=False, indent=2))
+            print(yaml.dump(processor_info, default_flow_style=False, indent=2))
         elif args.output == 'json':
-            print(json.dumps(result, indent=2, default=str))
-        
+            print(json.dumps(processor_info, indent=2, default=str))
+
         return 0
     
     def _get_processing(self, env, args):
@@ -560,30 +567,58 @@ Examples:
         if not args.resource_name.isdigit():
             print("Error: Processing ID must be numeric", file=sys.stderr)
             return 1
-        
+
         processing = env['imq.message_processing'].search([('id', '=', int(args.resource_name))], limit=1)
         if not processing:
             print(f"Error: Processing '{args.resource_name}' not found", file=sys.stderr)
             return 1
-        
-        # Use existing imq-dump functionality
-        from .imq_dump import IMQDump
-        dump_tool = IMQDump()
-        
-        class FakeArgs:
-            def __init__(self):
-                self.processing = args.resource_name
-                self.include_logs = True
-                self.output = args.output
-        
-        fake_args = FakeArgs()
-        result = dump_tool._dump_processing(env, fake_args)
-        
+
+        # Build processing info directly
+        processing_info = {
+            'apiVersion': 'imq/v1',
+            'kind': 'Processing',
+            'metadata': {
+                'id': processing.id,
+                'createdAt': self._format_datetime(processing.create_date),
+                'updatedAt': self._format_datetime(processing.write_date)
+            },
+            'spec': {
+                'message': {
+                    'id': processing.message_id.id,
+                    'name': processing.message_id.name
+                },
+                'workerType': processing.worker_type,
+                'attempt': processing.attempt
+            },
+            'status': {
+                'state': processing.state,
+                'startTime': self._format_datetime(processing.start_time),
+                'endTime': self._format_datetime(processing.end_time),
+                'result': processing.result
+            }
+        }
+
+        # Add logs if requested
+        if hasattr(args, 'include_logs') and args.include_logs:
+            logs = env['imq.message_processing_log'].search([
+                ('processing_id', '=', processing.id)
+            ], order='create_date asc')
+
+            processing_info['logs'] = []
+            for log in logs:
+                processing_info['logs'].append({
+                    'id': log.id,
+                    'loggerName': log.logger_name,
+                    'logLevel': log.log_level,
+                    'message': log.log_message,
+                    'createdAt': self._format_datetime(log.create_date)
+                })
+
         if args.output == 'yaml':
-            print(yaml.dump(result, default_flow_style=False, indent=2))
+            print(yaml.dump(processing_info, default_flow_style=False, indent=2))
         elif args.output == 'json':
-            print(json.dumps(result, indent=2, default=str))
-        
+            print(json.dumps(processing_info, indent=2, default=str))
+
         return 0
     
     # Table formatting methods
@@ -1060,7 +1095,3 @@ Examples:
         
         self._write_output(output_content, args)
         return 0
-
-
-# Register the command
-imq_ctl = IMQCtl()

@@ -1,9 +1,2 @@
 # CLI commands for IMQ Workers v3
-try:
-    from .imq_worker import IMQWorker
-    from .imq_test import IMQTest
-    from .imq_ctl import IMQCtl
-except ImportError as e:
-    # Log import errors but don't fail module loading
-    import logging
-    logging.getLogger(__name__).warning(f"Failed to import CLI components: {e}")
+# Note: In Odoo 19, CLI commands are auto-discovered, no need to import them here

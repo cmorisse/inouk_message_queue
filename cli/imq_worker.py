@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import os
 import sys
 import logging
 from odoo.cli import Command
@@ -21,8 +22,8 @@ class IMQWorker(Command):
         )
         
         # Required arguments
-        parser.add_argument('--database', '-d', required=True,
-                          help='Database name to connect to')
+        parser.add_argument('--database', '-d', required=False,
+                          help='Database name to connect to. Default to $PGDATABASE')
         parser.add_argument('--queue', '-q', required=True, 
                           help='Queue name or regex pattern (e.g., default, mpy.*)')
         
@@ -59,6 +60,15 @@ class IMQWorker(Command):
             return e.code
         
         # Validate arguments
+        if parsed_args.database:
+            database_name = parsed_args.database
+        else:
+            database_name = os.environ.get('PGDATABASE')
+
+        if not database_name:
+            print("Error: --database not set and $PGDATABASE is not defined.", file=sys.stderr)
+            return 1
+
         if parsed_args.max_messages < 0:
             print("Error: --max-messages must be >= 0", file=sys.stderr)
             return 1
@@ -97,7 +107,7 @@ class IMQWorker(Command):
             
             # Create worker instance
             worker = StandaloneWorker(
-                database=parsed_args.database,
+                database=database_name,
                 queue_pattern=parsed_args.queue,
                 max_messages=parsed_args.max_messages,
                 max_rss_memory=parsed_args.max_rss_memory,

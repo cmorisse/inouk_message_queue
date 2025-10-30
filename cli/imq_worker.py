@@ -66,7 +66,7 @@ class IMQWorker(Command):
             database_name = os.environ.get('PGDATABASE')
 
         if not database_name:
-            print("Error: --database not set and $PGDATABASE is not defiled.", file=sys.stderr)
+            print("Error: --database not set and $PGDATABASE is not defined.", file=sys.stderr)
             return 1
 
         if parsed_args.max_messages < 0:

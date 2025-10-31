@@ -15,6 +15,7 @@ import socket
 
 from dateutil.relativedelta import relativedelta
 import psycopg2
+import psycopg2.errors
 import time
 import boto3
 
@@ -120,43 +121,60 @@ class IMQWorkerSQS(models.AbstractModel):
         _db_cnx = odoo.sql_db.db_connect(self.env.cr.dbname)
         with _db_cnx.cursor() as cr:
             cr.autocommit = True
-            if queue_obj.q_type == 'std':
-                sql_params = (
-                    queue_obj.id,                    # queue_id
-                    target_message_id,               # message filter check (NULL or value)
-                    msg_id_param,                    # numeric ID match
-                    target_message_id                # MessageId UUID match
-                )
-                _logger.debug("Executing SQL query with params: %s", sql_params)
-                
-                self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_std, sql_params)
-                _row = self.env.cr.fetchone()
-                cr.commit()
-                _msg_id = _row and _row[0] or None
-                
-                _logger.debug("SQL result: _row=%s, _msg_id=%s", _row, _msg_id)
+            try:
+                if queue_obj.q_type == 'std':
+                    sql_params = (
+                        queue_obj.id,                    # queue_id
+                        target_message_id,               # message filter check (NULL or value)
+                        msg_id_param,                    # numeric ID match
+                        target_message_id                # MessageId UUID match
+                    )
+                    _logger.debug("Executing SQL query with params: %s", sql_params)
 
-            elif queue_obj.q_type == 'fifo':
-                sql_params = (
-                    queue_obj.id,                    # queue_id
-                    target_message_id,               # message filter check (NULL or value)
-                    msg_id_param,                    # numeric ID match
-                    target_message_id                # MessageId UUID match
-                )
-                _logger.debug("Polling FIFO queue '%s' for message: %s with params: %s", 
-                             queue_obj.id, target_message_id, sql_params)
-                
-                self.env.cr.execute(PGSQL_GET_MESSAGE_SQL_fifo, sql_params)
-                _row = self.env.cr.fetchone()
-                cr.commit()
-                _msg_id = _row and _row[0] or None
-                
-                _logger.debug("FIFO result: _row=%s, _msg_id=%s", _row, _msg_id)
-            else:
-                raise Exception("Unsupported Queue type:'%s' for get_message__pgsql()" % queue_obj.q_type)
+                    cr.execute(PGSQL_GET_MESSAGE_SQL_std, sql_params)
+                    _row = cr.fetchone()
+                    cr.commit()
+                    _msg_id = _row and _row[0] or None
+
+                    _logger.debug("SQL result: _row=%s, _msg_id=%s", _row, _msg_id)
+
+                elif queue_obj.q_type == 'fifo':
+                    sql_params = (
+                        queue_obj.id,                    # queue_id
+                        target_message_id,               # message filter check (NULL or value)
+                        msg_id_param,                    # numeric ID match
+                        target_message_id                # MessageId UUID match
+                    )
+                    _logger.debug("Polling FIFO queue '%s' for message: %s with params: %s",
+                                 queue_obj.id, target_message_id, sql_params)
+
+                    cr.execute(PGSQL_GET_MESSAGE_SQL_fifo, sql_params)
+                    _row = cr.fetchone()
+                    cr.commit()
+                    _msg_id = _row and _row[0] or None
+
+                    _logger.debug("FIFO result: _row=%s, _msg_id=%s", _row, _msg_id)
+                else:
+                    raise Exception("Unsupported Queue type:'%s' for get_message__pgsql()" % queue_obj.q_type)
+
+            except psycopg2.errors.SerializationFailure:
+                _logger.info("Another worker was speedier to catch the next message from queue %s, will try again at next polling interval", queue_obj.name)
+                return None
 
         if _msg_id:
-            return self.env['imq.message'].browse(_msg_id)
+            message_obj = self.env['imq.message'].browse(_msg_id)
+            
+            # NEW: Commit the main transaction to synchronize
+            # with changes made by the autocommit transaction
+            self.env.cr.commit()
+            
+            # Now the message has been modified AND committed to database
+            # The main transaction restarts cleanly with up-to-date data
+            
+            # Optional: Force a re-read to be sure
+            # message_obj.read()    
+            return message_obj            
+        
         return None
 
     def store_message__pgsql(self, queue_obj, message, start_timestamp=None):
@@ -171,7 +189,7 @@ class IMQWorkerSQS(models.AbstractModel):
         processor_obj = self.env['imq.message_processor'].upsert_processor_from_message(body)
     
         message_values_dict = {
-            'state': 'wip',
+            # 'state': 'wip',  # already set by GET_MESSAGE_QUERY
             'start_time': start_timestamp,
             'start_time_microseconds': start_timestamp and start_timestamp.microsecond,
         }

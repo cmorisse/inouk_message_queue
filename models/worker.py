@@ -603,7 +603,6 @@ class IMQWorker(models.AbstractModel):
         :return: nothing
         """
         TLS.log_cursor = self.env.registry.cursor()
-        TLS.log_cursor.autocommit(True)
         TLS._imq_stream = MpyStringIO(
             message_obj.id, 
             processing_obj.id, 
@@ -707,6 +706,7 @@ class MpyStringIO(StringIO):
                     _now,
                 )
         )
+        self._log_cr.commit()
         #print(">>>>>>>>>>>>>>>>>>>>>>>>")
         #print("%s%s" % (self._mpy_buffer, output_str))
         #print("<<<<<<<<<<<<<<<<<<<<<<<<")
@@ -747,5 +747,6 @@ class MpyStringIO(StringIO):
                         _now,
                     )
             )
+            self._log_cr.commit()
         self._mpy_buffer = None
 

@@ -120,7 +120,6 @@ class IMQWorkerSQS(models.AbstractModel):
         
         _db_cnx = odoo.sql_db.db_connect(self.env.cr.dbname)
         with _db_cnx.cursor() as cr:
-            cr.autocommit = True
             try:
                 if queue_obj.q_type == 'std':
                     sql_params = (

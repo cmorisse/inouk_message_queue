@@ -47,19 +47,25 @@ class IMQOdooQueue(models.Model):
         :param message_title: The title of the notification.
         :param message: The message text (slack markdown format).
         :param icon: DEPRECATED - Ignored in Odoo 18.
-        :param message_obj: Optional IMQ message object to include link in notification.
+        :param message_obj: Optional IMQ message object to include button in notification.
         :param sticky: When set the notification must be explicitly closed.
         :param user_obj: Target user(s). If None, broadcasts to all IMQ administrators.
                          If set, notifies only that specific user.
         """
         for record in self:
             if record.use_odoo_notifications:
-                body_html = message or ""  # No rendering on Odoo notifs
-                if message_obj:
-                    _now = datetime.datetime.now().strftime(DEFAULT_SERVER_DATETIME_FORMAT)
-                    obj_url = f'<b>Message: </b><a href="{message_obj.get_form_url()}">{message_obj.name}</a><br/><b>At: </b>{_now} UTC'
-                    body_html += obj_url
 
+                # Build action_button if message_obj is provided
+                action_button = None
+                if message_obj:
+                    action_button = {
+                        'model': message_obj._name,
+                        'res_id': message_obj.id,
+                        'name': 'Open IMQ Message',
+                    }
+                    body_html = message_obj.name
+                else:
+                    body_html = message or ""
                 # Determine target users
                 if user_obj:
                     # Notify specific user(s) only
@@ -87,6 +93,7 @@ class IMQOdooQueue(models.Model):
                             message_title or "",
                             body_html,
                             sticky=True if (message_type == 'danger' or sticky) else False,
+                            action_button=action_button,
                         )
                     except AttributeError:
                         _logger.error(

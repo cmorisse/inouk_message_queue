@@ -86,12 +86,23 @@ class IMQWorkerSQS(models.AbstractModel):
         message_model = self.env['imq.message']
 
         queue_message_id = sqs_message.message_id
-        body = jsonpickle.decode(sqs_message.body)
-        message_selector = body.get('selector', None)
-        message_module = body.get('module_name', None)
-        message_function = body.get('function_name', None)
-        user_id = body.get('user_id',
-                           self.env.ref('inouk_message_queue.user_imq').id)
+        try:
+            body = jsonpickle.decode(sqs_message.body)
+            message_selector = body.get('selector', None)
+            message_module = body.get('module_name', None)
+            message_function = body.get('function_name', None)
+            user_id = body.get('user_id',
+                            self.env.ref('inouk_message_queue.user_imq').id)
+        except:
+            body = { 
+                "selector": "Malformed.message",
+                "type": "simple",
+                "malformed_body": sqs_message.body 
+            }
+            message_selector = None
+            message_module = None
+            message_function = None
+            user_id = self.env.ref('inouk_message_queue.user_imq').id
 
         message_attributes = sqs_message.message_attributes or {}
         name = message_attributes.get(
@@ -116,6 +127,16 @@ class IMQWorkerSQS(models.AbstractModel):
             sqs_message.attributes['ApproximateFirstReceiveTimestamp']
         ) / 1000
         context = body.get('context', {})
+
+        try:
+            raw_message_body = json.dumps(
+                json.loads(sqs_message.body),
+                sort_keys=True,
+                indent=4
+            )
+        except:
+            raw_message_body = f"error: {traceback.format_exc()} \n raw body: {sqs_message.body}"
+            
         message_values_dict = {
             'state': 'wip',
             'queue_message_id': sqs_message.message_id,
@@ -129,11 +150,7 @@ class IMQWorkerSQS(models.AbstractModel):
             'user_id': user_id,
             'context': jsonpickle.encode(body.get('context', {})),
             'payload': jsonpickle.encode(body.get('payload', {})),
-            'raw_message_body': json.dumps(
-                json.loads(sqs_message.body),
-                sort_keys=True,
-                indent=4
-            ),
+            'raw_message_body': raw_message_body,
         }
         # Add only id present
         if '_imq_parent_message_id' in context:

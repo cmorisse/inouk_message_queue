@@ -369,11 +369,46 @@ for item in items:
        """Process invoice {invoice.name}"""
    ```
 
-2. **Always include logging parameter**: 
+2. **IMQ Logger Propagation Pattern**:
+   Methods decorated with `@processor` or `@processor_method` receive an IMQ logger when executed asynchronously. Use this pattern to ensure consistent logging:
+
    ```python
+   import logging
+   _logger = logging.getLogger(__name__)
+
+   @processor('my_queue')
    def my_task(env, data, _imq_logger=None):
-       _imq_logger = _imq_logger or _logger
+       """My task description."""
+       _task_logger = _imq_logger or _logger
+
+       _task_logger.info("Starting task...")
+
+       # Propagate _imq_logger to dependent methods
+       helper_function(data, _imq_logger=_imq_logger)
+
+       _task_logger.info("Task completed")
+       return result
+
+
+   def helper_function(data, _imq_logger=None):
+       """Helper that also supports IMQ logging."""
+       _task_logger = _imq_logger or _logger
+
+       _task_logger.debug("Helper processing...")
+       # ... logic ...
    ```
+
+   **Key rules:**
+   - `_imq_logger=None` parameter always **last** (before kwargs)
+   - `_task_logger = _imq_logger or _logger` at **method start**
+   - Use `_task_logger` throughout your code
+   - Pass `_imq_logger=_imq_logger` to dependent methods
+   - Each dependent method implements the same pattern
+
+   **Benefits:**
+   - **Async execution**: All logs go to the IMQ task journal
+   - **Sync execution**: Each method uses its own `_logger`
+   - **Traceability**: Centralized logs for debugging
 
 3. **Handle retries appropriately**:
    - Use `IMQError` for permanent failures

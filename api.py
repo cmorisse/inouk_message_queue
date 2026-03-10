@@ -340,6 +340,8 @@ def enqueue(runnable, *args, **kwargs):
     processor_context['_imq_message_name'] = message_name
     processor_context['_imq_parent_message_id'] = parent_message_id
     processor_context['_imq_target_children_count'] = target_children_count
+    # Preserve superuser mode for task execution
+    processor_context['_imq_su'] = env.su if env else False
 
     # We serialize payload differently based on is_method
     if is_method:

@@ -165,7 +165,12 @@ class BaseWorker:
         run_cursor = env.registry.cursor()
         try:
             self.logger.debug("run_cursor: %s created.", run_cursor)
-            run_env = Environment(run_cursor, message_obj.user_id.id, run_context)
+            run_env = Environment(
+                run_cursor,
+                message_obj.user_id.id,
+                run_context,
+                su=run_context.get('_imq_su', False)
+            )
 
             try:
                 if message_obj.message_type == 'rpc':

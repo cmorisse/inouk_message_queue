@@ -74,6 +74,13 @@ class IMQMessage(models.Model):
                               help="User owner of the Message. This defines "
                                      "the security restriction of executed "
                                      "processing.")
+    requesting_user_id = fields.Many2one(
+        'res.users',
+        string="Requesting User",
+        index=True,
+        help="User who requested this operation. May differ from user_id when "
+             "operations are executed by a system user on behalf of another user."
+    )
     code = fields.Char(help="Python expression that will be executed to "
                             "launch message processing. This is informational "
                             "only. Use fields in 'Exec. params. tab to "

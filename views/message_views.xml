@@ -32,6 +32,7 @@
                         <filter name="group_by_start_time" string="Start time" context="{'group_by': 'start_time'}" help="Group messages by Name" />
                         <filter name="group_by_name" string="Name" context="{'group_by': 'name'}" help="Group messages by Name" />
                         <filter name="group_by_user" string="User" context="{'group_by': 'user_id'}" help="Group messages by User" />
+                        <filter name="group_by_requesting_user" string="Requesting User" context="{'group_by': 'requesting_user_id'}" help="Group messages by Requesting User" />
                     </group>
 
                     <field name="name" />
@@ -44,6 +45,7 @@
                     
                     <field name="state" />
                     <field name="user_id" />
+                    <field name="requesting_user_id" />
                 </search>
             </field>
         </record>
@@ -56,6 +58,7 @@
                 <list default_order="id desc">
                     <field name="id" optional="hide" />
                     <field name="user_id" optional="hide" />
+                    <field name="requesting_user_id" optional="hide" />
                     <field name="queue_message_id" optional="hide" />
                     <field name="name" />
                     <field name="group" optional="hide" />
@@ -101,6 +104,7 @@
                                 <field name="processor_id" />
                                 <field name="queue_id" />
                                 <field name="user_id" />
+                                <field name="requesting_user_id" />
                                 <field name="attempt_as_text" />
                                 <field name="enqueued_time" />
                             </group>

@@ -360,6 +360,41 @@ for item in items:
    - Error details
    - Timing information
 
+### Programmatic Status Check (`get_task_status`)
+
+The `get_task_status()` model method provides a simple way to poll task status programmatically (e.g., from MCP agents or external scripts).
+
+```python
+# Single task
+result = env['imq.message'].get_task_status([message_id])
+
+# Multiple tasks
+result = env['imq.message'].get_task_status([id1, id2, id3])
+```
+
+Returns a list of dicts:
+```python
+[
+    {
+        'id': 42,
+        'name': 'Provision dev server...',
+        'state': 'wip',
+        'elapsed_seconds': 145,
+        'hint': 'Executing. Poll again in 30 seconds.',
+    }
+]
+```
+
+**Hints by state:**
+| State | Hint |
+|-------|------|
+| `pending` | Task queued. If still pending after 2min, IMQ worker may not be running. |
+| `wip` | Executing. Poll again in 30 seconds. |
+| `done` | Completed. Read the target record for results. |
+| `failed` | Failed. Read imq.message_processing_log for details. |
+| `retry` | Will be retried automatically. |
+| `terminated` | Manually terminated. |
+
 ## Best Practices
 
 1. **Use meaningful message names**: The first line of the docstring becomes the message name

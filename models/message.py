@@ -180,6 +180,42 @@ class IMQMessage(models.Model):
     def refresh(self):
         pass
     
+    @api.model
+    def get_task_status(self, message_ids):
+        """Get task status with elapsed time and next-step hints.
+
+        Args:
+            message_ids: list of imq.message IDs
+
+        Returns:
+            list of dicts with status info per task
+        """
+        messages = self.browse(message_ids).exists()
+        now = fields.Datetime.now()
+        result = []
+        for msg in messages:
+            elapsed = None
+            if msg.start_time:
+                end = msg.end_time or now
+                elapsed = round((end - msg.start_time).total_seconds())
+
+            hints = {
+                'pending': "Task queued. If still pending after 2min, IMQ worker may not be running.",
+                'wip': "Executing. Poll again in 30 seconds.",
+                'done': "Completed. Read the target record for results.",
+                'failed': "Failed. Read imq.message_processing_log for details.",
+                'terminated': "Manually terminated.",
+                'retry': "Will be retried automatically.",
+            }
+            result.append({
+                'id': msg.id,
+                'name': msg.name or '',
+                'state': msg.state,
+                'elapsed_seconds': elapsed,
+                'hint': hints.get(msg.state, f"State: {msg.state}"),
+            })
+        return result
+
     def btn_retry_processing(self):
         self.ensure_one()
         self.do_retry_processing()

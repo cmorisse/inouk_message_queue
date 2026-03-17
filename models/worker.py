@@ -137,9 +137,12 @@ class IMQWorker(models.AbstractModel):
             # create a db cursor and Environment dedicated to execution
             run_cursor = self.env.registry.cursor()
             _logger.debug("run_cursor: %s created.", run_cursor)
-            run_env = Environment(run_cursor,
-                                  message_obj.user_id.id,
-                                  run_context)
+            run_env = Environment(
+                run_cursor,
+                message_obj.user_id.id,
+                run_context,
+                su=run_context.get('_imq_su', False)
+            )
     
             if message_obj.message_type == 'rpc':
                 # use run_env to rebuild parameters (including openerp.Models)

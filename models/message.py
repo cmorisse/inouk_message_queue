@@ -26,6 +26,7 @@ IMQ_MESSAGE_STATES = [
     ('failed', "Failed"),
     ('archived', "Archived"),
     ('reset', "Reset"),
+    ('cancelled', "Cancelled"),
 ]
 
 IMQ_MESSAGE_TYPES = [
@@ -206,6 +207,7 @@ class IMQMessage(models.Model):
                 'failed': "Failed. Read imq.message_processing_log for details.",
                 'terminated': "Manually terminated.",
                 'retry': "Will be retried automatically.",
+                'cancelled': "Cancelled by user.",
             }
             result.append({
                 'id': msg.id,
@@ -230,6 +232,25 @@ class IMQMessage(models.Model):
 
     def do_archive(self):
         self.write({'state': 'archived'})
+
+    def btn_cancel(self):
+        """Button action to cancel message(s). Calls cancel()."""
+        return self.cancel()
+
+    def cancel(self):
+        """Cancel pending/retry PGSQL messages. Sets state to 'cancelled' and end_time."""
+        non_pgsql = self.filtered(lambda m: m.queue_provider != 'pgsql')
+        if non_pgsql:
+            raise UserError(_("Cancel is only supported for PostgreSQL queue messages."))
+        forbidden = self.filtered(lambda m: m.state not in ('pending', 'retry'))
+        if forbidden:
+            raise UserError(_(
+                "Only messages in 'pending' or 'retry' state can be cancelled. "
+                "Found: %s") % ', '.join(set(forbidden.mapped('state'))))
+        self.write({
+            'state': 'cancelled',
+            'end_time': fields.Datetime.now(),
+        })
     
     def create_processing_object(self, worker_type='cron-workerv2'):
         self.ensure_one()

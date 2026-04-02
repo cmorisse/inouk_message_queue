@@ -327,18 +327,56 @@ def long_running_task(self):
     # Long processing...
 ```
 
+### Message Naming (`_imq_message_name`)
+
+Use `_imq_message_name` to give tasks a short, human-readable name that explains the intent. This name appears in the IMQ UI, logs, and `get_task_status()` responses.
+
+**Convention**: Keep names short, start with an action verb, and include key identifiers.
+
+```python
+# Good — short, clear intent, key identifiers
+_imq_message_name="Backup PostgreSQL DB 'my_db' from cluster 'prod-pg15'"
+_imq_message_name="Deploy branch 'feature-x' on server 'dev-01'"
+_imq_message_name="Enroll Host 'web-03.internal'"
+_imq_message_name="Retry upload pg_dump 'my_db' to S3 bucket 'backups'"
+
+# Bad — too generic, missing context
+_imq_message_name="backup"
+_imq_message_name="mpy_execute::mpy_pg_backup() on web-03"
+```
+
+**How it works**: If `_imq_message_name` is not provided, IMQ falls back to the processor's docstring first line, then to a generated name like `mpy_execute::function_name()`.
+
+```python
+# With mpy_execute
+mpy_execute(
+    my_task, host_obj,
+    _imq_message_name=f"Install PostgreSQL ({version}) on host '{host_obj.name}'"
+)
+
+# With run_async
+record.process.run_async(
+    record, data,
+    _imq_message_name=f"Process order #{record.name}"
+)
+```
+
 ### Parent-Child Message Relationships
 
 ```python
 # Create child tasks that update parent progress
-parent_msg_id = env.context.get('_imq_parent_message_id')
+parent_msg_id = env.context.get('_imq_message_id')
 for item in items:
-    process_item.run_async(
-        item,
+    mpy_execute(
+        process_item, host_obj,
+        item_name=item.name,
         _imq_parent_message_id=parent_msg_id,
-        _imq_target_children_count=len(items)
+        _imq_target_children_count=len(items),
+        _imq_message_name=f"Process item '{item.name}'"
     )
 ```
+
+When a parent message has children, `get_task_status()` returns `children_summary` (per-state counters) and `children` (list of child statuses).
 
 ## Monitoring
 

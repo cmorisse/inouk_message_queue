@@ -185,6 +185,9 @@ class IMQMessage(models.Model):
     def get_task_status(self, message_ids):
         """Get task status with elapsed time and next-step hints.
 
+        When a message has child tasks (linked via parent_message_id),
+        the response includes children_summary and children fields.
+
         Args:
             message_ids: list of imq.message IDs
 
@@ -209,13 +212,41 @@ class IMQMessage(models.Model):
                 'retry': "Will be retried automatically.",
                 'cancelled': "Cancelled by user.",
             }
-            result.append({
+            entry = {
                 'id': msg.id,
                 'name': msg.name or '',
                 'state': msg.state,
                 'elapsed_seconds': elapsed,
                 'hint': hints.get(msg.state, f"State: {msg.state}"),
-            })
+            }
+
+            # Enrich with children status if this message has child tasks
+            if msg.queue_message_id:
+                children_objs = self.search([
+                    ('parent_message_id', '=', msg.queue_message_id)
+                ])
+                if children_objs:
+                    # Build per-state counters
+                    summary = {}
+                    children_list = []
+                    for child in children_objs:
+                        state = child.state
+                        summary[state] = summary.get(state, 0) + 1
+                        child_elapsed = None
+                        if child.start_time:
+                            child_end = child.end_time or now
+                            child_elapsed = round((child_end - child.start_time).total_seconds())
+                        children_list.append({
+                            'id': child.id,
+                            'name': child.name or '',
+                            'state': state,
+                            'elapsed_seconds': child_elapsed,
+                        })
+                    summary['total'] = len(children_objs)
+                    entry['children_summary'] = summary
+                    entry['children'] = children_list
+
+            result.append(entry)
         return result
 
     def btn_retry_processing(self):

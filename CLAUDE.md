@@ -27,6 +27,7 @@ All IMQ command-line tools are documented with examples in `README.md`:
 - **Queue Depth Definition**: Messages where state is in ('pending', 'retry') AND (planned_time IS NULL OR planned_time <= NOW())
 - **Message States**: new, pending, wip, retry, done, terminated, failed, archived, reset
 - **'new' messages excluded**: They can stay indefinitely in 'new' state while being entered by users
+- **FIFO failure propagation**: A `failed` task blocks every subsequent pending task in the same `group` on a FIFO queue until it is archived. See README.md § "Failure handling in FIFO groups".
 
 ### Worker Monitoring
 - **Observability Server**: Workers expose /status, /healthz, /readyz, /metrics endpoints

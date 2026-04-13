@@ -207,7 +207,12 @@ class IMQMessage(models.Model):
                 'pending': "Task queued. If still pending after 2min, IMQ worker may not be running.",
                 'wip': "Executing. Poll again in 30 seconds.",
                 'done': "Completed. Read the target record for results.",
-                'failed': "Failed. Read imq.message_processing_log for details.",
+                'failed': (
+                    "Failed. Read imq.message_processing_log (filter message_id=<id>) "
+                    "for details. If this task is in a FIFO queue group, subsequent "
+                    "pending tasks in the same group are blocked until this one is "
+                    "archived — call do_archive() once you have captured the diagnostics."
+                ),
                 'terminated': "Manually terminated.",
                 'retry': "Will be retried automatically.",
                 'cancelled': "Cancelled by user.",
@@ -262,6 +267,14 @@ class IMQMessage(models.Model):
         _method()
 
     def do_archive(self):
+        # Primary use: unblock a FIFO group stuck on a failed task.
+        # Reject in-flight states (new, wip, retry, reset) to avoid racing the worker.
+        ARCHIVABLE_STATES = ('pending', 'failed', 'terminated', 'done', 'cancelled')
+        forbidden = self.filtered(lambda m: m.state not in ARCHIVABLE_STATES)
+        if forbidden:
+            raise UserError(_(
+                "Only messages in %s state can be archived. Found: %s"
+            ) % (', '.join(ARCHIVABLE_STATES), ', '.join(set(forbidden.mapped('state')))))
         self.write({'state': 'archived'})
 
     def btn_cancel(self):

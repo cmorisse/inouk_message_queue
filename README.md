@@ -318,6 +318,28 @@ records.process_records.run_async(
 )
 ```
 
+### Failure handling in FIFO groups
+
+Within a FIFO queue, tasks sharing a `group` value execute strictly in order.
+The worker only pulls the next pending task when the previous one in the same
+group is in a non-blocking state: `done`, `terminated`, or `archived`.
+
+**Consequence**: a task in state `failed` blocks every subsequent pending task
+in its group indefinitely. Neither retry exhaustion nor time passing will
+release the queue.
+
+**Resolution**:
+- **Retry** the failed task (`btn_retry_processing` / `do_retry_processing`) —
+  on success the group resumes automatically.
+- **Archive** the failed task (`do_archive`) — preferred when the task is
+  unrecoverable. Archiving immediately releases subsequent pending tasks.
+  Archiving is preferred over deletion so the failure history is preserved.
+
+Archivable source states: `pending`, `failed`, `terminated`, `done`,
+`cancelled`. In-flight states (`new`, `wip`, `retry`, `reset`) are rejected
+to avoid racing the worker. Archiving a `pending` task is effectively a
+silent cancel that also releases the FIFO group.
+
 ### Custom Visibility Timeout
 
 ```python

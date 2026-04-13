@@ -83,9 +83,9 @@
                     <header>
                         <button string="Retry" type="object" name="btn_retry_processing" class="btn-danger" invisible="state not in ('failed') or (queue_provider == 'aws_sqs' and queue_type == 'fifo')" />
 
-                        <button string="Cancel" type="object" name="btn_cancel" class="btn-danger" invisible="state not in ('pending', 'retry') or queue_provider != 'pgsql'" />
+                        <button string="Archive" type="object" name="do_archive" class="btn-warning" invisible="state not in ('pending','failed','terminated','done','cancelled')" />
 
-                        <button string="Archive" type="object" name="do_archive" class="oe_highlight" groups="inouk_message_queue.group_admin" invisible="state in ['new']" />
+                        <button string="Cancel" type="object" name="btn_cancel" class="btn-danger" invisible="state not in ('pending', 'retry') or queue_provider != 'pgsql'" />
 
                         <field name="state" widget="statusbar" statusbar_visible="new,wip,done,failed" />
                     </header>

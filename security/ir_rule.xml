@@ -65,6 +65,25 @@
             <field name="groups" eval="[(4, ref('inouk_message_queue.group_user'))]" />
         </record>
 
+        <function name="upsert_externalid" model="ir.model.data">
+            <value>inouk_message_queue.ir_rule__imq_message_processing_for_admin</value>
+            <value>ir.rule</value>
+            <function name="search" model="ir.rule">
+                <value eval="[('name', '=', 'IMQ - Message Processing for Admin'), ('model_id', '=', ref('inouk_message_queue.model_imq_message_processing'))]" />
+            </function>
+            <value eval="False" />
+        </function>
+        <record id="ir_rule__imq_message_processing_for_admin" model="ir.rule">
+            <field name="model_id" ref="inouk_message_queue.model_imq_message_processing" />
+            <field name="name">IMQ - Message Processing for Admin</field>
+            <field name="perm_create" eval="1" />
+            <field name="perm_read" eval="1" />
+            <field name="perm_write" eval="1" />
+            <field name="perm_unlink" eval="1" />
+            <field name="active" eval="1" />
+            <field name="groups" eval="[(4, ref('inouk_message_queue.group_admin'))]" />
+        </record>
+
         <!-- User-scoped read on imq.message_processing_log via message_id ownership -->
         <function name="upsert_externalid" model="ir.model.data">
             <value>inouk_message_queue.ir_rule__imq_message_processing_log_for_user</value>
@@ -84,6 +103,25 @@
             <field name="active" eval="1" />
             <field name="domain_force">['|', ('message_id.user_id','=',user.id), ('message_id.requesting_user_id','=',user.id)]</field>
             <field name="groups" eval="[(4, ref('inouk_message_queue.group_user'))]" />
+        </record>
+
+        <function name="upsert_externalid" model="ir.model.data">
+            <value>inouk_message_queue.ir_rule__imq_message_processing_log_for_admin</value>
+            <value>ir.rule</value>
+            <function name="search" model="ir.rule">
+                <value eval="[('name', '=', 'IMQ - Processing Log for Admin'), ('model_id', '=', ref('inouk_message_queue.model_imq_message_processing_log'))]" />
+            </function>
+            <value eval="False" />
+        </function>
+        <record id="ir_rule__imq_message_processing_log_for_admin" model="ir.rule">
+            <field name="model_id" ref="inouk_message_queue.model_imq_message_processing_log" />
+            <field name="name">IMQ - Processing Log for Admin</field>
+            <field name="perm_create" eval="1" />
+            <field name="perm_read" eval="1" />
+            <field name="perm_write" eval="1" />
+            <field name="perm_unlink" eval="1" />
+            <field name="active" eval="1" />
+            <field name="groups" eval="[(4, ref('inouk_message_queue.group_admin'))]" />
         </record>
     </data>
 </odoo>

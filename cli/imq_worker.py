@@ -61,6 +61,11 @@ class IMQWorker(Command):
                           help='HTTP path for Prometheus metrics endpoint')
         parser.add_argument('--queue-depth-caching-period-s', type=int, default=30,
                           help='Queue depth metrics caching period in seconds (Default: 30)')
+        parser.add_argument('--metrics-export-mode', type=str, default='network',
+                          choices=['network', 'textfile'],
+                          help='Metrics export mode: "network" (HTTP, default) or "textfile" (node_exporter textfile collector)')
+        parser.add_argument('--textfile-dir', type=str, default='/var/lib/node_exporter/textfile',
+                          help='Directory for textfile collector output (used with --metrics-export-mode=textfile)')
         
         # Message targeting
         parser.add_argument('--message', '-m', type=str, default=None,
@@ -110,6 +115,9 @@ class IMQWorker(Command):
         if parsed_args.queue_depth_caching_period_s < 1:
             print("Error: --queue-depth-caching-period-s must be >= 1 second", file=sys.stderr)
             return 1
+
+        if parsed_args.metrics_export_mode == 'textfile' and parsed_args.observability_port:
+            print("Warning: --observability-port is ignored in textfile mode", file=sys.stderr)
             
         # Validate message ID format if provided
         if parsed_args.message:
@@ -145,7 +153,9 @@ class IMQWorker(Command):
                 observability_port=parsed_args.observability_port,
                 metrics_path=parsed_args.metrics_path,
                 target_message_id=parsed_args.message,
-                queue_depth_caching_period_s=parsed_args.queue_depth_caching_period_s
+                queue_depth_caching_period_s=parsed_args.queue_depth_caching_period_s,
+                metrics_export_mode=parsed_args.metrics_export_mode,
+                textfile_dir=parsed_args.textfile_dir
             )
             
             # Run worker

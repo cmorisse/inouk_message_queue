@@ -13,7 +13,9 @@ from odoo import api, SUPERUSER_ID
 from odoo.modules.registry import Registry
 
 from .base import BaseWorker
-from .monitoring import MemoryMonitor, MetricsCollector, ObservabilityServer, ThreadMonitor
+from .monitoring import MemoryMonitor, MetricsCollector, ThreadMonitor
+from .monitoring__observability_server import ObservabilityServer
+from .monitoring__textfile_exporter import TextfileExporter
 from ..worker_utils.worker_utils import get_worker_name, validate_queue_pattern
 
 _logger = logging.getLogger(__name__)
@@ -65,14 +67,24 @@ class StandaloneWorker(BaseWorker):
             warn_percent=self.thread_warn_percent,
         )
         self.metrics_collector = MetricsCollector(self.worker_name, self.queue_depth_caching_period_s)
-        self.observability_server = ObservabilityServer(
-            kwargs.get('observability_port', 0),
-            self.metrics_collector,
-            self.memory_monitor,
-            worker_ref=self,
-            metrics_path=kwargs.get('metrics_path', '/metrics'),
-            thread_monitor=self.thread_monitor,
-        )
+
+        metrics_export_mode = kwargs.get('metrics_export_mode', 'network')
+        if metrics_export_mode == 'textfile':
+            self.observability_server = None
+            self.textfile_exporter = TextfileExporter(
+                directory=kwargs.get('textfile_dir'),
+                worker_name=self.worker_name,
+            )
+        else:
+            self.textfile_exporter = None
+            self.observability_server = ObservabilityServer(
+                kwargs.get('observability_port', 0),
+                self.metrics_collector,
+                self.memory_monitor,
+                worker_ref=self,
+                metrics_path=kwargs.get('metrics_path', '/metrics'),
+                thread_monitor=self.thread_monitor,
+            )
         
         # Setup logging
         log_level = getattr(logging, kwargs.get('log_level', 'INFO').upper())
@@ -545,8 +557,10 @@ class StandaloneWorker(BaseWorker):
         if self.target_message_id:
             self.logger.info(f"Message-specific mode: targeting message {self.target_message_id}")
 
-        # Start observability server if configured
-        if self.observability_server.port:
+        # Start metrics export (textfile or HTTP)
+        if self.textfile_exporter:
+            self.textfile_exporter.start()
+        elif self.observability_server and self.observability_server.port:
             self.observability_server.start()
 
         # Capture thread/FD baseline AFTER observability server is started
@@ -648,37 +662,36 @@ class StandaloneWorker(BaseWorker):
                     self._update_queue_stats(queue_name, True, processing_time)
                     self.processed_count += 1
                     consecutive_empty_polls = 0
-                    self.observability_server.update_last_activity()
-                    
+                    self._signal_activity()
+
                     # Log progress periodically
                     if self.processed_count % 100 == 0:
                         uptime = time.time() - self.start_time
                         rate = self.processed_count / uptime if uptime > 0 else 0
                         self.logger.info(f"Processed {self.processed_count} messages ({rate:.1f} msg/s)")
-                
+
                 elif result == 'empty':
                     # Queue is empty - this is not a failure, so don't update failure stats
                     consecutive_empty_polls += 1
-                    # Update activity to show worker is alive and polling
-                    self.observability_server.update_last_activity()
+                    self._signal_activity()
                     # No message available, short sleep to avoid busy loop
                     time.sleep(0.5)
-                
+
                 elif result == 'failed':
                     # Actual processing failure - update failure stats
                     self._update_queue_stats(queue_name, False, processing_time)
                     consecutive_empty_polls += 1
                     # Short sleep after failure
                     time.sleep(0.5)
-                
+
                 # Update metrics periodically
                 if self.processed_count % 10 == 0 or consecutive_empty_polls % 50 == 0:
                     self.metrics_collector.update_metrics(
                         self.memory_monitor, self,
                         thread_monitor=self.thread_monitor,
                     )
-                    # Update activity during metrics update to provide regular heartbeat
-                    self.observability_server.update_last_activity()
+                    self._signal_activity()
+                    self._flush_metrics()
                 
                 # Log status summary periodically (wall-clock based, not
                 # message-count based, because tasks range from 500ms to
@@ -694,11 +707,12 @@ class StandaloneWorker(BaseWorker):
                 self.memory_monitor, self,
                 thread_monitor=self.thread_monitor,
             )
+            self._flush_metrics()
             self._log_status_summary()
-            
+
             self.logger.info(f"Worker shutting down. Processed {self.processed_count} messages")
             return 0
-            
+
         except KeyboardInterrupt:
             self.logger.info("Received keyboard interrupt, shutting down")
             return 0
@@ -706,9 +720,25 @@ class StandaloneWorker(BaseWorker):
             self.logger.error(f"Fatal error in worker: {e}", exc_info=True)
             return 1
         finally:
-            if self.observability_server.port:
+            if self.textfile_exporter:
+                self.textfile_exporter.cleanup()
+            elif self.observability_server and self.observability_server.port:
                 self.observability_server.stop()
     
+    def _signal_activity(self):
+        """Signal liveness heartbeat to the observability server (network mode only)."""
+        if self.observability_server:
+            self.observability_server.update_last_activity()
+
+    def _flush_metrics(self):
+        """Persist current metrics to the configured export backend.
+
+        In textfile mode: writes a .prom file for node_exporter.
+        In network mode: no-op — the HTTP server exposes metrics on pull.
+        """
+        if self.textfile_exporter:
+            self.textfile_exporter.write()
+
     def _process_one_message(self, registry, queue_id, queue_name):
         """Process a single message from the queue
         

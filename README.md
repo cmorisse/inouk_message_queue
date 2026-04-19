@@ -1476,6 +1476,86 @@ curl -s http://localhost:8080/status | jq '.status.queues[]'
 curl -s http://localhost:8080/status | jq '.status.runtime.last_message_at'
 ```
 
+## Systemd Deployments
+
+When running multiple IMQ workers as systemd units, each worker would normally expose metrics on a separate port, requiring multiple Prometheus scrape targets. The **textfile export mode** solves this by writing metrics to files consumed by `node_exporter` — no HTTP ports needed, single Prometheus target.
+
+### Textfile Collector Mode (Recommended for systemd)
+
+```bash
+# Each worker writes to /var/lib/node_exporter/textfile/imq_<worker_name>.prom
+bin/start_odoo imq-worker --database $PGDATABASE --queue=default \
+  --worker-name=imq-default \
+  --metrics-export-mode=textfile \
+  --textfile-dir=/var/lib/node_exporter/textfile
+```
+
+`node_exporter` collects all `.prom` files automatically — Prometheus scrapes a single `node_exporter` endpoint regardless of the number of IMQ workers.
+
+**Requirements**: `node_exporter` installed with `--collector.textfile.directory=/var/lib/node_exporter/textfile`.
+
+### Setup: Textfile Collector Directory
+
+The textfile directory must exist and be writable by the IMQ worker process before starting workers in textfile mode.
+
+The directory must be readable by `node_exporter` and writable by the IMQ worker user — two different users. The simplest setup uses the sticky bit (same pattern as `/tmp`): any user can write files, but cannot delete files owned by others.
+
+```bash
+# Create the textfile directory with sticky-world-writable permissions
+sudo mkdir -p /var/lib/node_exporter/textfile
+sudo chmod 1777 /var/lib/node_exporter/textfile
+```
+
+Alternatively, use a shared group if you prefer stricter permissions:
+
+```bash
+sudo mkdir -p /var/lib/node_exporter/textfile
+sudo chown node_exporter:node_exporter /var/lib/node_exporter/textfile
+sudo chmod 775 /var/lib/node_exporter/textfile   # group can write
+sudo usermod -aG node_exporter odoo              # add IMQ worker user to group
+```
+
+Ensure `node_exporter` is started with the textfile collector enabled:
+
+```bash
+# /etc/systemd/system/node_exporter.service (excerpt)
+ExecStart=/usr/local/bin/node_exporter \
+    --collector.textfile.directory=/var/lib/node_exporter/textfile
+```
+
+### Systemd Unit Example
+
+```ini
+[Unit]
+Description=IMQ Worker - default queue
+After=network.target
+
+[Service]
+User=odoo
+WorkingDirectory=/opt/your-project
+ExecStart=bin/start_odoo imq-worker \
+    --queue=default \
+    --worker-name=imq-default \
+    --metrics-export-mode=textfile \
+    --textfile-dir=/var/lib/node_exporter/textfile
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Metrics Export Modes
+
+| Mode | Flag | Use case |
+|------|------|----------|
+| `network` (default) | `--observability-port=PORT` | Kubernetes, single worker, direct Prometheus scraping |
+| `textfile` | `--metrics-export-mode=textfile` | systemd multi-worker deployments with `node_exporter` |
+
+**Cleanup on shutdown**: In textfile mode, the worker removes its `.prom` file on clean exit so stale metrics do not persist after the service stops. Metrics are written at the same cadence as internal metric updates (every 10 messages or 50 empty polls).
+
+---
+
 ## Kubernetes Deployment (Beta)
 
 > ⚠️ **Beta Warning**: The Kubernetes deployment examples and configurations are currently in **beta**. While they follow best practices and have been tested, they may require adjustments for your specific production environment. Please thoroughly test in non-production environments first.

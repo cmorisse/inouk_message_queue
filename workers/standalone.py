@@ -13,7 +13,7 @@ from odoo import api, SUPERUSER_ID
 from odoo.modules.registry import Registry
 
 from .base import BaseWorker
-from .monitoring import MemoryMonitor, MetricsCollector, ObservabilityServer
+from .monitoring import MemoryMonitor, MetricsCollector, ObservabilityServer, ThreadMonitor
 from ..worker_utils.worker_utils import get_worker_name, validate_queue_pattern
 
 _logger = logging.getLogger(__name__)
@@ -33,6 +33,9 @@ class StandaloneWorker(BaseWorker):
         self.queue_pattern = queue_pattern
         self.max_messages = kwargs.get('max_messages', 0)
         self.max_rss_memory = kwargs.get('max_rss_memory')
+        self.max_thread_delta = kwargs.get('max_thread_delta', 0)
+        self.thread_warn_percent = kwargs.get('thread_warn_percent', 50)
+        self.status_summary_interval_s = kwargs.get('status_summary_interval_s', 300)
         self.worker_name = get_worker_name(kwargs.get('worker_name'))
         
         # Message targeting
@@ -46,6 +49,7 @@ class StandaloneWorker(BaseWorker):
         self.should_stop = False
         self.current_message = None
         self.start_time = time.time()
+        self.last_status_summary_time = self.start_time
         
         # Queue management
         self.queue_stats = {}  # Track per-queue statistics
@@ -56,13 +60,18 @@ class StandaloneWorker(BaseWorker):
         
         # Initialize components
         self.memory_monitor = MemoryMonitor(self.max_rss_memory)
+        self.thread_monitor = ThreadMonitor(
+            max_thread_delta=self.max_thread_delta,
+            warn_percent=self.thread_warn_percent,
+        )
         self.metrics_collector = MetricsCollector(self.worker_name, self.queue_depth_caching_period_s)
         self.observability_server = ObservabilityServer(
             kwargs.get('observability_port', 0),
             self.metrics_collector,
             self.memory_monitor,
             worker_ref=self,
-            metrics_path=kwargs.get('metrics_path', '/metrics')
+            metrics_path=kwargs.get('metrics_path', '/metrics'),
+            thread_monitor=self.thread_monitor,
         )
         
         # Setup logging
@@ -112,48 +121,99 @@ class StandaloneWorker(BaseWorker):
         """
         if self.should_stop:
             self.logger.warning(f"Received {signal_name} again, forcing immediate shutdown")
-            # Log current state before forcing shutdown
-            self._log_status_summary()
             self.should_stop = True
             return
-        
+
         self.logger.info(f"Graceful shutdown initiated by {signal_name}")
         self.should_stop = True
-        
+
         # Log current processing state
         if self.current_message:
             self.logger.info("Currently processing a message, will finish before shutdown")
         else:
             self.logger.info("No message currently being processed")
-        
-        # Log final statistics
-        self._log_status_summary()
+        # Final status summary is logged by run() after the main loop exits,
+        # to avoid a duplicate log when the loop exits immediately on signal.
     
-    def _log_status_summary(self):
-        """Log comprehensive status summary"""
+    def _log_status_summary(self, level=logging.INFO):
+        """Log comprehensive status summary at the given level.
+
+        Default INFO (periodic + shutdown). Promoted to WARNING by
+        _post_task_thread_check when a per-task thread leak is detected.
+        """
         status = self.get_status()
         uptime_hours = status['uptime_seconds'] / 3600
-        
-        self.logger.info(f"Worker Status Summary:")
-        self.logger.info(f"  Worker Name: {status['worker_name']}")
-        self.logger.info(f"  Uptime: {uptime_hours:.2f} hours")
-        self.logger.info(f"  Messages Processed: {status['processed_count']}")
-        self.logger.info(f"  Queue Pattern: {status['queue_pattern']}")
-        
+
+        log = self.logger.log
+        log(level, "Worker Status Summary:")
+        log(level, f"  Worker Name: {status['worker_name']}")
+        log(level, f"  Uptime: {uptime_hours:.2f} hours")
+        log(level, f"  Messages Processed: {status['processed_count']}")
+        log(level, f"  Queue Pattern: {status['queue_pattern']}")
+
         # Queue health summary
         queue_health = status['queue_health']
-        self.logger.info(f"  Queue Health: {queue_health['healthy_queues']}/{queue_health['total_queues']} healthy")
-        
+        log(level, f"  Queue Health: {queue_health['healthy_queues']}/{queue_health['total_queues']} healthy")
+
         # Per-queue statistics
         for queue_name, stats in status['queue_stats'].items():
             if stats['processed_count'] > 0 or stats['failed_count'] > 0:
-                self.logger.info(f"  Queue {queue_name}: {stats['processed_count']} processed, {stats['failed_count']} failed, avg {stats['processing_time_avg']:.2f}s")
-        
+                log(level, f"  Queue {queue_name}: {stats['processed_count']} processed, {stats['failed_count']} failed, avg {stats['processing_time_avg']:.2f}s")
+
         # Memory info
         memory_info = status['memory_info']
-        self.logger.info(f"  Memory Usage: {memory_info['rss_mb']:.1f}MB")
+        log(level, f"  Memory Usage: {memory_info['rss_mb']:.1f}MB")
         if memory_info.get('max_rss_mb'):
-            self.logger.info(f"  Memory Limit: {memory_info['max_rss_mb']:.1f}MB")
+            log(level, f"  Memory Limit: {memory_info['max_rss_mb']:.1f}MB")
+
+        # Thread / FD info
+        if getattr(self, 'thread_monitor', None) is not None:
+            sample = self.thread_monitor.sample()
+            log(level,
+                f"  Threads: os={sample['os_threads']} py={sample['py_threads']} "
+                f"(baseline os={sample['baseline_os_threads']}, "
+                f"delta={sample['thread_delta']})"
+            )
+            log(level,
+                f"  FDs: {sample['fds']} (baseline {sample['baseline_fds']}, "
+                f"delta={sample['fd_delta']})"
+            )
+            # System ceilings. user_nproc counts threads across ALL
+            # processes of the current user, so we measure that usage
+            # here (more expensive — OK at summary cadence).
+            sys_limits = self.thread_monitor.system_limits
+            os_max = sys_limits.get('os_threads_max')
+            user_soft = sys_limits.get('user_nproc_soft')
+            user_hard = sys_limits.get('user_nproc_hard')
+            user_usage = self.thread_monitor.get_current_user_thread_usage()
+
+            # % of kernel-wide ceiling by this worker alone.
+            os_pct = (sample['os_threads'] / os_max * 100) if os_max else None
+            log(level,
+                f"  System Thread Ceiling: os_max={os_max} "
+                f"(this worker: {f'{os_pct:.3f}%' if os_pct is not None else 'n/a'})"
+            )
+            # Per-user: usage is sum across all user's processes.
+            if user_usage is not None:
+                user_total = user_usage['total_threads']
+                user_pct = (user_total / user_soft * 100) if user_soft else None
+                log(level,
+                    f"  User Thread Usage: {user_total} threads across "
+                    f"{user_usage['proc_count']} procs "
+                    f"(skipped={user_usage['skipped']}) "
+                    f"vs nproc soft={user_soft}/hard={user_hard} "
+                    f"({f'{user_pct:.2f}%' if user_pct is not None else 'n/a'} of soft)"
+                )
+            else:
+                log(level,
+                    f"  User Thread Usage: n/a (non-POSIX), "
+                    f"nproc soft={user_soft}/hard={user_hard}"
+                )
+            if self.thread_monitor.max_thread_delta:
+                log(level,
+                    f"  Thread Delta Limit: +{self.thread_monitor.max_thread_delta} "
+                    f"(warn at +{self.thread_monitor.warn_threshold_delta})"
+                )
     
     def _reset_queue_failures(self):
         """Reset all queue failure counters"""
@@ -389,6 +449,53 @@ class StandaloneWorker(BaseWorker):
             'total_failed': total_failed
         }
     
+    def _post_task_thread_check(self, queue_name):
+        """Sample thread/FD state post-task and emit a log.
+
+        Per-task leak detection: if the OS-thread count grew vs. the
+        previous post-task sample (or the baseline for the first task),
+        the just-finished task leaked threads. In that case we log a
+        WARNING with the per-task delta and dump the full status summary
+        at WARNING for operator visibility.
+
+        Otherwise: DEBUG (default) or INFO if the cumulative thread_delta
+        has reached warn_threshold_delta. The loop's pre-iteration check
+        handles the exit on cumulative hard limit.
+        """
+        prev_os_threads = (
+            self.thread_monitor.last_sample['os_threads']
+            if self.thread_monitor.last_sample is not None
+            else self.thread_monitor.baseline_os_threads
+        )
+        sample = self.thread_monitor.sample()
+        delta = sample['thread_delta']
+        task_delta = (
+            sample['os_threads'] - prev_os_threads
+            if prev_os_threads is not None else None
+        )
+
+        if task_delta is not None and task_delta > 0:
+            self.logger.warning(
+                "Thread leak detected on last task: queue=%s leaked=+%d "
+                "(os_threads %d -> %d, cumulative delta=%s, fd_delta=%s)",
+                queue_name, task_delta, prev_os_threads, sample['os_threads'],
+                delta, sample['fd_delta'],
+            )
+            self._log_status_summary(level=logging.WARNING)
+            return
+
+        warn = self.thread_monitor.warn_threshold_delta
+        if warn and delta is not None and delta >= warn:
+            level = logging.INFO
+        else:
+            level = logging.DEBUG
+        self.logger.log(
+            level,
+            "Post-task threads: os=%d (delta=%s) py=%d fds=%s (fd_delta=%s) queue=%s",
+            sample['os_threads'], delta, sample['py_threads'],
+            sample['fds'], sample['fd_delta'], queue_name,
+        )
+
     def _check_stop_parameter(self, env):
         """Check if standalone workers should stop via system parameter
         
@@ -430,12 +537,22 @@ class StandaloneWorker(BaseWorker):
             self.logger.info(f"Will exit after processing {self.max_messages} messages")
         if self.max_rss_memory:
             self.logger.info(f"Will exit when RSS memory exceeds {self.max_rss_memory}")
+        if self.max_thread_delta:
+            self.logger.info(
+                f"Will exit when OS thread delta vs baseline exceeds "
+                f"+{self.max_thread_delta} (warn at {self.thread_warn_percent}%)"
+            )
         if self.target_message_id:
             self.logger.info(f"Message-specific mode: targeting message {self.target_message_id}")
-        
+
         # Start observability server if configured
         if self.observability_server.port:
             self.observability_server.start()
+
+        # Capture thread/FD baseline AFTER observability server is started
+        # (so its daemon thread is counted in the baseline) but BEFORE any
+        # message is processed.
+        self.thread_monitor.capture_baseline()
         
         try:
             # Get registry and find queue IDs (not queue objects)
@@ -475,6 +592,19 @@ class StandaloneWorker(BaseWorker):
                     memory_info = self.memory_monitor.get_memory_info()
                     self.logger.error(f"RSS memory limit exceeded: {memory_info['rss_mb']:.1f}MB / {memory_info['max_rss_mb']:.1f}MB, exiting")
                     break
+
+                # Check thread-delta limit (symétrique avec max-rss-memory).
+                # The supervisor (K8s/systemd) is expected to restart the
+                # worker with a clean thread baseline.
+                if not self.thread_monitor.check_threads():
+                    sample = self.thread_monitor.last_sample or self.thread_monitor.sample()
+                    self.logger.warning(
+                        "Thread delta limit exceeded: os_threads=%d baseline=%d "
+                        "delta=+%d (max_delta=+%d), exiting for recycling",
+                        sample['os_threads'], sample['baseline_os_threads'],
+                        sample['thread_delta'], self.thread_monitor.max_thread_delta,
+                    )
+                    break
                 
                 # Check stop parameter periodically (every 10 iterations to avoid overhead)
                 if self.processed_count % 10 == 0:
@@ -506,7 +636,13 @@ class StandaloneWorker(BaseWorker):
                 start_time = time.time()
                 result = self._process_one_message(registry, queue_id, queue_name)
                 processing_time = time.time() - start_time
-                
+
+                # Post-task thread/FD sample (Phase 1: observation only).
+                # Runs for processed AND failed tasks — both can leak. 'empty'
+                # means no message ran, so the sample would be noise.
+                if result in ('processed', 'failed'):
+                    self._post_task_thread_check(queue_name)
+
                 # Update queue statistics based on result
                 if result == 'processed':
                     self._update_queue_stats(queue_name, True, processing_time)
@@ -537,16 +673,27 @@ class StandaloneWorker(BaseWorker):
                 
                 # Update metrics periodically
                 if self.processed_count % 10 == 0 or consecutive_empty_polls % 50 == 0:
-                    self.metrics_collector.update_metrics(self.memory_monitor, self)
+                    self.metrics_collector.update_metrics(
+                        self.memory_monitor, self,
+                        thread_monitor=self.thread_monitor,
+                    )
                     # Update activity during metrics update to provide regular heartbeat
                     self.observability_server.update_last_activity()
                 
-                # Log status summary periodically (every 10 minutes)
-                if self.processed_count % 600 == 0 and self.processed_count > 0:
-                    self._log_status_summary()
+                # Log status summary periodically (wall-clock based, not
+                # message-count based, because tasks range from 500ms to
+                # hours — a count-based trigger would be unreliable).
+                if self.status_summary_interval_s > 0:
+                    elapsed = time.time() - self.last_status_summary_time
+                    if elapsed >= self.status_summary_interval_s:
+                        self._log_status_summary()
+                        self.last_status_summary_time = time.time()
             
             # Final metrics update and status log
-            self.metrics_collector.update_metrics(self.memory_monitor, self)
+            self.metrics_collector.update_metrics(
+                self.memory_monitor, self,
+                thread_monitor=self.thread_monitor,
+            )
             self._log_status_summary()
             
             self.logger.info(f"Worker shutting down. Processed {self.processed_count} messages")

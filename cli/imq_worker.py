@@ -32,6 +32,20 @@ class IMQWorker(Command):
                           help='Exit after processing N messages (0=unlimited)')
         parser.add_argument('--max-rss-memory', type=str, default=None,
                           help='Exit when RSS memory exceeds limit (e.g., 1024M)')
+        parser.add_argument('--max-thread-delta', type=int, default=0,
+                          help='Exit worker when OS-thread count grows by more '
+                               'than N above the startup baseline. Requires an '
+                               'external supervisor (K8s/systemd) to restart '
+                               'the worker. 0=disabled.')
+        parser.add_argument('--thread-warn-percent', type=int, default=50,
+                          help='Log post-task thread sample at INFO when '
+                               'thread_delta >= this %% of --max-thread-delta '
+                               '(default 50). Ignored if --max-thread-delta=0.')
+        parser.add_argument('--status-summary-interval-s', type=int, default=300,
+                          help='Wall-clock interval in seconds between periodic '
+                               'status summary logs (default 300 = 5 min). '
+                               '0 disables the periodic summary (shutdown and '
+                               'leak-detection summaries still fire).')
         
         # Worker configuration
         parser.add_argument('--worker-name', '-w', default=None,
@@ -72,6 +86,18 @@ class IMQWorker(Command):
         if parsed_args.max_messages < 0:
             print("Error: --max-messages must be >= 0", file=sys.stderr)
             return 1
+
+        if parsed_args.max_thread_delta < 0:
+            print("Error: --max-thread-delta must be >= 0", file=sys.stderr)
+            return 1
+
+        if not (0 < parsed_args.thread_warn_percent <= 100):
+            print("Error: --thread-warn-percent must be in (0, 100]", file=sys.stderr)
+            return 1
+
+        if parsed_args.status_summary_interval_s < 0:
+            print("Error: --status-summary-interval-s must be >= 0", file=sys.stderr)
+            return 1
             
         if parsed_args.observability_port < 0 or parsed_args.observability_port > 65535:
             print("Error: --observability-port must be between 0 and 65535", file=sys.stderr)
@@ -111,6 +137,9 @@ class IMQWorker(Command):
                 queue_pattern=parsed_args.queue,
                 max_messages=parsed_args.max_messages,
                 max_rss_memory=parsed_args.max_rss_memory,
+                max_thread_delta=parsed_args.max_thread_delta,
+                thread_warn_percent=parsed_args.thread_warn_percent,
+                status_summary_interval_s=parsed_args.status_summary_interval_s,
                 worker_name=parsed_args.worker_name,
                 log_level=parsed_args.log_level,
                 observability_port=parsed_args.observability_port,

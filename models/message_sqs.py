@@ -18,8 +18,8 @@ _logger = logging.getLogger("IMQMessage")
 
 class IMQMessageSQS(models.Model):
     _inherit = 'imq.message'
-    
-    def do_retry_processing__aws_sqs(self):
+
+    def retry_processing__aws_sqs(self):
         for record in self:
             if record.state == 'new':
                 _logger.error("Message Retry ignored. Messages in state 'new' can't be retried.")
@@ -28,7 +28,7 @@ class IMQMessageSQS(models.Model):
             if record.message_type != 'rpc':
                 _logger.error("Message Retry ignored. Only RPC messages can be retried.")
                 continue
-            
+
             if record.queue_id.q_type == 'fifo':
                 _logger.error("Message Retry ignored. Only message on AWS standard queues can be retried.")
                 continue
@@ -39,7 +39,7 @@ class IMQMessageSQS(models.Model):
                 aws_access_key_id=record.queue_id.key,
                 aws_secret_access_key=record.queue_id.secret,
             )
-        
+
             sqs_queue = sqs_resource.get_queue_by_name(QueueName=record.queue_id.sqs_name)
             message_body_values = {
                 'type': 'rpc',
@@ -80,9 +80,8 @@ class IMQMessageSQS(models.Model):
             update_dict = {
                 'queue_message_id_history': queue_message_id_history,
                 'state': 'retry'
-            } 
+            }
             if response:
                 update_dict['queue_message_id'] = response['MessageId']
             record.write(update_dict)
-        return        
-    
+        return

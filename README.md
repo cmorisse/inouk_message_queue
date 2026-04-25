@@ -329,11 +329,17 @@ in its group indefinitely. Neither retry exhaustion nor time passing will
 release the queue.
 
 **Resolution**:
-- **Retry** the failed task (`btn_retry_processing` / `do_retry_processing`) —
-  on success the group resumes automatically.
-- **Archive** the failed task (`do_archive`) — preferred when the task is
+- **Retry** the failed task (`btn_retry_processing` / `retry_processing`) —
+  on success the group resumes automatically. Supported on PostgreSQL queues
+  and AWS SQS **standard** queues; SQS FIFO queues do not support retry.
+- **Archive** the failed task (`archive`) — preferred when the task is
   unrecoverable. Archiving immediately releases subsequent pending tasks.
   Archiving is preferred over deletion so the failure history is preserved.
+
+**SQS limitations**: `cancel` is PostgreSQL-only (SQS messages can't be
+cancelled — only consumed or expired by visibility timeout). On SQS FIFO,
+`retry` is also unavailable (the AWS-managed FIFO ordering forbids
+re-injecting a stale message). `archive` works on every provider.
 
 Archivable source states: `pending`, `failed`, `terminated`, `done`,
 `cancelled`. In-flight states (`new`, `wip`, `retry`, `reset`) are rejected

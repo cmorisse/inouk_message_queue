@@ -19,7 +19,7 @@ _logger = logging.getLogger("IMQMessage")
 class IMQMessagePGSQL(models.Model):
     _inherit = 'imq.message'
     
-    def do_retry_processing__pgsql(self):
+    def retry_processing__pgsql(self):
         for record in self:
             if record.state == 'new':
                 _logger.error("Message Retry ignored. Messages in state 'new' can't be retried.")

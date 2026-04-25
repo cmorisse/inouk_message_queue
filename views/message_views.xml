@@ -81,19 +81,21 @@
             <field name="arch" type="xml">
                 <form>
                     <header>
-                        <button string="Retry" type="object" name="btn_retry_processing" class="btn-danger" invisible="state not in ('failed') or (queue_provider == 'aws_sqs' and queue_type == 'fifo')" />
+                        <button string="Retry" type="object" name="btn_retry_processing" class="btn-primary" invisible="state != 'failed' or (queue_provider == 'aws_sqs' and queue_type == 'fifo')" />
 
-                        <button string="Archive" type="object" name="do_archive" class="btn-warning" invisible="state not in ('pending','failed','terminated','done','cancelled')" />
+                        <button string="Retry (recovery)" type="object" name="btn_retry_recovery" class="btn-warning" groups="base.group_no_one" confirm="Recovery retry on a 'wip' message. Use only on support staff request, after a worker restart and before the message visibility timeout expires. Continue?" invisible="state != 'wip' or (queue_provider == 'aws_sqs' and queue_type == 'fifo')" />
+
+                        <button string="Archive" type="object" name="btn_archive" class="btn-secondary" invisible="state not in ('pending','failed','terminated','done','cancelled')" />
 
                         <button string="Cancel" type="object" name="btn_cancel" class="btn-danger" invisible="state not in ('pending', 'retry') or queue_provider != 'pgsql'" />
 
-                        <field name="state" widget="statusbar" statusbar_visible="new,wip,done,failed" />
+                        <field name="state" widget="statusbar" statusbar_visible="new,pending,wip,done" />
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
                             <button class="oe_stat_button" string="Exec. logs" icon="fa-align-left" name="%(imq_message_processing_log__act_window)d" context="{'search_default_message_id': [id]}" type="action" />
                             <button class="oe_stat_button" string="Exec. stats" icon="fa-bar-chart" name="%(imq_message_processing__act_window)d" context="{'search_default_message_id': [id], 'default_message_id': id}" type="action" />
-                            <button class="oe_stat_button" type="object" string="Refresh" icon="fa-refresh" name="refresh" />
+                            <button class="oe_stat_button" type="object" string="Refresh" icon="fa-refresh" name="btn_refresh" />
                         </div>
                         <div class="oe_title">
                             <h2>Cloud id = <field name="queue_message_id" class="oe_inline" /></h2>
@@ -223,7 +225,7 @@
             <field name="model_id" ref="model_imq_message" />
             <field name="binding_model_id" ref="model_imq_message" />
             <field name="binding_type">action</field>
-            <field name="code">records.do_retry_processing()</field>
+            <field name="code">records.retry_processing()</field>
         </record>
 
         <record id="archive_msg__server_action" model="ir.actions.server">
@@ -235,7 +237,7 @@
             <field name="model_id" ref="model_imq_message" />
             <field name="binding_model_id" ref="model_imq_message" />
             <field name="binding_type">action</field>
-            <field name="code">records.do_archive()</field>
+            <field name="code">records.archive()</field>
         </record>
 
         <record id="cancel_msg__server_action" model="ir.actions.server">

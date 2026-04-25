@@ -178,9 +178,13 @@ class IMQMessage(models.Model):
             record.attempt_as_text = "%s / %s" % (record.attempt, 
                                                   record.max_number_of_attempts)
     
+    def btn_refresh(self):
+        """Button action. GUI feedback only — calls refresh()."""
+        return self.refresh()
+
     def refresh(self):
         pass
-    
+
     @api.model
     def get_task_status(self, message_ids):
         """Get task status with elapsed time and next-step hints.
@@ -211,7 +215,7 @@ class IMQMessage(models.Model):
                     "Failed. Read imq.message_processing_log (filter message_id=<id>) "
                     "for details. If this task is in a FIFO queue group, subsequent "
                     "pending tasks in the same group are blocked until this one is "
-                    "archived — call do_archive() once you have captured the diagnostics."
+                    "archived — call archive() once you have captured the diagnostics."
                 ),
                 'terminated': "Manually terminated.",
                 'retry': "Will be retried automatically.",
@@ -255,18 +259,44 @@ class IMQMessage(models.Model):
         return result
 
     def btn_retry_processing(self):
+        """Button action. GUI wrapper — calls retry_processing()."""
         self.ensure_one()
-        self.do_retry_processing()
+        self.retry_processing()
 
-    def do_retry_processing(self):
-        """Interactive method which call Q specific method to retry processing 
-        of a message record set.
+    def btn_retry_recovery(self):
+        """Button action for recovery retry on a 'wip' message.
+
+        Reserved for support staff: a worker restart left the message stuck in
+        'wip'. Re-injecting it before the visibility timeout expires avoids
+        AWS-style auto-redelivery side effects. Visible only in developer mode.
         """
-        _method_name = "do_retry_processing__%s" % self.queue_id.provider
+        self.ensure_one()
+        self.retry_processing(force_wip=True)
+
+    def retry_processing(self, force_wip=False):
+        """Re-inject a message in the retry pipeline.
+
+        Dispatches to the queue provider's retry_processing__{provider}
+        implementation (pgsql, aws_sqs, ...). Each provider applies its own
+        constraints (e.g., aws_sqs skips FIFO and non-RPC messages).
+
+        Refuses 'wip' unless force_wip=True (recovery path used by
+        btn_retry_recovery, gated to developer mode).
+        """
+        if not force_wip and any(rec.state == 'wip' for rec in self):
+            raise UserError(_(
+                "Retry on 'wip' state is a recovery action. "
+                "Use the 'Retry (recovery)' button (developer mode required)."
+            ))
+        _method_name = "retry_processing__%s" % self.queue_id.provider
         _method = getattr(self, _method_name)
         _method()
 
-    def do_archive(self):
+    def btn_archive(self):
+        """Button action. GUI wrapper — calls archive()."""
+        return self.archive()
+
+    def archive(self):
         # Primary use: unblock a FIFO group stuck on a failed task.
         # Reject in-flight states (new, wip, retry, reset) to avoid racing the worker.
         ARCHIVABLE_STATES = ('pending', 'failed', 'terminated', 'done', 'cancelled')

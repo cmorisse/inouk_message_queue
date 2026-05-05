@@ -8,7 +8,7 @@ import base64
 import uuid
 
 import requests
-import slackdown
+# slackdown removed - using plain text for Odoo 18 notifications
 
 import odoo
 from odoo import models, fields, api
@@ -38,44 +38,81 @@ class IMQOdooQueue(models.Model):
         return _icon
 
     def send_odoo_notification(
-        self, message_type, message_title, message, icon=None, message_obj=None, 
+        self, message_type, message_title, message, icon=None, message_obj=None,
         sticky=False, user_obj=None
     ):
-        """ Send Odoo notifications to all queues in record set. 
-        :param message: when formatted, must use slack markdown
+        """Send Odoo notifications using Odoo 18 standard simple_notification.
+
+        :param message_type: "danger", "warning", "success" or "info".
+        :param message_title: The title of the notification.
+        :param message: The message text (slack markdown format).
+        :param icon: DEPRECATED - Ignored in Odoo 18.
+        :param message_obj: Optional IMQ message object to include button in notification.
+        :param sticky: When set the notification must be explicitly closed.
+        :param user_obj: Target user(s). If None, broadcasts to all IMQ administrators.
+                         If set, notifies only that specific user.
         """
         for record in self:
             if record.use_odoo_notifications:
-                body_html = slackdown.render(message or "")
+
+                # Build action_button if message_obj is provided
+                action_button = None
                 if message_obj:
-                    _now = datetime.datetime.now().strftime(DEFAULT_SERVER_DATETIME_FORMAT)
-                    obj_url = f'<b>Message: </b><a href="{message_obj.get_form_url()}">{message_obj.name}</a> <br> <b>At: </b>{_now} UTC'
-                    body_html += obj_url
-                if user_obj is None:
-                    user_obj = self.env.user
-                try:
-                    user_obj.ik_notify(
-                        message_type,
-                        message_title or "",
-                        body_html, 
-                        force_icon=self.render_icon__odoo(icon),
-                        sticky=True if (message_type=='danger' or sticky) else False,
+                    action_button = {
+                        'model': message_obj._name,
+                        'res_id': message_obj.id,
+                        'name': 'Open IMQ Message',
+                    }
+                    body_html = message_obj.name
+                else:
+                    body_html = message or ""
+                # Determine target users
+                if user_obj:
+                    # Notify specific user(s) only
+                    target_users = user_obj
+                else:
+                    # Broadcast to all IMQ administrators
+                    imq_admin_group = self.env.ref(
+                        'inouk_message_queue.group_admin',
+                        raise_if_not_found=False
                     )
-                except AttributeError:
-                    _logger.error("Failed to call res.users::ik_notify(). Is Addon inouk_notifications installed ?")
-                except:
-                    raise
+                    if imq_admin_group:
+                        target_users = imq_admin_group.users.filtered(
+                            lambda u: u.active and not u.share
+                        )
+                    else:
+                        _logger.warning(
+                            "IMQ admin group not found, falling back to current user"
+                        )
+                        target_users = self.env.user
+
+                for user in target_users:
+                    try:
+                        user.ik_notify(
+                            message_type,
+                            message_title or "",
+                            body_html,
+                            sticky=True if (message_type == 'danger' or sticky) else False,
+                            action_button=action_button,
+                        )
+                    except AttributeError:
+                        _logger.error(
+                            "Failed to call res.users::ik_notify(). "
+                            "Is Addon inouk_notifications installed?"
+                        )
+                    except Exception as e:
+                        _logger.error("Failed to notify user %s: %s", user.login, e)
 
     def btn_test_odoo_notifications(self):
-        """ Sends an Odoo test notifications."""
+        """Send an Odoo test notification to all IMQ administrators."""
         self.ensure_one()
         message = "Queue: *%s* is ready to send notifications." % self.name
         self.send_odoo_notification(
             'info',
             "IMQ Notification Test",
-            message, 
-            icon=":bear:",  # 'fa-paw',
-            sticky=True
+            message,
+            sticky=True,
+            # user_obj=None by default → broadcasts to all users
         )
         return True
 

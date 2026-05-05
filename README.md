@@ -318,6 +318,34 @@ records.process_records.run_async(
 )
 ```
 
+### Failure handling in FIFO groups
+
+Within a FIFO queue, tasks sharing a `group` value execute strictly in order.
+The worker only pulls the next pending task when the previous one in the same
+group is in a non-blocking state: `done`, `terminated`, or `archived`.
+
+**Consequence**: a task in state `failed` blocks every subsequent pending task
+in its group indefinitely. Neither retry exhaustion nor time passing will
+release the queue.
+
+**Resolution**:
+- **Retry** the failed task (`btn_retry_processing` / `retry_processing`) —
+  on success the group resumes automatically. Supported on PostgreSQL queues
+  and AWS SQS **standard** queues; SQS FIFO queues do not support retry.
+- **Archive** the failed task (`archive`) — preferred when the task is
+  unrecoverable. Archiving immediately releases subsequent pending tasks.
+  Archiving is preferred over deletion so the failure history is preserved.
+
+**SQS limitations**: `cancel` is PostgreSQL-only (SQS messages can't be
+cancelled — only consumed or expired by visibility timeout). On SQS FIFO,
+`retry` is also unavailable (the AWS-managed FIFO ordering forbids
+re-injecting a stale message). `archive` works on every provider.
+
+Archivable source states: `pending`, `failed`, `terminated`, `done`,
+`cancelled`. In-flight states (`new`, `wip`, `retry`, `reset`) are rejected
+to avoid racing the worker. Archiving a `pending` task is effectively a
+silent cancel that also releases the FIFO group.
+
 ### Custom Visibility Timeout
 
 ```python
@@ -327,18 +355,56 @@ def long_running_task(self):
     # Long processing...
 ```
 
+### Message Naming (`_imq_message_name`)
+
+Use `_imq_message_name` to give tasks a short, human-readable name that explains the intent. This name appears in the IMQ UI, logs, and `get_task_status()` responses.
+
+**Convention**: Keep names short, start with an action verb, and include key identifiers.
+
+```python
+# Good — short, clear intent, key identifiers
+_imq_message_name="Backup PostgreSQL DB 'my_db' from cluster 'prod-pg15'"
+_imq_message_name="Deploy branch 'feature-x' on server 'dev-01'"
+_imq_message_name="Enroll Host 'web-03.internal'"
+_imq_message_name="Retry upload pg_dump 'my_db' to S3 bucket 'backups'"
+
+# Bad — too generic, missing context
+_imq_message_name="backup"
+_imq_message_name="mpy_execute::mpy_pg_backup() on web-03"
+```
+
+**How it works**: If `_imq_message_name` is not provided, IMQ falls back to the processor's docstring first line, then to a generated name like `mpy_execute::function_name()`.
+
+```python
+# With mpy_execute
+mpy_execute(
+    my_task, host_obj,
+    _imq_message_name=f"Install PostgreSQL ({version}) on host '{host_obj.name}'"
+)
+
+# With run_async
+record.process.run_async(
+    record, data,
+    _imq_message_name=f"Process order #{record.name}"
+)
+```
+
 ### Parent-Child Message Relationships
 
 ```python
 # Create child tasks that update parent progress
-parent_msg_id = env.context.get('_imq_parent_message_id')
+parent_msg_id = env.context.get('_imq_message_id')
 for item in items:
-    process_item.run_async(
-        item,
+    mpy_execute(
+        process_item, host_obj,
+        item_name=item.name,
         _imq_parent_message_id=parent_msg_id,
-        _imq_target_children_count=len(items)
+        _imq_target_children_count=len(items),
+        _imq_message_name=f"Process item '{item.name}'"
     )
 ```
+
+When a parent message has children, `get_task_status()` returns `children_summary` (per-state counters) and `children` (list of child statuses).
 
 ## Monitoring
 
@@ -360,6 +426,41 @@ for item in items:
    - Error details
    - Timing information
 
+### Programmatic Status Check (`get_task_status`)
+
+The `get_task_status()` model method provides a simple way to poll task status programmatically (e.g., from MCP agents or external scripts).
+
+```python
+# Single task
+result = env['imq.message'].get_task_status([message_id])
+
+# Multiple tasks
+result = env['imq.message'].get_task_status([id1, id2, id3])
+```
+
+Returns a list of dicts:
+```python
+[
+    {
+        'id': 42,
+        'name': 'Provision dev server...',
+        'state': 'wip',
+        'elapsed_seconds': 145,
+        'hint': 'Executing. Poll again in 30 seconds.',
+    }
+]
+```
+
+**Hints by state:**
+| State | Hint |
+|-------|------|
+| `pending` | Task queued. If still pending after 2min, IMQ worker may not be running. |
+| `wip` | Executing. Poll again in 30 seconds. |
+| `done` | Completed. Read the target record for results. |
+| `failed` | Failed. Read imq.message_processing_log for details. |
+| `retry` | Will be retried automatically. |
+| `terminated` | Manually terminated. |
+
 ## Best Practices
 
 1. **Use meaningful message names**: The first line of the docstring becomes the message name
@@ -369,11 +470,46 @@ for item in items:
        """Process invoice {invoice.name}"""
    ```
 
-2. **Always include logging parameter**: 
+2. **IMQ Logger Propagation Pattern**:
+   Methods decorated with `@processor` or `@processor_method` receive an IMQ logger when executed asynchronously. Use this pattern to ensure consistent logging:
+
    ```python
+   import logging
+   _logger = logging.getLogger(__name__)
+
+   @processor('my_queue')
    def my_task(env, data, _imq_logger=None):
-       _imq_logger = _imq_logger or _logger
+       """My task description."""
+       _task_logger = _imq_logger or _logger
+
+       _task_logger.info("Starting task...")
+
+       # Propagate _imq_logger to dependent methods
+       helper_function(data, _imq_logger=_imq_logger)
+
+       _task_logger.info("Task completed")
+       return result
+
+
+   def helper_function(data, _imq_logger=None):
+       """Helper that also supports IMQ logging."""
+       _task_logger = _imq_logger or _logger
+
+       _task_logger.debug("Helper processing...")
+       # ... logic ...
    ```
+
+   **Key rules:**
+   - `_imq_logger=None` parameter always **last** (before kwargs)
+   - `_task_logger = _imq_logger or _logger` at **method start**
+   - Use `_task_logger` throughout your code
+   - Pass `_imq_logger=_imq_logger` to dependent methods
+   - Each dependent method implements the same pattern
+
+   **Benefits:**
+   - **Async execution**: All logs go to the IMQ task journal
+   - **Sync execution**: Each method uses its own `_logger`
+   - **Traceability**: Centralized logs for debugging
 
 3. **Handle retries appropriately**:
    - Use `IMQError` for permanent failures
@@ -486,6 +622,9 @@ bin/start_odoo imq-worker --database $PGDATABASE --queue default \
 # Processing limits
 --max-messages N           # Exit after processing N messages (0=unlimited)
 --max-rss-memory SIZE      # Exit when RSS memory exceeds limit (e.g., 1024M)
+--max-thread-delta N       # Exit when (os_threads - baseline) > N (0=disabled)
+--thread-warn-percent P    # Log at INFO when delta >= P% of max-thread-delta (default: 50)
+--status-summary-interval-s S  # Periodic status summary interval in seconds (default: 300, 0=off)
 
 # Message targeting
 --message, -m ID           # Process specific message by ID or MessageId
@@ -499,6 +638,222 @@ bin/start_odoo imq-worker --database $PGDATABASE --queue default \
 --metrics-path PATH        # HTTP path for Prometheus metrics (default: /metrics)
 --queue-depth-caching-period-s SECONDS  # Queue depth metrics caching period (default: 30)
 ```
+
+## Worker Thread Consumption and Management
+
+### Background
+
+Long-lived IMQ workers can hit `RuntimeError: can't start new thread`, which kills the entire worker process — not just the failing task. This happens when threads accumulate over time and exhaust the OS per-user thread limit (`RLIMIT_NPROC`). Any task type that creates threads without releasing them cleanly is a potential source: third-party libraries managing connection pools, background I/O threads, or native extensions. In Muppy, Fabric/paramiko SSH connections are a known example — any unclosed SSH connection leaves behind 2–4 threads (Transport, Packetizer, Channel) per task.
+
+This section describes IMQ's built-in thread monitoring and self-recycling feature that **contains** the issue: it detects accumulation, exposes it via metrics and logs, and recycles the worker cleanly before exhaustion occurs. It is a safety net — fixing the thread sources themselves is a separate workstream.
+
+### How It Works
+
+The worker measures OS thread count (`psutil.num_threads()`) at two points:
+
+- **Baseline**: captured once at startup, after the observability server starts
+- **Post-task**: after each task completes (`processed` or `failed`, not empty-poll)
+
+The metric is **`thread_delta = os_threads - baseline_os_threads`**. A delta of 20 means the worker has accumulated 20 threads it didn't have at startup — it directly measures the leak regardless of environment.
+
+Two independent detection signals work in parallel:
+
+| Signal | Trigger | Action | Purpose |
+|---|---|---|---|
+| **Per-task leak** | `os_threads` grew since the previous task | WARNING + status summary | Identify which queue/task is leaking |
+| **Cumulative delta** | `delta > --max-thread-delta` | Worker exits cleanly | Recycle before thread exhaustion |
+
+The worker always finishes its current task before exiting. An external supervisor (K8s Deployment, systemd `Restart=always`) restarts it with a fresh thread baseline.
+
+### CLI Flags
+
+```bash
+--max-thread-delta N          # Exit after task when (os_threads - baseline) > N.
+                              # Requires supervisor restart. 0 = disabled (default).
+
+--thread-warn-percent P       # Log post-task sample at INFO when delta >= P% of
+                              # max-thread-delta. Below threshold: DEBUG. Default: 50.
+                              # Ignored if --max-thread-delta=0.
+
+--status-summary-interval-s S # Periodic status summary every S seconds (wall-clock).
+                              # 0 = disable periodic. Shutdown + leak summaries always fire.
+                              # Default: 300.
+```
+
+### Observability
+
+#### Prometheus Metrics
+
+| Metric | Description |
+|---|---|
+| `imq_worker_os_thread_count` | OS threads — source of truth (`psutil.num_threads()`) |
+| `imq_worker_thread_delta` | `os_thread_count - baseline` — pivot metric for leak detection |
+| `imq_worker_baseline_os_thread_count` | Baseline captured at startup |
+| `imq_worker_thread_count` | Python threads (`threading.active_count()`) |
+| `imq_worker_fd_count` | Open file descriptors |
+| `imq_worker_fd_delta` | `fd_count - baseline_fds` |
+| `imq_worker_max_thread_delta` | Configured `--max-thread-delta` (0 = disabled) |
+
+Alert rule example:
+
+```yaml
+alert: IMQWorkerThreadLeak
+expr: imq_worker_thread_delta > 40
+for: 5m
+annotations:
+  summary: "IMQ worker {{ $labels.worker_name }} accumulating threads (delta={{ $value }})"
+```
+
+#### `/status` Endpoint — `threads` Block
+
+```json
+"threads": {
+  "enabled": true,
+  "python_threads": 3,
+  "os_threads": 12,
+  "thread_delta": 9,
+  "baseline_os_threads": 3,
+  "fds": 47,
+  "fd_delta": 29,
+  "baseline_fds": 18,
+  "max_thread_delta": 20,
+  "warn_threshold_delta": 10
+}
+```
+
+#### Log Messages
+
+**Post-task, no leak** — `DEBUG` by default, `INFO` when `delta >= warn_threshold_delta`:
+```
+Post-task threads: os=12 (delta=9) py=3 fds=47 (fd_delta=29) queue=muppy
+```
+
+**Per-task leak detected** — `WARNING` + full status summary:
+```
+Thread leak detected on last task: queue=muppy leaked=+3 (os_threads 9 -> 12, cumulative delta=9, fd_delta=29)
+```
+
+**Cumulative delta exceeded** — `WARNING` before exit:
+```
+Thread delta limit exceeded: os_threads=83 baseline=3 delta=+80 (max_delta=+80), exiting for recycling
+```
+
+**Periodic status summary** (every `--status-summary-interval-s` seconds and at shutdown):
+```
+=== Worker Status Summary ===
+Threads:                os=12 (delta=+9)  py=3
+FDs:                    47 (delta=+29)
+System Thread Ceiling:  os_max=62498 (worker uses 0.02%)
+User Thread Usage:      total=234 procs=8 (nproc_soft=31249, 0.75%)
+Thread Delta Limit:     9/20 (45%)
+```
+
+### Calibration
+
+#### Check `RLIMIT_NPROC` in Your Environment
+
+`RLIMIT_NPROC` is **per-user and shared** across all processes of the `muppy` user (all workers + `mpy-srv` + active Fabric tasks). Verifying the real limit is the first step.
+
+```bash
+# Ubuntu host — quick check in your shell (may differ from the worker
+# if systemd overrides the limit):
+ulimit -u
+
+# Ubuntu host, worker under systemd — what the unit actually enforces:
+systemctl show imq-worker@<instance>.service \
+    --property=LimitNPROC,LimitNPROCSoft
+
+# Most reliable — active limit for the running process:
+cat /proc/$(pgrep -f 'imq-worker')/limits | grep "Max processes"
+
+# Ubuntu pod in K8s:
+kubectl exec <pod> -- sh -c 'cat /proc/1/limits | grep "Max processes"'
+```
+
+The worker also logs the limit at startup:
+```
+System thread limits: os_max=62498, user_nproc=31249/31249
+```
+
+If `ulimit -u` and `/proc/<pid>/limits` diverge, `/proc/<pid>/limits` is authoritative.
+
+#### Formula
+
+```
+max_thread_delta ≈ (RLIMIT_NPROC - cluster_baseline_threads) / (replicas × safety_factor)
+
+  cluster_baseline_threads ≈ sum of startup threads for all user processes
+  safety_factor = 3–4  (margin for simultaneous peaks + restart gap)
+```
+
+Reference table for **8 workers**:
+
+| `RLIMIT_NPROC` | `--max-thread-delta` (recommended) |
+|---|---|
+| 4 096 | 80–120 |
+| 8 192 | 200–300 |
+| 16 384 | 400–500 |
+| 65 536+ | `p95(thread_delta) × 2`, minimum 50 |
+
+#### Activation Procedure
+
+1. **Deploy with `--max-thread-delta=0`** (monitoring only): metrics and logs are active, no recycling.
+2. **Observe 7–14 days**: collect `p95` and `max` of `imq_worker_thread_delta` per worker in Prometheus/Grafana.
+3. **Activate recycling**: set `--max-thread-delta = max(p95 × 2, 50)`, capped by the formula above.
+4. **Monitor recycling frequency** via WARNING logs `Thread delta limit exceeded, exiting for recycling`:
+   - **< 2 recycles/h/worker** → acceptable containment
+   - **> 5 recycles/h/worker** → investigate the leaking tasks via per-task WARNING logs (`queue=` field)
+   - **Never triggered in 7 days** → threshold is too high, halve it
+
+**Starting point without data** (8 workers, `RLIMIT_NPROC` unknown): `--max-thread-delta 80`.
+
+### Orchestrator Configuration
+
+The self-recycling pattern requires a supervisor to restart the worker after exit.
+
+**Kubernetes** — `Deployment` with `restartPolicy: Always` (default). Set `resources.limits.pids` to control the thread budget at the cgroup level:
+
+```yaml
+spec:
+  template:
+    spec:
+      containers:
+      - name: imq-worker
+        args:
+        - imq-worker
+        - --queue=muppy
+        - --max-thread-delta=80
+        - --observability-port=9000
+        resources:
+          limits:
+            pids: 512        # cgroup pids controller — effective RLIMIT_NPROC in the container
+```
+
+**systemd**:
+
+```ini
+[Service]
+Restart=always
+RestartSec=5s
+LimitNPROC=2048
+ExecStart=bin/start_odoo imq-worker --queue muppy --max-thread-delta 80 --observability-port 9000
+```
+
+### Troubleshooting
+
+**Worker exits immediately: "No active queues found matching pattern: 'muppy'"**
+The queue name has literal quotes. In Kubernetes YAML args, the shell does not strip them. Use `--queue=muppy`, not `--queue='muppy'`.
+
+**Frequent per-task WARNING "Thread leak detected"**
+One or more task types are not closing their Fabric/SSH connections. Check the `queue=` field in the warning to identify the processor. Inspect `finally` blocks in Fabric tasks for unclosed connections.
+
+**Worker recycles too often (> 5/h)**
+`--max-thread-delta` is too low, or the leak is severe. Check `p95(thread_delta)` in Prometheus. If the delta keeps growing session to session without bound, the leak needs fixing — raise the threshold temporarily while investigating.
+
+**Worker never recycles despite WARNING logs**
+`--max-thread-delta=0` (disabled) or the configured value is never reached. Check the `imq_worker_max_thread_delta` gauge (0 = disabled) and `imq_worker_thread_delta` trend.
+
+---
 
 ## Advanced Observability
 
@@ -1126,6 +1481,86 @@ curl -s http://localhost:8080/status | jq '.status.queues[]'
 # Check last activity time
 curl -s http://localhost:8080/status | jq '.status.runtime.last_message_at'
 ```
+
+## Systemd Deployments
+
+When running multiple IMQ workers as systemd units, each worker would normally expose metrics on a separate port, requiring multiple Prometheus scrape targets. The **textfile export mode** solves this by writing metrics to files consumed by `node_exporter` — no HTTP ports needed, single Prometheus target.
+
+### Textfile Collector Mode (Recommended for systemd)
+
+```bash
+# Each worker writes to /var/lib/node_exporter/textfile/imq_<worker_name>.prom
+bin/start_odoo imq-worker --database $PGDATABASE --queue=default \
+  --worker-name=imq-default \
+  --metrics-export-mode=textfile \
+  --textfile-dir=/var/lib/node_exporter/textfile
+```
+
+`node_exporter` collects all `.prom` files automatically — Prometheus scrapes a single `node_exporter` endpoint regardless of the number of IMQ workers.
+
+**Requirements**: `node_exporter` installed with `--collector.textfile.directory=/var/lib/node_exporter/textfile`.
+
+### Setup: Textfile Collector Directory
+
+The textfile directory must exist and be writable by the IMQ worker process before starting workers in textfile mode.
+
+The directory must be readable by `node_exporter` and writable by the IMQ worker user — two different users. The simplest setup uses the sticky bit (same pattern as `/tmp`): any user can write files, but cannot delete files owned by others.
+
+```bash
+# Create the textfile directory with sticky-world-writable permissions
+sudo mkdir -p /var/lib/node_exporter/textfile
+sudo chmod 1777 /var/lib/node_exporter/textfile
+```
+
+Alternatively, use a shared group if you prefer stricter permissions:
+
+```bash
+sudo mkdir -p /var/lib/node_exporter/textfile
+sudo chown node_exporter:node_exporter /var/lib/node_exporter/textfile
+sudo chmod 775 /var/lib/node_exporter/textfile   # group can write
+sudo usermod -aG node_exporter odoo              # add IMQ worker user to group
+```
+
+Ensure `node_exporter` is started with the textfile collector enabled:
+
+```bash
+# /etc/systemd/system/node_exporter.service (excerpt)
+ExecStart=/usr/local/bin/node_exporter \
+    --collector.textfile.directory=/var/lib/node_exporter/textfile
+```
+
+### Systemd Unit Example
+
+```ini
+[Unit]
+Description=IMQ Worker - default queue
+After=network.target
+
+[Service]
+User=odoo
+WorkingDirectory=/opt/your-project
+ExecStart=bin/start_odoo imq-worker \
+    --queue=default \
+    --worker-name=imq-default \
+    --metrics-export-mode=textfile \
+    --textfile-dir=/var/lib/node_exporter/textfile
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Metrics Export Modes
+
+| Mode | Flag | Use case |
+|------|------|----------|
+| `network` (default) | `--observability-port=PORT` | Kubernetes, single worker, direct Prometheus scraping |
+| `textfile` | `--metrics-export-mode=textfile` | systemd multi-worker deployments with `node_exporter` |
+
+**Cleanup on shutdown**: In textfile mode, the worker removes its `.prom` file on clean exit so stale metrics do not persist after the service stops. Metrics are written at the same cadence as internal metric updates (every 10 messages or 50 empty polls).
+
+---
 
 ## Kubernetes Deployment (Beta)
 

@@ -81,6 +81,8 @@ def send_message__pgsql(
         "group": message_group,
         "queue_message_id": queue_obj.generate_message_id(),
         "user_id": odoo_env.user.id,
+        # Get requesting_user_id from processor_context, fallback to user_id
+        "requesting_user_id": message_body_values.get('context', {}).get('_imq_requesting_user_id') or message_body_values.get('user_id') or odoo_env.user.id,
         "raw_message_body": _raw_message_body,
         "enqueued_time": _now.isoformat(sep=' ', timespec='seconds'),
         "enqueued_time_microseconds": _now.microsecond,

@@ -137,9 +137,12 @@ class IMQWorker(models.AbstractModel):
             # create a db cursor and Environment dedicated to execution
             run_cursor = self.env.registry.cursor()
             _logger.debug("run_cursor: %s created.", run_cursor)
-            run_env = Environment(run_cursor,
-                                  message_obj.user_id.id,
-                                  run_context)
+            run_env = Environment(
+                run_cursor,
+                message_obj.user_id.id,
+                run_context,
+                su=run_context.get('_imq_su', False)
+            )
     
             if message_obj.message_type == 'rpc':
                 # use run_env to rebuild parameters (including openerp.Models)
@@ -603,7 +606,6 @@ class IMQWorker(models.AbstractModel):
         :return: nothing
         """
         TLS.log_cursor = self.env.registry.cursor()
-        TLS.log_cursor.autocommit(True)
         TLS._imq_stream = MpyStringIO(
             message_obj.id, 
             processing_obj.id, 
@@ -707,6 +709,7 @@ class MpyStringIO(StringIO):
                     _now,
                 )
         )
+        self._log_cr.commit()
         #print(">>>>>>>>>>>>>>>>>>>>>>>>")
         #print("%s%s" % (self._mpy_buffer, output_str))
         #print("<<<<<<<<<<<<<<<<<<<<<<<<")
@@ -747,5 +750,6 @@ class MpyStringIO(StringIO):
                         _now,
                     )
             )
+            self._log_cr.commit()
         self._mpy_buffer = None
 

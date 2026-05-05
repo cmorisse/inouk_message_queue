@@ -26,6 +26,7 @@ IMQ_MESSAGE_STATES = [
     ('failed', "Failed"),
     ('archived', "Archived"),
     ('reset', "Reset"),
+    ('cancelled', "Cancelled"),
 ]
 
 IMQ_MESSAGE_TYPES = [
@@ -74,6 +75,13 @@ class IMQMessage(models.Model):
                               help="User owner of the Message. This defines "
                                      "the security restriction of executed "
                                      "processing.")
+    requesting_user_id = fields.Many2one(
+        'res.users',
+        string="Requesting User",
+        index=True,
+        help="User who requested this operation. May differ from user_id when "
+             "operations are executed by a system user on behalf of another user."
+    )
     code = fields.Char(help="Python expression that will be executed to "
                             "launch message processing. This is informational "
                             "only. Use fields in 'Exec. params. tab to "
@@ -144,16 +152,12 @@ class IMQMessage(models.Model):
         return self.env.ref('inouk_message_queue.imq_message__act_window')
 
     def get_form_url(self):
+        """Return URL to open this record in backend form view (Odoo 18 format)."""
         self.ensure_one()
-        web_base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-        action_dict = self.get_formview_action()
-        action_dict['action_id'] = self.get_default_action().id
-        action_dict['web_base_url'] = web_base_url
-        # target:
-        # https://xsid-dev.inouk.ovh/web?debug#id=1&action=257&model=imq.test_launcher&view_type=form&menu_id=140
-        url_str = "{web_base_url}/web#id={res_id}&action={action_id}&model="\
-                  "{res_model}&view_type={view_type}".format(**action_dict)
-        _logger.debug("get_form_url(%s) => %s", self,  url_str)
+        base_url = self.get_base_url()
+        action = self.get_default_action()
+        url_str = f"{base_url}/odoo/action-{action.id}/{self.id}"
+        _logger.debug("get_form_url(%s) => %s", self, url_str)
         return url_str
 
     def set_work_progress(self, current=None, target=None):
@@ -174,23 +178,153 @@ class IMQMessage(models.Model):
             record.attempt_as_text = "%s / %s" % (record.attempt, 
                                                   record.max_number_of_attempts)
     
+    def btn_refresh(self):
+        """Button action. GUI feedback only — calls refresh()."""
+        return self.refresh()
+
     def refresh(self):
         pass
-    
-    def btn_retry_processing(self):
-        self.ensure_one()
-        self.do_retry_processing()
 
-    def do_retry_processing(self):
-        """Interactive method which call Q specific method to retry processing 
-        of a message record set.
+    @api.model
+    def get_task_status(self, message_ids):
+        """Get task status with elapsed time and next-step hints.
+
+        When a message has child tasks (linked via parent_message_id),
+        the response includes children_summary and children fields.
+
+        Args:
+            message_ids: list of imq.message IDs
+
+        Returns:
+            list of dicts with status info per task
         """
-        _method_name = "do_retry_processing__%s" % self.queue_id.provider
+        messages = self.browse(message_ids).exists()
+        now = fields.Datetime.now()
+        result = []
+        for msg in messages:
+            elapsed = None
+            if msg.start_time:
+                end = msg.end_time or now
+                elapsed = round((end - msg.start_time).total_seconds())
+
+            hints = {
+                'pending': "Task queued. If still pending after 2min, IMQ worker may not be running.",
+                'wip': "Executing. Poll again in 30 seconds.",
+                'done': "Completed. Read the target record for results.",
+                'failed': (
+                    "Failed. Read imq.message_processing_log (filter message_id=<id>) "
+                    "for details. If this task is in a FIFO queue group, subsequent "
+                    "pending tasks in the same group are blocked until this one is "
+                    "archived — call archive() once you have captured the diagnostics."
+                ),
+                'terminated': "Manually terminated.",
+                'retry': "Will be retried automatically.",
+                'cancelled': "Cancelled by user.",
+            }
+            entry = {
+                'id': msg.id,
+                'name': msg.name or '',
+                'state': msg.state,
+                'elapsed_seconds': elapsed,
+                'hint': hints.get(msg.state, f"State: {msg.state}"),
+            }
+
+            # Enrich with children status if this message has child tasks
+            if msg.queue_message_id:
+                children_objs = self.search([
+                    ('parent_message_id', '=', msg.queue_message_id)
+                ])
+                if children_objs:
+                    # Build per-state counters
+                    summary = {}
+                    children_list = []
+                    for child in children_objs:
+                        state = child.state
+                        summary[state] = summary.get(state, 0) + 1
+                        child_elapsed = None
+                        if child.start_time:
+                            child_end = child.end_time or now
+                            child_elapsed = round((child_end - child.start_time).total_seconds())
+                        children_list.append({
+                            'id': child.id,
+                            'name': child.name or '',
+                            'state': state,
+                            'elapsed_seconds': child_elapsed,
+                        })
+                    summary['total'] = len(children_objs)
+                    entry['children_summary'] = summary
+                    entry['children'] = children_list
+
+            result.append(entry)
+        return result
+
+    def btn_retry_processing(self):
+        """Button action. GUI wrapper — calls retry_processing()."""
+        self.ensure_one()
+        self.retry_processing()
+
+    def btn_retry_recovery(self):
+        """Button action for recovery retry on a 'wip' message.
+
+        Reserved for support staff: a worker restart left the message stuck in
+        'wip'. Re-injecting it before the visibility timeout expires avoids
+        AWS-style auto-redelivery side effects. Visible only in developer mode.
+        """
+        self.ensure_one()
+        self.retry_processing(force_wip=True)
+
+    def retry_processing(self, force_wip=False):
+        """Re-inject a message in the retry pipeline.
+
+        Dispatches to the queue provider's retry_processing__{provider}
+        implementation (pgsql, aws_sqs, ...). Each provider applies its own
+        constraints (e.g., aws_sqs skips FIFO and non-RPC messages).
+
+        Refuses 'wip' unless force_wip=True (recovery path used by
+        btn_retry_recovery, gated to developer mode).
+        """
+        if not force_wip and any(rec.state == 'wip' for rec in self):
+            raise UserError(_(
+                "Retry on 'wip' state is a recovery action. "
+                "Use the 'Retry (recovery)' button (developer mode required)."
+            ))
+        _method_name = "retry_processing__%s" % self.queue_id.provider
         _method = getattr(self, _method_name)
         _method()
 
-    def do_archive(self):
+    def btn_archive(self):
+        """Button action. GUI wrapper — calls archive()."""
+        return self.archive()
+
+    def archive(self):
+        # Primary use: unblock a FIFO group stuck on a failed task.
+        # Reject in-flight states (new, wip, retry, reset) to avoid racing the worker.
+        ARCHIVABLE_STATES = ('pending', 'failed', 'terminated', 'done', 'cancelled')
+        forbidden = self.filtered(lambda m: m.state not in ARCHIVABLE_STATES)
+        if forbidden:
+            raise UserError(_(
+                "Only messages in %s state can be archived. Found: %s"
+            ) % (', '.join(ARCHIVABLE_STATES), ', '.join(set(forbidden.mapped('state')))))
         self.write({'state': 'archived'})
+
+    def btn_cancel(self):
+        """Button action to cancel message(s). Calls cancel()."""
+        return self.cancel()
+
+    def cancel(self):
+        """Cancel pending/retry PGSQL messages. Sets state to 'cancelled' and end_time."""
+        non_pgsql = self.filtered(lambda m: m.queue_provider != 'pgsql')
+        if non_pgsql:
+            raise UserError(_("Cancel is only supported for PostgreSQL queue messages."))
+        forbidden = self.filtered(lambda m: m.state not in ('pending', 'retry'))
+        if forbidden:
+            raise UserError(_(
+                "Only messages in 'pending' or 'retry' state can be cancelled. "
+                "Found: %s") % ', '.join(set(forbidden.mapped('state'))))
+        self.write({
+            'state': 'cancelled',
+            'end_time': fields.Datetime.now(),
+        })
     
     def create_processing_object(self, worker_type='cron-workerv2'):
         self.ensure_one()

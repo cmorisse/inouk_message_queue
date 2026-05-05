@@ -119,8 +119,8 @@ class IMQQueue(models.Model):
 
     def _compute_admin_secret(self):
         for record in self:
-            if self.user_has_groups('inouk_message_queue.group_admin'):
-                record.admin_secret = self.secret
+            if self.env.user.has_group('inouk_message_queue.group_admin'):
+                record.admin_secret = record.secret
             else:
                 record.admin_secret = None
             
@@ -140,16 +140,12 @@ class IMQQueue(models.Model):
         return self.env.ref('inouk_message_queue.imq_queue__act_window')
 
     def get_form_url(self):
+        """Return URL to open this record in backend form view (Odoo 18 format)."""
         self.ensure_one()
-        web_base_url = self.env['ir.config_parameter'].get_param('web.base.url')
-        action_dict = self.get_formview_action()
-        action_dict['action_id'] = self.get_default_action().id
-        action_dict['web_base_url'] = web_base_url
-        # target:
-        # https://xsid-dev.inouk.ovh/web?debug#id=1&action=257&model=imq.test_launcher&view_type=form&menu_id=140
-        url_str = "{web_base_url}/web#id={res_id}&action={action_id}&model="\
-                  "{res_model}&view_type={view_type}".format(**action_dict)
-        _logger.debug("URL for %s = > %q", self, url_str)
+        base_url = self.get_base_url()
+        action = self.get_default_action()
+        url_str = f"{base_url}/odoo/action-{action.id}/{self.id}"
+        _logger.debug("get_form_url(%s) => %s", self, url_str)
         return url_str
 
     @api.model
@@ -202,21 +198,21 @@ class IMQQueue(models.Model):
         self.test_result = result_str
 
     def send_notification(self, message_type, message_title, message, icon=None, message_obj=None):
-        """ Send message to all 'channels' (slack, sms) of all queues in recordset
+        """Send message to all 'channels' (odoo, slack, teams) of all queues in recordset.
 
-        :param message_type: "danger", "warning", "success" or "info". This defines the overall aspect of the notification.
+        :param message_type: "danger", "warning", "success" or "info".
+            This defines the overall aspect of the notification.
         :param message_title: The title of the notification
         :param message: The message text. HTML content is supported.
-        :pram icon: any of :bear:, success, info, warning, danger"
-        """        
+        :param icon: DEPRECATED - Ignored in Odoo 18.
+        """
         self.send_odoo_notification(
-            message_type, 
-            message_title, 
-            message, 
-            icon=icon, 
-            #sticky=True,
-            message_obj=message_obj, 
-            user_obj=message_obj.user_id if message_obj else self.env.user
+            message_type,
+            message_title,
+            message,
+            icon=icon,
+            message_obj=message_obj,
+            user_obj=None,  # Broadcast to all IMQ administrators
         )
         self.send_slack_notification(message_type, message_title, message, icon=icon, message_obj=message_obj)
 

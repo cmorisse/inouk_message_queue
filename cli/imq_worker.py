@@ -137,7 +137,7 @@ class ImqWorker(Command):
         
         # Import and initialize worker (import here to avoid circular imports)
         try:
-            from ..workers.standalone import StandaloneWorker
+            from odoo.addons.inouk_message_queue.workers.standalone import StandaloneWorker
             
             # Create worker instance
             worker = StandaloneWorker(

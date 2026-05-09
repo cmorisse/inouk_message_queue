@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import pickle
 import datetime
 
@@ -12,6 +13,8 @@ from .message import IMQ_MESSAGE_STATES
 from .message_processor import IMQ_MESSAGE_PROCESSOR_LOG_LEVEL
 
 """Tracks message processing history"""
+
+_logger = logging.getLogger("IMQ.message_processing")
 
 
 
@@ -65,10 +68,20 @@ class IMQMessageProcessing(models.Model):
                                    related='message_id.processor_id',
                                    store=True,
                                    readonly=True)
+    company_id = fields.Many2one(
+        'res.company',
+        string="Company",
+        related='message_id.company_id',
+        store=True,
+        readonly=True,
+        index=True,
+        help="Tenant company. Mirrors message_id.company_id (frozen at "
+             "message create from requesting_user_id.company_id)."
+    )
     # statistics
     processing_time = fields.Float(compute='_calc_processing_time', store=True)
 
-    
+
     @api.depends('start_time','end_time')
     def _calc_processing_time(self):
         for record in self:
@@ -79,7 +92,6 @@ class IMQMessageProcessing(models.Model):
             else:
                 record.processing_time = None
 
-    
     def refresh(self):
         pass
 
@@ -92,6 +104,16 @@ class IMQMessageProcessingLog(models.Model):
     processing_id = fields.Many2one('imq.message_processing', "Processing", ondelete='cascade', index=True)
     message_id = fields.Many2one('imq.message', "Message", ondelete='cascade', index=True)
     active_message_id = fields.Many2one('imq.message', "Active Message", ondelete='cascade', index=True)
+    company_id = fields.Many2one(
+        'res.company',
+        string="Company",
+        related='message_id.company_id',
+        store=True,
+        readonly=True,
+        index=True,
+        help="Tenant company. Mirrors message_id.company_id (frozen at "
+             "message create from requesting_user_id.company_id)."
+    )
 
     logger_name = fields.Char()
     log_level = fields.Selection(IMQ_MESSAGE_PROCESSOR_LOG_LEVEL)

@@ -82,6 +82,15 @@ class IMQMessage(models.Model):
         help="User who requested this operation. May differ from user_id when "
              "operations are executed by a system user on behalf of another user."
     )
+    company_id = fields.Many2one(
+        'res.company',
+        string="Company",
+        readonly=True,
+        index=True,
+        help="Tenant company at message submission time. Frozen at create from "
+             "requesting_user_id.company_id. Consumers may use this field for "
+             "tenant-scoped record rules; IMQ itself enforces no ACL on it."
+    )
     code = fields.Char(help="Python expression that will be executed to "
                             "launch message processing. This is informational "
                             "only. Use fields in 'Exec. params. tab to "
@@ -138,10 +147,28 @@ class IMQMessage(models.Model):
     )
     _sql_constraints = [
         (
-            'remote_id_uniq', 
-            "UNIQUE(queue_id,queue_message_id)", 
+            'remote_id_uniq',
+            "UNIQUE(queue_id,queue_message_id)",
             "Message ID must be unique per Queue.")
     ]
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        # company_id is always derived from requesting_user_id, never declared
+        # by the caller. Letting a caller supply company_id would open a
+        # cross-tenant injection vector (see muppy_manganese threat model V9).
+        # Sudo the User lookup so callers without res.users read access
+        # (portal users, minimal-permission contexts) can still create messages.
+        User = self.env['res.users'].sudo()
+        for vals in vals_list:
+            if vals.pop('company_id', None) is not None:
+                _logger.warning(
+                    "imq.message.create(): caller-supplied company_id ignored "
+                    "— tenancy is always derived from requesting_user_id."
+                )
+            ruid = vals.get('requesting_user_id')
+            vals['company_id'] = User.browse(ruid).company_id.id if ruid else False
+        return super().create(vals_list)
 
     def get_formview_id(self, access_uid=None):
         self.ensure_one()

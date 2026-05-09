@@ -6,7 +6,7 @@
     'author': 'Cyril MORISSE (twitter @cmorisse)',
     'license': 'OPL-1',
     'category': 'Extra Tools',
-    'version': '0.1',
+    'version': '0.2.0',
     'depends': ['inouk_core', 'mail'],
     'data': [
         'security/res_users.xml',

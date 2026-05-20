@@ -52,7 +52,7 @@ my_heavy_task.run_async({'key': 'value'})
 - **Zero configuration** - Works out of the box with PostgreSQL
 - **Rich debugging** - Inspect task state, logs, and execution history
 - **Flexible routing** - Route tasks to specific queues and workers
-- **Open source** - MIT licensed, community-driven development
+- **Source-available** - FSL-1.1-MIT licensed (Functional Source License; each version converts to the MIT license two years after its release)
 
 ## Quick Start
 
@@ -2261,7 +2261,11 @@ The test script is designed to work in CI/CD environments:
 
 ## License
 
-This module is licensed under OPL-1.
+This module is licensed under the Functional Source License, Version 1.1, MIT
+Future License (FSL-1.1-MIT) — see the [LICENSE](LICENSE) file. FSL is a
+source-available license: use is permitted for any purpose other than a
+Competing Use, and each version converts to the MIT license two years after its
+release.
 
 ## Credits
 

@@ -29,7 +29,7 @@ spec:
         args:
           - "imq-worker"
           - "--database=$(DATABASE_NAME)"
-          - "--queue=migration-tasks"  # Specific queue to drain
+          - "--queues=migration-tasks"  # Specific queue to drain
           - "--max-messages=0"  # Process until queue is empty
           - "--max-rss-memory=2048M"
           - "--observability-port=8080"
@@ -108,7 +108,7 @@ spec:
             args:
               - "imq-worker"
               - "--database=$(DATABASE_NAME)"
-              - "--queue=nightly-batch"
+              - "--queues=nightly-batch"
               - "--max-messages=10000"  # Process up to 10k messages
               - "--max-rss-memory=4096M"
               - "--observability-port=8080"
@@ -188,7 +188,7 @@ spec:
         args:
           - "imq-worker"
           - "--database=$(DATABASE_NAME)"
-          - "--queue=muppy"  # Must specify the queue containing the message
+          - "--queues=muppy"  # Must specify the queue containing the message
           - "--message=49665"  # Process specific message ID
           - "--observability-port=8080"
           - "--log-level=DEBUG"  # Debug logging for troubleshooting

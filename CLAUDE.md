@@ -61,7 +61,7 @@ bin/start_odoo imq-ctl --database $PGDATABASE describe message MESSAGE_ID
 bin/start_odoo imq-ctl --database $PGDATABASE describe queue QUEUE_NAME  
 
 # Run worker with observability
-bin/start_odoo imq-worker --database $PGDATABASE --queue PATTERN --observability-port 8080
+bin/start_odoo imq-worker --database $PGDATABASE --queues PATTERN --observability-port 8080
 
 # Check worker status
 curl http://localhost:8080/status | python3 -m json.tool

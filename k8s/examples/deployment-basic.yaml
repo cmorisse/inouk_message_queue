@@ -30,7 +30,7 @@ spec:
         args:
           - "imq-worker"
           - "--database=$(DATABASE_NAME)"
-          - "--queue=default"
+          - "--queues=default"
           - "--max-messages=1000"
           - "--max-rss-memory=512M"
           - "--observability-port=8080"

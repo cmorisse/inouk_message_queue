@@ -31,7 +31,7 @@ spec:
         args:
           - "imq-worker"
           - "--database=$(DATABASE_NAME)"
-          - "--queue=high-priority"
+          - "--queues=high-priority"
           - "--max-messages=0"  # No limit, continuous processing
           - "--max-rss-memory=512M"
           - "--observability-port=8080"
@@ -123,7 +123,7 @@ spec:
         args:
           - "imq-worker"
           - "--database=$(DATABASE_NAME)"
-          - "--queue=default.*"  # Process all queues starting with 'default'
+          - "--queues=default.*"  # Process all queues starting with 'default'
           - "--max-messages=2000"
           - "--max-rss-memory=1024M"
           - "--observability-port=8080"
@@ -214,7 +214,7 @@ spec:
         args:
           - "imq-worker"
           - "--database=$(DATABASE_NAME)"
-          - "--queue=batch.*"
+          - "--queues=batch.*"
           - "--max-messages=10000"  # Process many messages then exit
           - "--max-rss-memory=2048M"  # Higher memory for batch jobs
           - "--observability-port=8080"

@@ -83,6 +83,13 @@ def send_message__pgsql(
         "user_id": odoo_env.user.id,
         # Get requesting_user_id from processor_context, fallback to user_id
         "requesting_user_id": message_body_values.get('context', {}).get('_imq_requesting_user_id') or message_body_values.get('user_id') or odoo_env.user.id,
+        # Reporting axes set at ENQUEUE (pgsql creates the record here), so a
+        # still-'pending' message already carries its bucket and get_task_status
+        # can return a duration hint before a worker even picks it up. The receive
+        # site store_message__pgsql re-applies the same values (harmless) and
+        # keeps SQS — which has no record until receive — symmetric.
+        "stats_category": message_body_values.get('context', {}).get('_imq_stats_category'),
+        "stats_target": message_body_values.get('context', {}).get('_imq_stats_target'),
         "raw_message_body": _raw_message_body,
         "enqueued_time": _now.isoformat(sep=' ', timespec='seconds'),
         "enqueued_time_microseconds": _now.microsecond,

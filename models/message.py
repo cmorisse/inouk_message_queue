@@ -126,6 +126,24 @@ class IMQMessage(models.Model):
         readonly=True
     )
     end_time_microseconds = fields.Integer()
+
+    # Reporting axes (see README "Execution Stats"). Set at receive time from
+    # processor_context by store_message__pgsql / store_message__aws_sqs, so they
+    # behave identically across providers.
+    stats_category = fields.Char(
+        index=True,
+        help="Reporting axis (low cardinality): the KIND of task, for "
+             "aggregation/read_group on processing_time. For Muppy tasks, "
+             "auto-filled by mpy_execute with the fabric task name. Empty for "
+             "untagged tasks (fall back to processor_id at query time)."
+    )
+    stats_target = fields.Char(
+        index=True,
+        help="Reporting axis (conventional, free-form): WHAT the task acted on "
+             "(e.g. app_def name, host name). For filtering/breakdown, not "
+             "strict aggregation."
+    )
+
     result = fields.Text(readonly=True)
     operator_comment = fields.Text()
 
@@ -212,6 +230,91 @@ class IMQMessage(models.Model):
     def refresh(self):
         pass
 
+    # Minimum successful samples before the precise (category+target) bucket is
+    # trusted; below this, the estimate falls back to the broader category bucket.
+    DURATION_ESTIMATE_MIN_SAMPLES = 3
+
+    # Poll-guidance tuning (token economy). We anchor the recommended wait on
+    # p95 (not p50): for an agent, wall-clock waiting is ~free while each poll
+    # costs tokens, so biasing the wait high makes the agent sleep until
+    # completion is ~95% likely and then poll ONCE, instead of polling at a
+    # fixed interval. The blocking get_*_status variant will use this same value
+    # as its server-side block timeout (returning early on completion).
+    DURATION_HINT_MARGIN = 1.10          # recommended wait target = p95 * margin
+    NEXT_POLL_FLOOR_SECONDS = 20         # never advise polling sooner than this
+    OVERDUE_POLL_SECONDS = 30            # cadence once elapsed passes p95 (tail / stuck)
+
+    @api.model
+    def _format_duration_estimate(self, row, based_on):
+        return {
+            'sample_count': int(row['n']),
+            'avg_seconds': round(row['avg']),
+            'p50_seconds': round(row['p50']),
+            'p95_seconds': round(row['p95']),
+            'min_seconds': round(row['min']),
+            'max_seconds': round(row['max']),
+            'based_on': based_on,  # 'category+target' or 'category'
+        }
+
+    @api.model
+    def estimate_task_duration(self, stats_category, stats_target=None):
+        """Historical duration estimate (seconds) for a task bucket, or None.
+
+        Aggregates processing_time over SUCCESSFUL (state='done') processings
+        sharing stats_category. Walks a fallback ladder ordered by specificity:
+        tries the precise (category+target) bucket first; if it holds fewer than
+        DURATION_ESTIMATE_MIN_SAMPLES samples, falls back to the broader
+        (category-only) bucket. This ladder is why the stats fields are ordered
+        coarse->fine (category -> target); a future stats_sub_target would add a
+        finer rung above target with the same degrade-when-thin semantics.
+
+        Returns a dict (see _format_duration_estimate) with a 'based_on' marker
+        telling the caller which rung produced the figures, or None when the
+        category is empty or no successful sample exists at all.
+        """
+        if not stats_category:
+            return None
+        # Raw SQL below bypasses the ORM cache — flush pending writes on the
+        # queried fields first so freshly-created/updated processings are visible.
+        self.env['imq.message_processing'].flush_model(
+            ['processing_time', 'stats_category', 'stats_target', 'state'])
+        base_sql = """
+            SELECT count(*) AS n,
+                   avg(processing_time) AS avg,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY processing_time) AS p50,
+                   percentile_cont(0.95) WITHIN GROUP (ORDER BY processing_time) AS p95,
+                   min(processing_time) AS min, max(processing_time) AS max
+            FROM imq_message_processing
+            WHERE state = 'done' AND processing_time IS NOT NULL
+              AND stats_category = %s
+        """
+        if stats_target:
+            self.env.cr.execute(base_sql + " AND stats_target = %s",
+                                (stats_category, stats_target))
+            row = self.env.cr.dictfetchone()
+            if row and row['n'] >= self.DURATION_ESTIMATE_MIN_SAMPLES:
+                return self._format_duration_estimate(row, 'category+target')
+        self.env.cr.execute(base_sql, (stats_category,))
+        row = self.env.cr.dictfetchone()
+        if row and row['n']:
+            return self._format_duration_estimate(row, 'category')
+        return None
+
+    @api.model
+    def _poll_guidance(self, estimate, elapsed):
+        """Return (next_poll_seconds, overdue) from an estimate + elapsed time.
+
+        Anchors the wait on p95*margin so the agent sleeps until completion is
+        very likely and polls once (see DURATION_HINT_MARGIN rationale). Past
+        p95 the task is in the tail / possibly stuck → short cadence + overdue.
+        """
+        elapsed = elapsed or 0
+        p95 = estimate['p95_seconds']
+        if elapsed >= p95:
+            return self.OVERDUE_POLL_SECONDS, True
+        target = p95 * self.DURATION_HINT_MARGIN
+        return max(self.NEXT_POLL_FLOOR_SECONDS, round(target - elapsed)), False
+
     @api.model
     def get_task_status(self, message_ids):
         """Get task status with elapsed time and next-step hints.
@@ -256,6 +359,29 @@ class IMQMessage(models.Model):
                 'hint': hints.get(msg.state, f"State: {msg.state}"),
             }
 
+            # Duration hint from history (same category+target bucket). Lets an
+            # MCP agent set expectations and compute an ETA. Absent when the task
+            # is untagged or has no historical sample.
+            estimate = self.estimate_task_duration(msg.stats_category, msg.stats_target)
+            if estimate:
+                entry['expected'] = estimate
+                if msg.state in ('pending', 'wip'):
+                    next_poll, overdue = self._poll_guidance(estimate, elapsed)
+                    entry['next_poll_seconds'] = next_poll
+                    if overdue:
+                        entry['overdue'] = True
+                        entry['hint'] += (
+                            " Past typical max (p95 %ss) at %ss — may be stuck;"
+                            " re-poll in %ss."
+                            % (estimate['p95_seconds'], elapsed or 0, next_poll)
+                        )
+                    else:
+                        entry['hint'] += (
+                            " Typically ~%ss (p95 %ss, n=%s). Sleep ~%ss, then poll once."
+                            % (estimate['p50_seconds'], estimate['p95_seconds'],
+                               estimate['sample_count'], next_poll)
+                        )
+
             # Enrich with children status if this message has child tasks
             if msg.queue_message_id:
                 children_objs = self.search([
@@ -272,12 +398,23 @@ class IMQMessage(models.Model):
                         if child.start_time:
                             child_end = child.end_time or now
                             child_elapsed = round((child_end - child.start_time).total_seconds())
-                        children_list.append({
+                        child_entry = {
                             'id': child.id,
                             'name': child.name or '',
                             'state': state,
                             'elapsed_seconds': child_elapsed,
-                        })
+                        }
+                        child_estimate = self.estimate_task_duration(
+                            child.stats_category, child.stats_target)
+                        if child_estimate:
+                            child_entry['expected'] = child_estimate
+                            if state in ('pending', 'wip'):
+                                next_poll, overdue = self._poll_guidance(
+                                    child_estimate, child_elapsed)
+                                child_entry['next_poll_seconds'] = next_poll
+                                if overdue:
+                                    child_entry['overdue'] = True
+                        children_list.append(child_entry)
                     summary['total'] = len(children_objs)
                     entry['children_summary'] = summary
                     entry['children'] = children_list

@@ -411,6 +411,50 @@ for item in items:
 
 When a parent message has children, `get_task_status()` returns `children_summary` (per-state counters) and `children` (list of child statuses).
 
+### Execution Stats (`_imq_stats_category` / `_imq_stats_target`)
+
+Two optional reporting axes promoted to queryable columns on the message and
+mirrored (stored + indexed) onto `imq.message_processing`, where the existing
+`processing_time` measure lives (one row per attempt). They let you answer *"how
+long does task X take?"* — aggregated by kind, filtered by target.
+
+- **`_imq_stats_category`** — low cardinality, the *kind* of task. This is the
+  aggregation axis (`read_group` / pivot rows). Keep it stable and generic
+  (`"mpy_pg_backup"`, `"provision_app_server"`), **not** instance-specific.
+- **`_imq_stats_target`** — free-form, conventional, *what* the task acted on
+  (an app definition name, a host name…). This is the filter/breakdown axis.
+
+```python
+# run_async — tag both axes explicitly
+record.process.run_async(
+    record, data,
+    _imq_stats_category="provision_app_server",
+    _imq_stats_target=app_def_obj.name,
+)
+```
+
+With Muppy's `mpy_execute`, `stats_category` is **auto-filled** with the fabric
+task name (`fabric_task_callable.__name__`) when not provided — because every
+Muppy task runs through the same `_mpy_execute` processor, so `processor_id`
+can't tell them apart. The caller always wins if it passes `_imq_stats_category`
+explicitly. Pass `_imq_stats_target` for the acted-on object:
+
+```python
+mpy_execute(mpy_pg_backup, host_obj)                       # category = "mpy_pg_backup"
+mpy_execute(mpy_pg_backup, host_obj,                       # target tagged
+            _imq_stats_target=cluster_obj.name)
+```
+
+**Provider parity**: the values ride in the processor context, so they are set
+identically for the PostgreSQL and AWS SQS providers (read back at receive time
+by `store_message__pgsql` / `store_message__aws_sqs`). Untagged tasks leave the
+columns empty — fall back to `processor_id` at query time.
+
+**Querying**: group/aggregate on `imq.message_processing` — e.g.
+`read_group([], ['processing_time:avg'], ['stats_category'])`, or use the
+**Execution Stats** pivot view (rows: category → target; measure: avg
+`processing_time`).
+
 ## Monitoring
 
 ### Message States

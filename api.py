@@ -312,6 +312,17 @@ def enqueue(runnable, *args, **kwargs):
     if '_imq_requesting_user_id' in kwargs:
         del kwargs['_imq_requesting_user_id']
 
+    # Reporting axes (see README "Execution Stats"). Extracted here — the single
+    # chokepoint for mpy_execute AND run_async — and del'd BEFORE the payload is
+    # pickled below, so they never leak into the executed task's kwargs.
+    stats_category = kwargs.get('_imq_stats_category', None)
+    if '_imq_stats_category' in kwargs:
+        del kwargs['_imq_stats_category']
+
+    stats_target = kwargs.get('_imq_stats_target', None)
+    if '_imq_stats_target' in kwargs:
+        del kwargs['_imq_stats_target']
+
     message_name = extract_message_name(runnable, args, kwargs)
     if '_imq_message_name' in kwargs:
         del kwargs['_imq_message_name']  # We pass all "_imq" params via context
@@ -348,6 +359,9 @@ def enqueue(runnable, *args, **kwargs):
     processor_context['_imq_su'] = env.su if env else False
     # Track requesting user (for visibility when executed by system user)
     processor_context['_imq_requesting_user_id'] = requesting_user_id
+    # Reporting axes — read back at receive time by store_message__*
+    processor_context['_imq_stats_category'] = stats_category
+    processor_context['_imq_stats_target'] = stats_target
 
     # We serialize payload differently based on is_method
     if is_method:

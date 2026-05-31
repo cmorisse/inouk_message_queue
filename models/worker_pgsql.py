@@ -199,6 +199,11 @@ class IMQWorkerSQS(models.AbstractModel):
             message_values_dict['parent_message_id'] = context['_imq_parent_message_id']
         if '_imq_target_children_count' in context:
             message_values_dict['target_children_count'] = context['_imq_target_children_count']
+        # Reporting axes (see README "Execution Stats")
+        if '_imq_stats_category' in context:
+            message_values_dict['stats_category'] = context['_imq_stats_category']
+        if '_imq_stats_target' in context:
+            message_values_dict['stats_target'] = context['_imq_stats_target']
 
         if processor_obj:
             if processor_obj.force_visibility_timeout:

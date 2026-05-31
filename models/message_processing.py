@@ -78,6 +78,17 @@ class IMQMessageProcessing(models.Model):
         help="Tenant company. Mirrors message_id.company_id (frozen at "
              "message create from requesting_user_id.company_id)."
     )
+    # Reporting axes mirrored from the message (see README "Execution Stats").
+    # Stored + indexed so read_group on processing_time can aggregate/filter on
+    # them. Provider-agnostic: message_id.stats_* is already set by
+    # store_message__* before create_processing_object() runs.
+    stats_category = fields.Char(
+        related='message_id.stats_category',
+        store=True, readonly=True, index=True)
+    stats_target = fields.Char(
+        related='message_id.stats_target',
+        store=True, readonly=True, index=True)
+
     # statistics
     processing_time = fields.Float(compute='_calc_processing_time', store=True)
 
@@ -87,7 +98,7 @@ class IMQMessageProcessing(models.Model):
         for record in self:
             if record.start_time and record.end_time:
                 record.processing_time = (
-                    self.end_time - self.start_time
+                    record.end_time - record.start_time
                 ).total_seconds()
             else:
                 record.processing_time = None

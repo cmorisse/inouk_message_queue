@@ -73,7 +73,7 @@
                     <field name="processor_id"/>
                     <field name="stats_category" optional="show"/>
                     <field name="stats_target" optional="show"/>
-                    <field name="processing_time"/>
+                    <field name="processing_time" optional="show"/>
                     <field name="state"/>
                 </list>
             </field>
@@ -99,7 +99,7 @@
 
                         <group>
                             <group>
-                                <field name="processor_id" colspan="4" />
+                                <field name="processor_id" />
                                 <field name="queue_id" />
                                 <label for="stats_category" string="Stats categ. / target"/>
                                 <div class="o_row">

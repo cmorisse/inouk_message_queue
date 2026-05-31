@@ -187,3 +187,43 @@ class TestImqStatsAxes(TransactionCase):
         self.assertIn('next_poll_seconds', status)
         self.assertGreaterEqual(status['next_poll_seconds'], 60)
         self.assertFalse(status.get('overdue'))
+
+    def test_get_task_status_default_poll_without_stats(self):
+        """No history → next_poll_seconds still present with the sensible default."""
+        msg = self._make_message('no_history_cat_xyz', 'tgt')
+        msg.write({'state': 'wip', 'start_time': datetime.datetime.now()})
+        [status] = self.env['imq.message'].get_task_status([msg.id])
+        self.assertNotIn('expected', status)
+        self.assertEqual(status['next_poll_seconds'], 30)
+
+    # --- Launch-time hint (build_launch_hint / enqueue opt-in) ---
+
+    def test_build_launch_hint_with_history(self):
+        cat = 'test_cat_launch'
+        msg = self._make_message(cat, 'tgt_L')
+        for s in (30, 30, 30, 30):
+            self._add_done_processing(msg, s)
+        hint = self.env['imq.message'].build_launch_hint(cat, 'tgt_L')
+        self.assertEqual(hint['expected']['based_on'], 'category+target')
+        self.assertGreaterEqual(hint['next_poll_seconds'], 30)  # p95(30)*1.1≈33
+        self.assertIn('poll once', hint['hint'])
+
+    def test_build_launch_hint_sensible_default(self):
+        hint = self.env['imq.message'].build_launch_hint('no_such_cat_launch')
+        self.assertIsNone(hint['expected'])
+        self.assertEqual(hint['next_poll_seconds'], 30)
+        self.assertEqual(hint['hint'], "No stats available for now; poll in 30s")
+
+    def test_enqueue_opt_in_returns_hint_default(self):
+        """enqueue with the opt-in flag enriches the response; flag never leaks."""
+        resp = enqueue(
+            _stats_probe_task, self.env,
+            _imq_queue_name=self.queue.name,
+            _imq_stats_category='test_cat_enqueue_hint',  # no history → default
+            _imq_return_duration_hint=True,
+        )
+        self.assertEqual(resp['next_poll_seconds'], 30)
+        self.assertIsNone(resp['expected'])
+        self.assertIn('hint', resp)
+        body = json.loads(self.env['imq.message'].browse(resp['id']).raw_message_body)
+        self.assertNotIn('_imq_return_duration_hint', json.dumps(body['payload']))

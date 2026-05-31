@@ -256,6 +256,8 @@ class IMQMessage(models.Model):
     DURATION_HINT_MARGIN = 1.10          # recommended wait target = p95 * margin
     NEXT_POLL_FLOOR_SECONDS = 20         # never advise polling sooner than this
     OVERDUE_POLL_SECONDS = 30            # cadence once elapsed passes p95 (tail / stuck)
+    DEFAULT_NO_STATS_POLL_SECONDS = 30   # sensible default when no history exists yet
+    NO_STATS_HINT = "No stats available for now; poll in 30s"
 
     @api.model
     def _format_duration_estimate(self, row, based_on):
@@ -329,6 +331,35 @@ class IMQMessage(models.Model):
         return max(self.NEXT_POLL_FLOOR_SECONDS, round(target - elapsed)), False
 
     @api.model
+    def build_launch_hint(self, stats_category, stats_target=None):
+        """Self-contained duration hint for a freshly-launched task (elapsed=0).
+
+        Always actionable so an MCP agent never has to handle absence: with
+        history it returns the p95-anchored wait and an 'expected' block; without
+        (cold-start / untagged) it returns a sensible default. Shape:
+            {'expected': <dict|None>, 'next_poll_seconds': int, 'hint': str}
+
+        Meant to be merged into the return value of async launch methods (the
+        mgx_* entry points), so the agent gets the duration guidance at creation
+        time without a separate get_task_status round-trip.
+        """
+        est = self.estimate_task_duration(stats_category, stats_target)
+        if not est:
+            return {
+                'expected': None,
+                'next_poll_seconds': self.DEFAULT_NO_STATS_POLL_SECONDS,
+                'hint': self.NO_STATS_HINT,
+            }
+        next_poll, _overdue = self._poll_guidance(est, 0)
+        return {
+            'expected': est,
+            'next_poll_seconds': next_poll,
+            'hint': ("Typically ~%ss (p95 %ss, n=%s). Sleep ~%ss, then poll once."
+                     % (est['p50_seconds'], est['p95_seconds'],
+                        est['sample_count'], next_poll)),
+        }
+
+    @api.model
     def get_task_status(self, message_ids):
         """Get task status with elapsed time and next-step hints.
 
@@ -378,7 +409,10 @@ class IMQMessage(models.Model):
             estimate = self.estimate_task_duration(msg.stats_category, msg.stats_target)
             if estimate:
                 entry['expected'] = estimate
-                if msg.state in ('pending', 'wip'):
+            # next_poll_seconds is ALWAYS present while running, even with no
+            # history — the agent reads one field and never has to handle absence.
+            if msg.state in ('pending', 'wip'):
+                if estimate:
                     next_poll, overdue = self._poll_guidance(estimate, elapsed)
                     entry['next_poll_seconds'] = next_poll
                     if overdue:
@@ -394,6 +428,8 @@ class IMQMessage(models.Model):
                             % (estimate['p50_seconds'], estimate['p95_seconds'],
                                estimate['sample_count'], next_poll)
                         )
+                else:
+                    entry['next_poll_seconds'] = self.DEFAULT_NO_STATS_POLL_SECONDS
 
             # Enrich with children status if this message has child tasks
             if msg.queue_message_id:

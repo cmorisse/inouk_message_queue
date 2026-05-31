@@ -35,11 +35,24 @@ IMQ_MESSAGE_TYPES = [
 ]
 
 
+# Tier-2 retention: delete the whole message (cascades to processing + logs).
 PURGE_MESSAGE_HISTORY_SQL = """
-    DELETE FROM imq_message 
-    WHERE 
+    DELETE FROM imq_message
+    WHERE
         end_time < (NOW() - INTERVAL '%s hours')
     AND state NOT IN ('failed', 'retry', 'reset', 'wip', 'archived');"""
+
+# Tier-1 retention: drop only the bulky processing logs for old-but-kept
+# messages. imq.message_processing (and its processing_time) survives, so the
+# duration-hint history outlives the logs. Same state filter as the delete tier,
+# so failed-message diagnostics are preserved (never purged here).
+PURGE_PROCESSING_LOGS_SQL = """
+    DELETE FROM imq_message_processing_log
+    WHERE message_id IN (
+        SELECT id FROM imq_message
+        WHERE end_time < (NOW() - INTERVAL '%s hours')
+          AND state NOT IN ('failed', 'retry', 'reset', 'wip', 'archived')
+    );"""
 
 class IMQMessage(models.Model):
     _name = 'imq.message'
@@ -524,31 +537,62 @@ class IMQMessage(models.Model):
 
     @api.model
     def purge_messages_history(self):
-        """ Purge imq.messages based on the the system parameter 'imq.messages_retention_period_in_hours'
-        When imq.messages_retention_period_in_hours is undefined, a default value of 720 hours (30 days) 
-        is used.
-        Purge is deactivated if system parameter imq.STOP_MESSAGES_PURGE exists.
+        """Tiered retention purge, driven by two system parameters (hours):
+
+        - imq.logs_retention_period_in_hours (default 168 = 7 days): older than
+          this, only the bulky imq.message_processing_log rows are dropped. The
+          message and its imq.message_processing (hence processing_time) are
+          kept, so the duration-hint history survives long after the logs.
+        - imq.messages_retention_period_in_hours (default 720 = 30 days): older
+          than this, the whole message is deleted (cascades to processing + logs).
+
+        Age is measured on end_time; both tiers skip failed/retry/reset/wip/
+        archived so in-flight work and failed-message diagnostics are preserved.
+        Purge is fully deactivated if system parameter imq.STOP_MESSAGES_PURGE
+        exists.
         """
         icp_model = self.env["ir.config_parameter"].sudo()
         STOP_MESSAGES_PURGE = icp_model.get_param("imq.STOP_MESSAGES_PURGE", None)
         if STOP_MESSAGES_PURGE:
             _logger.info("Messages Purge deactivated. System parameter imq.STOP_MESSAGES_PURGE is defined.")
             return
-        
+
+        LOGS_RETENTION = int(
+            icp_model.get_param("imq.logs_retention_period_in_hours", '168')
+        )
         MESSAGES_RETENTION_PERIOD_IN_HOURS = int(
             icp_model.get_param("imq.messages_retention_period_in_hours", '720')
-        )        
+        )
 
+        # Tier 1 — purge logs for kept messages older than the logs threshold.
+        # Skipped when it would be >= the messages threshold (logs go away with
+        # the message anyway, nothing to gain).
+        if LOGS_RETENTION < MESSAGES_RETENTION_PERIOD_IN_HOURS:
+            start_ts = timeit.default_timer()
+            self.env.cr.execute(PURGE_PROCESSING_LOGS_SQL, (LOGS_RETENTION,))
+            self.env.cr.commit()
+            _logger.info(
+                "Purged %s processing logs for messages older than %s hours "
+                "(processing/stats kept) in %.3fs.",
+                self.env.cr.rowcount, LOGS_RETENTION,
+                timeit.default_timer() - start_ts,
+            )
+        else:
+            _logger.warning(
+                "imq.logs_retention_period_in_hours (%s) >= "
+                "imq.messages_retention_period_in_hours (%s) — log tier skipped.",
+                LOGS_RETENTION, MESSAGES_RETENTION_PERIOD_IN_HOURS,
+            )
+
+        # Tier 2 — delete whole messages older than the messages threshold.
         _logger.info("Starting to delete messages older than %s hours",
                      MESSAGES_RETENTION_PERIOD_IN_HOURS)
-
         start_ts = timeit.default_timer()
-        self.env.cr.execute(PURGE_MESSAGE_HISTORY_SQL, 
+        self.env.cr.execute(PURGE_MESSAGE_HISTORY_SQL,
                             (MESSAGES_RETENTION_PERIOD_IN_HOURS,))
         self.env.cr.commit()
-        end_ts = timeit.default_timer()
         _logger.info("Deleted %s messages older than %s hours in %.3fs.",
-            self.env.cr.rowcount, 
+            self.env.cr.rowcount,
             MESSAGES_RETENTION_PERIOD_IN_HOURS,
-            end_ts-start_ts
-        )    
+            timeit.default_timer() - start_ts,
+        )

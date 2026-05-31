@@ -285,6 +285,32 @@ Value: $(hostname)
 
 **Note**: Workers check these parameters periodically and will stop gracefully when detected. This allows for controlled shutdown during deployments or maintenance without killing processes.
 
+### Message Retention (Purge)
+
+The cron **IMQ: Purge Messages History** (every 6h) applies a **tiered retention**
+so the lightweight execution history (`imq.message_processing.processing_time`,
+which feeds the `get_task_status` duration hints) outlives the bulky logs.
+
+Age is measured on `end_time`. Two system parameters (in **hours**):
+
+| Parameter | Default | Effect beyond the threshold |
+|---|---|---|
+| `imq.logs_retention_period_in_hours` | `168` (7 d) | Drops only `imq.message_processing_log` rows. The message and its `imq.message_processing` (hence `processing_time`) are **kept**. |
+| `imq.messages_retention_period_in_hours` | `720` (30 d) | Deletes the whole message (cascades to processing + logs). |
+
+So a message's lifecycle is: **0 → 7 d** keep everything · **7 → 30 d** keep
+message + duration stats, shed logs · **> 30 d** delete.
+
+Notes:
+- Both tiers **skip** `failed / retry / reset / wip / archived` — in-flight work
+  and failed-message diagnostics (including their logs) are preserved until
+  manually archived.
+- If `logs_retention >= messages_retention`, the log tier is a no-op (logs go
+  away with the message anyway) and is skipped with a warning.
+- Set **`imq.STOP_MESSAGES_PURGE`** (any value) to disable the purge entirely.
+- Raise `imq.messages_retention_period_in_hours` to build a longer duration-hint
+  history for rarely-run task types.
+
 ## Advanced Usage
 
 ### Error Handling

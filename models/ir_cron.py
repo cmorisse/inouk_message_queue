@@ -29,24 +29,22 @@ class ir_cron(models.Model):
             self.doall = False
  
     @classmethod
-    def _process_job(cls, db, cron_cr, job, ):
+    def _process_job(cls, cron_cr, job):
         """ Run a given job taking care of the repetition.
 
-        :param db: odoo.sql_db connect to the database
         :param cron_cr: cursor holding lock on the cron job row, to use to update the next exec date,
             must not be committed/rolled back!
         :param job: job to be run (as a dictionary).
         """
         _logger.debug("Entering imq::ir.cron._process_job()")
         if not job.get('imq_is_worker'):
-            super()._process_job(db, cron_cr, job)
+            super()._process_job(cron_cr, job)
             return
-        cls._imq_process_job(db, cron_cr, job)
+        cls._imq_process_job(cron_cr, job)
         return
 
     @classmethod
-    #def _imq_process_job(cls, job_cr, job, cron_cr):
-    def _imq_process_job(cls, db, cron_cr, job):
+    def _imq_process_job(cls, cron_cr, job):
         """ Run a given job taking care of the repetition.
 
         :param job_cr: cursor to use to execute the job, safe to commit/rollback

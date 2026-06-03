@@ -92,13 +92,11 @@ class IMQMessageProcessor(models.Model):
     notify_message_processing_fail = fields.Boolean(help="Send a notification when message processing fails.")
 
     # TODO: add statistics fields
-    _sql_constraints =  [
-        (
-            'processor_uniq', 
-            'UNIQUE(type, selector, module, function)', 
-            "Processor must be unique !"
-        )
-    ]
+    _processor_uniq_constraint = models.Constraint(
+        'UNIQUE(type, selector, module, function)',
+        "Processor must be unique !",
+    )
+
     def btn_refresh(self):
         self._calc_name()
 

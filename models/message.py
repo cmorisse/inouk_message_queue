@@ -136,12 +136,10 @@ class IMQMessage(models.Model):
         default=False,
         help="Will open IKPdb in post mortem mode if an exception is raised."
     )
-    _sql_constraints = [
-        (
-            'remote_id_uniq', 
-            "UNIQUE(queue_id,queue_message_id)", 
-            "Message ID must be unique per Queue.")
-    ]
+    _remote_id_uniq_constraint = models.Constraint(
+        'UNIQUE(queue_id,queue_message_id)',
+        "Message ID must be unique per Queue.",
+    )
 
     def get_formview_id(self, access_uid=None):
         self.ensure_one()

@@ -104,13 +104,10 @@ class IMQQueue(models.Model):
         help="On FIFO Queues when 'Content-Based Deduplication' is not set, a "
              "'MessageDeduplicationId' must be passed which each sent message."
     )
-    _sql_constraints = [
-        (
-            'name_queue_uniq', 
-            'UNIQUE(name)', 
-            "Queue name must be unique among all queue providers."
-        )
-    ]
+    _name_queue_uniq_constraint = models.Constraint(
+        'UNIQUE(name)',
+        "Queue name must be unique among all queue providers.",
+    )
 
     admin_secret = fields.Char(
         compute='_compute_admin_secret', 

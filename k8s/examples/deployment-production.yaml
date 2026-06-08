@@ -41,9 +41,9 @@ spec:
         imagePullPolicy: IfNotPresent
         command: ["bin/start_odoo"]
         args:
-          - "imq-worker"
+          - "imq_worker"
           - "--database=$(DATABASE_NAME)"
-          - "--queue=muppy.*"  # Process all muppy queues
+          - "--queues=muppy.*"  # Process all muppy queues
           - "--max-messages=5000"
           - "--max-rss-memory=1024M"
           - "--observability-port=8080"

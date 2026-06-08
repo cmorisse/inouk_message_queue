@@ -99,7 +99,7 @@ Separate worker pools for different priorities:
 | Argument | Description | Example |
 |----------|-------------|---------|
 | `--database` | Database name | `muppy_prod` |
-| `--queue` | Queue name or regex pattern | `default.*` |
+| `--queues` | Queue name or regex pattern (was `--queue`, deprecated alias) | `default.*` |
 | `--max-messages` | Message limit (0=unlimited) | `1000` |
 | `--max-rss-memory` | Memory limit | `1024M` |
 | `--observability-port` | Metrics port | `8080` |
@@ -322,7 +322,7 @@ EOF
 # Process specific message
 kubectl create job imq-debug-12345 \
   --from=cronjob/imq-worker-template \
-  -- imq-worker --database $PGDATABASE --queue=default --message=12345
+  -- imq_worker --database $PGDATABASE --queues=default --message=12345
 ```
 
 ## 🚨 Troubleshooting

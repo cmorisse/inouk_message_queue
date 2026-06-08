@@ -18,14 +18,29 @@ class ImqWorker(Command):
         """Main entry point for the CLI command"""
         parser = argparse.ArgumentParser(
             prog=f'{sys.argv[0]} imq_worker',
-            description='Run standalone IMQ worker for processing message queues'
+            description='Run standalone IMQ worker for processing message queues',
+            formatter_class=argparse.RawTextHelpFormatter,
         )
         
         # Required arguments
         parser.add_argument('--database', '-d', required=False,
                           help='Database name to connect to. Default to $PGDATABASE')
-        parser.add_argument('--queue', '-q', required=True, 
-                          help='Queue name or regex pattern (e.g., default, mpy.*)')
+        parser.add_argument('--queues', '-q', default=None,
+                          help=(
+                              'Queue selector: a single pattern that can match one '
+                              'or several active queues. Three accepted forms:\n'
+                              '  - exact name:   --queues=default\n'
+                              '  - glob:         --queues="mpy.*"   or   --queues="*"\n'
+                              '  - regex:        --queues="(default|pack8s|healthcheck)"\n'
+                              'To target a specific list of queues by name, use a '
+                              'regex alternation as shown above.'
+                          ))
+        parser.add_argument('--queue', default=None,
+                          help=(
+                              '[DEPRECATED] Alias for --queues with identical '
+                              'semantics. Use --queues instead. Emits a deprecation '
+                              'warning on stderr when used.'
+                          ))
         
         # Optional limits
         parser.add_argument('--max-messages', type=int, default=0,
@@ -77,7 +92,20 @@ class ImqWorker(Command):
         except SystemExit as e:
             # argparse calls sys.exit on error, we want to return the code instead
             return e.code
-        
+
+        # Resolve --queues / --queue (deprecated alias)
+        if parsed_args.queue and parsed_args.queues:
+            print("Error: --queue and --queues are mutually exclusive. Use --queues.",
+                  file=sys.stderr)
+            return 1
+        queue_value = parsed_args.queues or parsed_args.queue
+        if not queue_value:
+            print("Error: --queues is required.", file=sys.stderr)
+            return 1
+        if parsed_args.queue:
+            print("Warning: --queue is deprecated, use --queues instead.",
+                  file=sys.stderr)
+
         # Validate arguments
         if parsed_args.database:
             database_name = parsed_args.database
@@ -142,7 +170,7 @@ class ImqWorker(Command):
             # Create worker instance
             worker = StandaloneWorker(
                 database=database_name,
-                queue_pattern=parsed_args.queue,
+                queue_pattern=queue_value,
                 max_messages=parsed_args.max_messages,
                 max_rss_memory=parsed_args.max_rss_memory,
                 max_thread_delta=parsed_args.max_thread_delta,

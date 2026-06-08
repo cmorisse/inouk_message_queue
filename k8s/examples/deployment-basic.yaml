@@ -28,9 +28,9 @@ spec:
         image: your-registry/muppy:latest
         command: ["bin/start_odoo"]
         args:
-          - "imq-worker"
+          - "imq_worker"
           - "--database=$(DATABASE_NAME)"
-          - "--queue=default"
+          - "--queues=default"
           - "--max-messages=1000"
           - "--max-rss-memory=512M"
           - "--observability-port=8080"

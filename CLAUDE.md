@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working specifically with the IM
 When working with IMQ tools, ALWAYS consult `README.md` in this directory before attempting to use tools:
 - **imq-ctl**: Detailed usage examples and syntax in README.md
 - **imq-test**: Test command usage and options  
-- **imq-worker**: Worker command line options and patterns
+- **imq_worker**: Worker command line options and patterns
 
 ### Pattern Recognition
 - **Tools starting with `imq`**: Always check `README.md` for documented usage
@@ -19,7 +19,7 @@ When working with IMQ tools, ALWAYS consult `README.md` in this directory before
 All IMQ command-line tools are documented with examples in `README.md`:
 - `imq-ctl`: kubectl-style inspection tool for messages, queues, processors
 - `imq-test`: Testing framework for message processing
-- `imq-worker`: Standalone worker with observability features
+- `imq_worker`: Standalone worker with observability features
 
 ## IMQ Architecture Overview
 
@@ -61,7 +61,7 @@ bin/start_odoo imq-ctl --database $PGDATABASE describe message MESSAGE_ID
 bin/start_odoo imq-ctl --database $PGDATABASE describe queue QUEUE_NAME  
 
 # Run worker with observability
-bin/start_odoo imq-worker --database $PGDATABASE --queue PATTERN --observability-port 8080
+bin/start_odoo imq_worker --database $PGDATABASE --queues PATTERN --observability-port 8080
 
 # Check worker status
 curl http://localhost:8080/status | python3 -m json.tool

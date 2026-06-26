@@ -222,14 +222,19 @@ Workers are configured as Odoo cron jobs:
 Deploy workers using the CLI:
 ```bash
 # Process a single queue
-bin/start_odoo imq-worker --database $PGDATABASE --queue=default
+bin/start_odoo imq-worker --database $PGDATABASE --queues=default
 
-# Process multiple queues with pattern
-bin/start_odoo imq-worker --database $PGDATABASE --queue="high_priority_*" --max-messages=1000
+# Process multiple queues with a glob pattern
+bin/start_odoo imq-worker --database $PGDATABASE --queues="high_priority_*" --max-messages=1000
+
+# Target a specific list of queues by name (regex alternation)
+bin/start_odoo imq-worker --database $PGDATABASE --queues='(default|pack8s|healthcheck)'
 
 # Run with monitoring enabled
-bin/start_odoo imq-worker --database $PGDATABASE --queue=default --observability-port=9090
+bin/start_odoo imq-worker --database $PGDATABASE --queues=default --observability-port=9090
 ```
+
+> `--queue` (singular) is kept as a deprecated alias that emits a stderr warning. Update your scripts to use `--queues`. To target several named queues, use a regex alternation like `(a|b|c)`.
 
 ### Worker Control via System Parameters
 
@@ -279,6 +284,32 @@ Value: $(hostname)
 ```
 
 **Note**: Workers check these parameters periodically and will stop gracefully when detected. This allows for controlled shutdown during deployments or maintenance without killing processes.
+
+### Message Retention (Purge)
+
+The cron **IMQ: Purge Messages History** (every 6h) applies a **tiered retention**
+so the lightweight execution history (`imq.message_processing.processing_time`,
+which feeds the `get_task_status` duration hints) outlives the bulky logs.
+
+Age is measured on `end_time`. Two system parameters (in **hours**):
+
+| Parameter | Default | Effect beyond the threshold |
+|---|---|---|
+| `imq.logs_retention_period_in_hours` | `168` (7 d) | Drops only `imq.message_processing_log` rows. The message and its `imq.message_processing` (hence `processing_time`) are **kept**. |
+| `imq.messages_retention_period_in_hours` | `720` (30 d) | Deletes the whole message (cascades to processing + logs). |
+
+So a message's lifecycle is: **0 → 7 d** keep everything · **7 → 30 d** keep
+message + duration stats, shed logs · **> 30 d** delete.
+
+Notes:
+- Both tiers **skip** `failed / retry / reset / wip / archived` — in-flight work
+  and failed-message diagnostics (including their logs) are preserved until
+  manually archived.
+- If `logs_retention >= messages_retention`, the log tier is a no-op (logs go
+  away with the message anyway) and is skipped with a warning.
+- Set **`imq.STOP_MESSAGES_PURGE`** (any value) to disable the purge entirely.
+- Raise `imq.messages_retention_period_in_hours` to build a longer duration-hint
+  history for rarely-run task types.
 
 ## Advanced Usage
 
@@ -405,6 +436,50 @@ for item in items:
 ```
 
 When a parent message has children, `get_task_status()` returns `children_summary` (per-state counters) and `children` (list of child statuses).
+
+### Execution Stats (`_imq_stats_category` / `_imq_stats_target`)
+
+Two optional reporting axes promoted to queryable columns on the message and
+mirrored (stored + indexed) onto `imq.message_processing`, where the existing
+`processing_time` measure lives (one row per attempt). They let you answer *"how
+long does task X take?"* — aggregated by kind, filtered by target.
+
+- **`_imq_stats_category`** — low cardinality, the *kind* of task. This is the
+  aggregation axis (`read_group` / pivot rows). Keep it stable and generic
+  (`"mpy_pg_backup"`, `"provision_app_server"`), **not** instance-specific.
+- **`_imq_stats_target`** — free-form, conventional, *what* the task acted on
+  (an app definition name, a host name…). This is the filter/breakdown axis.
+
+```python
+# run_async — tag both axes explicitly
+record.process.run_async(
+    record, data,
+    _imq_stats_category="provision_app_server",
+    _imq_stats_target=app_def_obj.name,
+)
+```
+
+With Muppy's `mpy_execute`, `stats_category` is **auto-filled** with the fabric
+task name (`fabric_task_callable.__name__`) when not provided — because every
+Muppy task runs through the same `_mpy_execute` processor, so `processor_id`
+can't tell them apart. The caller always wins if it passes `_imq_stats_category`
+explicitly. Pass `_imq_stats_target` for the acted-on object:
+
+```python
+mpy_execute(mpy_pg_backup, host_obj)                       # category = "mpy_pg_backup"
+mpy_execute(mpy_pg_backup, host_obj,                       # target tagged
+            _imq_stats_target=cluster_obj.name)
+```
+
+**Provider parity**: the values ride in the processor context, so they are set
+identically for the PostgreSQL and AWS SQS providers (read back at receive time
+by `store_message__pgsql` / `store_message__aws_sqs`). Untagged tasks leave the
+columns empty — fall back to `processor_id` at query time.
+
+**Querying**: group/aggregate on `imq.message_processing` — e.g.
+`read_group([], ['processing_time:avg'], ['stats_category'])`, or use the
+**Execution Stats** pivot view (rows: category → target; measure: avg
+`processing_time`).
 
 ## Monitoring
 
@@ -563,13 +638,13 @@ The IMQ Workers v3 system provides a standalone worker command that can process 
 
 ```bash
 # Process messages from default queue
-bin/start_odoo imq-worker --database $PGDATABASE --queue default
+bin/start_odoo imq-worker --database $PGDATABASE --queues default
 
 # Process with queue pattern matching
-bin/start_odoo imq-worker --database $PGDATABASE --queue "mpy.*" --max-messages 100
+bin/start_odoo imq-worker --database $PGDATABASE --queues "mpy.*" --max-messages 100
 
 # Process with memory limit and observability
-bin/start_odoo imq-worker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queues default \
   --max-rss-memory 1024M --observability-port 8080
 ```
 
@@ -581,10 +656,10 @@ The `--message` parameter allows you to process a specific message by ID or Mess
 
 ```bash
 # Process specific message by numeric ID
-bin/start_odoo imq-worker --database $PGDATABASE --queue default --message 49737
+bin/start_odoo imq-worker --database $PGDATABASE --queues default --message 49737
 
 # Process specific message by MessageId (UUID)
-bin/start_odoo imq-worker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queues default \
   --message "8f3ec366-68c8-4945-87cc-aaf2cad5dd0f"
 ```
 
@@ -600,15 +675,15 @@ bin/start_odoo imq-worker --database $PGDATABASE --queue default \
 
 ```bash
 # Debug specific message processing
-bin/start_odoo imq-worker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queues default \
   --message 49737 --max-messages 1 --log-level DEBUG
 
 # Process message and exit immediately  
-bin/start_odoo imq-worker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queues default \
   --message 49737 --max-messages 1 --worker-name "debug-worker"
 
 # Process message with observability for monitoring
-bin/start_odoo imq-worker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queues default \
   --message 49737 --observability-port 8080
 ```
 
@@ -616,8 +691,10 @@ bin/start_odoo imq-worker --database $PGDATABASE --queue default \
 
 ```bash
 # Required arguments
---database, -d DATABASE    # Database name to connect to  
---queue, -q PATTERN        # Queue name or regex pattern
+--database, -d DATABASE    # Database name to connect to
+--queues, -q PATTERN       # Queue name, glob, or regex pattern (e.g.,
+                           #   default, "mpy.*", "(default|pack8s)")
+--queue PATTERN            # [DEPRECATED] Alias for --queues
 
 # Processing limits
 --max-messages N           # Exit after processing N messages (0=unlimited)
@@ -638,6 +715,23 @@ bin/start_odoo imq-worker --database $PGDATABASE --queue default \
 --metrics-path PATH        # HTTP path for Prometheus metrics (default: /metrics)
 --queue-depth-caching-period-s SECONDS  # Queue depth metrics caching period (default: 30)
 ```
+
+### Known Quirk: Exit Code is Always 0
+
+When `imq-worker` rejects bad CLI arguments (missing `--queues`, mutually exclusive flags, unknown queue pattern, etc.), it prints a clear error to **stderr** but the shell exit code is **always `0`**.
+
+This is an upstream Odoo behavior: [`odoo/cli/command.py`](https://github.com/odoo/odoo/blob/18.0/odoo/cli/command.py) invokes `o.run(args)` without `sys.exit()`, so any `return N` from a `Command.run()` subclass is silently discarded. It affects every `odoo.cli.Command` (not just IMQ — also `odoo shell`, `odoo populate`, etc.).
+
+**Impact**:
+- Pipelines, CI jobs, and supervisors (systemd, Kubernetes liveness probes) that check `$?` cannot detect argument errors. The worker process exits cleanly with code 0 even when it never started.
+- Successful runs and signal-triggered shutdowns (SIGTERM from a supervisor) are indistinguishable from misconfiguration at the exit-code level.
+
+**Detection strategies** (since exit codes don't work):
+- Parse stderr for `Error:` / `Warning:` patterns
+- Check `--logfile=` output for the expected `Starting IMQ worker` line
+- Use `/healthz` endpoint when `--observability-port` is set
+
+The same quirk applies to `imq-test` and `imq-ctl`.
 
 ## Worker Thread Consumption and Management
 
@@ -821,7 +915,7 @@ spec:
       - name: imq-worker
         args:
         - imq-worker
-        - --queue=muppy
+        - --queues=muppy
         - --max-thread-delta=80
         - --observability-port=9000
         resources:
@@ -836,13 +930,13 @@ spec:
 Restart=always
 RestartSec=5s
 LimitNPROC=2048
-ExecStart=bin/start_odoo imq-worker --queue muppy --max-thread-delta 80 --observability-port 9000
+ExecStart=bin/start_odoo imq-worker --queues muppy --max-thread-delta 80 --observability-port 9000
 ```
 
 ### Troubleshooting
 
 **Worker exits immediately: "No active queues found matching pattern: 'muppy'"**
-The queue name has literal quotes. In Kubernetes YAML args, the shell does not strip them. Use `--queue=muppy`, not `--queue='muppy'`.
+The queue name has literal quotes. In Kubernetes YAML args, the shell does not strip them. Use `--queues=muppy`, not `--queues='muppy'`.
 
 **Frequent per-task WARNING "Thread leak detected"**
 One or more task types are not closing their Fabric/SSH connections. Check the `queue=` field in the warning to identify the processor. Inspect `finally` blocks in Fabric tasks for unclosed connections.
@@ -863,7 +957,7 @@ IMQ Workers v3 provides comprehensive observability features designed for modern
 
 ```bash
 # Start worker with observability on port 8080
-bin/start_odoo imq-worker --database $PGDATABASE --queue default \
+bin/start_odoo imq-worker --database $PGDATABASE --queues default \
   --observability-port 8080 --worker-name "production-worker"
 ```
 
@@ -1154,7 +1248,7 @@ spec:
         args:
           - "imq-worker"
           - "--database=$(DATABASE_NAME)"
-          - "--queue=production.*"
+          - "--queues=production.*"
           - "--max-messages=1000"
           - "--max-rss-memory=512M"
           - "--observability-port=8080"
@@ -1490,7 +1584,7 @@ When running multiple IMQ workers as systemd units, each worker would normally e
 
 ```bash
 # Each worker writes to /var/lib/node_exporter/textfile/imq_<worker_name>.prom
-bin/start_odoo imq-worker --database $PGDATABASE --queue=default \
+bin/start_odoo imq-worker --database $PGDATABASE --queues=default \
   --worker-name=imq-default \
   --metrics-export-mode=textfile \
   --textfile-dir=/var/lib/node_exporter/textfile
@@ -1540,7 +1634,7 @@ After=network.target
 User=odoo
 WorkingDirectory=/opt/your-project
 ExecStart=bin/start_odoo imq-worker \
-    --queue=default \
+    --queues=default \
     --worker-name=imq-default \
     --metrics-export-mode=textfile \
     --textfile-dir=/var/lib/node_exporter/textfile
@@ -1909,7 +2003,7 @@ bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --output /va
 MESSAGE_ID=$(bin/start_odoo imq-test --database $PGDATABASE --simple --json-output | jq -r '.[0].id')
 
 # Process the message
-bin/start_odoo imq-worker --database $PGDATABASE --queue default --message $MESSAGE_ID --max-messages 1
+bin/start_odoo imq-worker --database $PGDATABASE --queues default --message $MESSAGE_ID --max-messages 1
 
 # Verify it completed successfully
 FINAL_STATE=$(bin/start_odoo imq-ctl --database $PGDATABASE describe message $MESSAGE_ID --output json | jq -r '.status.state')
@@ -2121,7 +2215,7 @@ RESULT=$(bin/start_odoo imq-test --database $PGDATABASE --simple --count 5 --jso
 MESSAGE_IDS=$(echo "$RESULT" | jq -r '.[].id')
 
 # Start worker to process them
-bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-messages 5 &
+bin/start_odoo imq-worker --database $PGDATABASE --queues default --max-messages 5 &
 WORKER_PID=$!
 
 # Wait for processing and check results
@@ -2227,22 +2321,22 @@ bin/start_odoo help | grep imq-worker
 bin/start_odoo imq-worker --help
 
 # Test worker with non-existent queue (should exit gracefully)
-bin/start_odoo imq-worker --database $PGDATABASE --queue test_queue --max-messages 1
+bin/start_odoo imq-worker --database $PGDATABASE --queues test_queue --max-messages 1
 ```
 
 #### Test Worker Functionality
 ```bash
 # Test with existing queue
-bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-messages 5
+bin/start_odoo imq-worker --database $PGDATABASE --queues default --max-messages 5
 
 # Test with memory limit
-bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-rss-memory 512M
+bin/start_odoo imq-worker --database $PGDATABASE --queues default --max-rss-memory 512M
 
 # Test with regex pattern
-bin/start_odoo imq-worker --database $PGDATABASE --queue "mpy.*" --max-messages 10
+bin/start_odoo imq-worker --database $PGDATABASE --queues "mpy.*" --max-messages 10
 
 # Test with observability (metrics and health checks)
-bin/start_odoo imq-worker --database $PGDATABASE --queue default --observability-port 8080
+bin/start_odoo imq-worker --database $PGDATABASE --queues default --observability-port 8080
 ```
 
 ### Test Results

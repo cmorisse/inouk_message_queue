@@ -24,9 +24,14 @@
             <field name="model_id" ref="inouk_message_queue.model_imq_message" />
             <field name="user_id" ref="inouk_message_queue.user_imq" />
             <field name="state">code</field>
-            <field name="code"># This will purge all messages older than 'imq.messages_retention_period_in_hours'
-# When imq.messages_retention_period_in_hours is undefined, a default value of 720 hours (30 days) is used.
-# Purge is deactivated if system parameter imq.STOP_MESSAGES_PURGE exists.
+            <field name="code"># Tiered retention purge (two thresholds, in hours):
+#  - imq.logs_retention_period_in_hours (default 168 = 7d): drop only the bulky
+#    processing logs; the message + processing (processing_time) are kept, so the
+#    duration-hint history outlives the logs.
+#  - imq.messages_retention_period_in_hours (default 720 = 30d): delete the whole
+#    message (cascades to processing + logs).
+# Both tiers skip failed/retry/reset/wip/archived. Deactivated if system
+# parameter imq.STOP_MESSAGES_PURGE exists.
 model.purge_messages_history()</field>
             <field name="interval_number">6</field>
             <field name="interval_type">hours</field>

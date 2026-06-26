@@ -40,6 +40,9 @@ All IMQ command-line tools are documented with examples in `README.md`:
 - **Queue types**: Standard (std) and FIFO queues
 - **Message targeting**: Workers can target specific messages by ID
 
+### Execution Stats axes (`stats_category` / `stats_target`)
+Two optional Char columns on `imq.message`, mirrored as **related stored + indexed** fields on `imq.message_processing` (where `processing_time` lives). They are the aggregation/filter axes for execution-time reporting. Passed via kwargs `_imq_stats_category` / `_imq_stats_target`, extracted **once** in `enqueue()` into the processor context, then written onto the message at receive time by **both** `store_message__pgsql` and `store_message__aws_sqs` (same conditional pattern as `_imq_parent_message_id`) — hence identical behavior across providers. Muppy's `mpy_execute` auto-fills `stats_category` with the fabric task name. See README § "Execution Stats" for usage and querying.
+
 ## Development Guidelines
 
 ### Testing
@@ -61,7 +64,7 @@ bin/start_odoo imq-ctl --database $PGDATABASE describe message MESSAGE_ID
 bin/start_odoo imq-ctl --database $PGDATABASE describe queue QUEUE_NAME  
 
 # Run worker with observability
-bin/start_odoo imq-worker --database $PGDATABASE --queue PATTERN --observability-port 8080
+bin/start_odoo imq-worker --database $PGDATABASE --queues PATTERN --observability-port 8080
 
 # Check worker status
 curl http://localhost:8080/status | python3 -m json.tool

@@ -37,6 +37,14 @@
                                 string="Worker Type"
                                 domain="[]"
                                 context="{'group_by': 'worker_type'}"/>
+                        <filter name="group_by_stats_category"
+                                string="Stats Category"
+                                domain="[]"
+                                context="{'group_by': 'stats_category'}"/>
+                        <filter name="group_by_stats_target"
+                                string="Stats Target"
+                                domain="[]"
+                                context="{'group_by': 'stats_target'}"/>
                     </group>
 
                     <field name="queue_id" />
@@ -44,6 +52,8 @@
                     <field name="user_id" />
                     <field name="message_id" />
                     <field name="state" />
+                    <field name="stats_category" />
+                    <field name="stats_target" />
                 </search>
             </field>
         </record>
@@ -61,7 +71,9 @@
                     <field name="message_id"/>
                     <field name="attempt"/>
                     <field name="processor_id"/>
-                    <field name="processing_time"/>
+                    <field name="stats_category" optional="show"/>
+                    <field name="stats_target" optional="show"/>
+                    <field name="processing_time" optional="show"/>
                     <field name="state"/>
                 </list>
             </field>
@@ -87,8 +99,13 @@
 
                         <group>
                             <group>
-                                <field name="processor_id" colspan="4" />
+                                <field name="processor_id" />
                                 <field name="queue_id" />
+                                <label for="stats_category" string="Stats categ. / target"/>
+                                <div class="o_row">
+                                    <field name="stats_category" nolabel="1"/>
+                                    <field name="stats_target" nolabel="1"/>
+                                </div>
                                 <field name="start_time" />
                                 <field name="processing_time" />
                                 
@@ -138,10 +155,23 @@
 
 
 
+        <record id="imq_message_processing__pivot_view" model="ir.ui.view">
+            <field name="name">imq.message_processing_pivot.view</field>
+            <field name="model">imq.message_processing</field>
+            <field name="priority" eval="15" />
+            <field name="arch" type="xml">
+                <pivot string="Execution Stats" sample="1">
+                    <field name="stats_category" type="row"/>
+                    <field name="stats_target" type="row"/>
+                    <field name="processing_time" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
         <record id="imq_message_processing__act_window" model="ir.actions.act_window">
             <field name="name">Messages processings</field>
             <field name="res_model">imq.message_processing</field>
-            <field name="view_mode">list,form</field>
+            <field name="view_mode">list,pivot,form</field>
             <field name="help">Review all messages processings</field>
         </record>
     </data>

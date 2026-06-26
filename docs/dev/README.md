@@ -46,10 +46,10 @@ Technical specifications and implementation plans:
 ./run_tests.sh
 
 # Start standalone worker
-bin/start_odoo imq-worker --database $PGDATABASE --queue default --max-messages 100
+bin/start_odoo imq-worker --database $PGDATABASE --queues default --max-messages 100
 
 # Worker with observability
-bin/start_odoo imq-worker --database $PGDATABASE --queue "mpy.*" --observability-port 8080
+bin/start_odoo imq-worker --database $PGDATABASE --queues "mpy.*" --observability-port 8080
 ```
 
 ## Contributing

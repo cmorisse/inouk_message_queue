@@ -33,6 +33,15 @@
                         <filter name="group_by_name" string="Name" context="{'group_by': 'name'}" help="Group messages by Name" />
                         <filter name="group_by_user" string="User" context="{'group_by': 'user_id'}" help="Group messages by User" />
                         <filter name="group_by_requesting_user" string="Requesting User" context="{'group_by': 'requesting_user_id'}" help="Group messages by Requesting User" />
+                        <filter name="group_by_stats_category"
+                                string="Stats Category"
+                                domain="[]"
+                                context="{'group_by': 'stats_category'}"/>
+                        <filter name="group_by_stats_target"
+                                string="Stats Target"
+                                domain="[]"
+                                context="{'group_by': 'stats_target'}"/>
+
                     </group>
 
                     <field name="name" />
@@ -41,6 +50,7 @@
                     <field name="processor_id" />
                     <field name="operator_comment" />
                     <field name="group" />
+                    <field name="stats_category" />
                     <field name="queue_message_id" />
                     
                     <field name="state" />
@@ -106,6 +116,11 @@
                             <group>
                                 <field string="Cloud ID" name="queue_message_id" />
                                 <field name="processor_id" />
+                                <label for="stats_category" string="Stats categ. / target"/>
+                                <div class="o_row">
+                                    <field name="stats_category" nolabel="1"/>
+                                    <field name="stats_target" nolabel="1"/>
+                                </div>
                                 <field name="queue_id" />
                                 <field name="user_id" />
                                 <field name="requesting_user_id" />
@@ -166,9 +181,11 @@
                                 
                                 <field name="processing_ids">
                                     <list>
+                                        <field name="id" optional="hide" />
                                         <field name="attempt" />
                                         <field name="start_time" />
                                         <field name="end_time" />
+                                        <field name="processing_time" />
                                         <field name="state" />
 
                                     </list>

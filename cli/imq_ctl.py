@@ -60,6 +60,7 @@ Examples:
                               help='Output format')
         get_parser.add_argument('--queue', help='Filter messages by queue name')
         get_parser.add_argument('--state', help='Filter messages by state')
+        get_parser.add_argument('--group', help='Filter messages by group (per-run tag)')
         
         # Create command
         create_parser = subparsers.add_parser('create', help='Create a resource')
@@ -362,7 +363,10 @@ Examples:
         
         if args.state:
             domain.append(('state', '=', args.state))
-        
+
+        if getattr(args, 'group', None):
+            domain.append(('group', '=', args.group))
+
         if args.resource_name:
             if args.resource_name.isdigit():
                 domain.append(('id', '=', int(args.resource_name)))

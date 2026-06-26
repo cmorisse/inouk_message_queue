@@ -321,6 +321,13 @@ def enqueue(runnable, *args, **kwargs):
     if not queue_obj:
         raise UserError("Unknown queue:'%s' !!!" % queue_name_prefix)
 
+    # Per-run follow: on STD queues, inherit the parent run's group from the
+    # restored execution context, so every message of one run shares a single
+    # group tag (filterable via `imq-ctl get message --group <tag>`). On FIFO
+    # queues `group` drives ordering and dedup, so it must NEVER be auto-inherited.
+    if message_group is None and queue_obj.q_type == 'std' and env is not None:
+        message_group = env.context.get('_imq_message_group') or None
+
     if queue_obj.provider == 'aws_sqs':
         queue_name = "%s_%s%s" % (
             queue_name_prefix, 

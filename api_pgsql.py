@@ -18,18 +18,31 @@ from odoo.exceptions import MissingError, UserError
 _logger = logging.getLogger(__name__)
 
 
+# `make_interval(secs => %s)` rather than '%s seconds'::INTERVAL: the placeholder used to sit
+# INSIDE a string literal, which was tolerable while the value could only come from an Integer
+# column. It can now come from a caller, so the interval is built from a typed parameter.
 CHECK_MESSAGE_DUPLICATE_SQL = """SELECT id
 FROM imq_message
-WHERE 
+WHERE
     state IN ('wip', 'pending', 'retry')
-AND enqueued_time > NOW() - '%s seconds'::INTERVAL
+AND enqueued_time > NOW() - make_interval(secs => %s)
 AND message_deduplication_id = %s;
 """
 
 
 
-def check_message_duplicate(odoo_env, queue_obj, message_deduplication_id, raise_on_duplicate):
-    _dedup_interval = queue_obj.deduplication_interval_s
+def check_message_duplicate(odoo_env, queue_obj, message_deduplication_id,
+                            raise_on_duplicate, deduplication_interval_s=None):
+    """Is an equivalent message still in flight?
+
+    :param deduplication_interval_s: the window to look in. **None inherits the queue's
+        `deduplication_interval_s`** — which is where every pre-existing caller lands, so
+        their behaviour is unchanged. `0` is NOT "inherit": it is a zero-length window, so
+        nothing can ever match and no message is suppressed. Keeping those two distinct is
+        what saves a special case here.
+    """
+    _dedup_interval = (queue_obj.deduplication_interval_s
+                       if deduplication_interval_s is None else deduplication_interval_s)
     odoo_env.cr.execute(CHECK_MESSAGE_DUPLICATE_SQL,(_dedup_interval, message_deduplication_id))
     if odoo_env.cr.rowcount:
         _msg = ("Message with Deduplication Id:'%s' is duplicated within a %ss time "
@@ -53,8 +66,9 @@ def check_message_duplicate(odoo_env, queue_obj, message_deduplication_id, raise
     return None
 
 def send_message__pgsql(
-    queue_obj, message_name, message_body_values, message_group=None, 
-    message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=False
+    queue_obj, message_name, message_body_values, message_group=None,
+    message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=False,
+    deduplication_interval_s=None
 ):
     """ Send a simple message to .
     :param queue_obj: An Odoo Queue object
@@ -71,7 +85,8 @@ def send_message__pgsql(
 
     if queue_obj.q_type == 'fifo':
         _r = check_message_duplicate(
-            odoo_env, queue_obj, message_deduplication_id, raise_on_duplicate
+            odoo_env, queue_obj, message_deduplication_id, raise_on_duplicate,
+            deduplication_interval_s=deduplication_interval_s
         )
         if _r: return _r
 

@@ -230,10 +230,15 @@ def extract_env_from_params(runnable, args, kwargs):
     return env
 
 def _send_message(
-    queue_obj, message_name, message_body_values, message_group=None, 
-    message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=False
-):    
+    queue_obj, message_name, message_body_values, message_group=None,
+    message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=False,
+    deduplication_interval_s=None
+):
     """ Low level driver method that sends message to a queue.
+
+    :param deduplication_interval_s: window, in seconds, in which a duplicate is looked
+        for. None inherits the queue's `deduplication_interval_s`. Honoured by the pgsql
+        provider only — AWS fixes its FIFO window at 5 minutes.
     """
     _send_method_name = "send_message__%s" % queue_obj.provider
     
@@ -251,7 +256,8 @@ def _send_message(
         message_group=message_group,
         message_deduplication_id=_msg_dedup_id,
         message_attributes=message_attributes,
-        raise_on_duplicate=raise_on_duplicate
+        raise_on_duplicate=raise_on_duplicate,
+        deduplication_interval_s=deduplication_interval_s
     )
     _logger.debug("{method} => {resp}".format(
         method=_send_method_name,
@@ -307,6 +313,31 @@ def enqueue(runnable, *args, **kwargs):
     _imq_raise_on_duplicate = kwargs.get('_imq_raise_on_duplicate', None)
     if '_imq_raise_on_duplicate' in kwargs:
         del kwargs['_imq_raise_on_duplicate']
+
+    # Per-enqueue deduplication window, overriding the queue's `deduplication_interval_s`
+    # for THIS call only. None inherits the queue setting, so every existing caller is
+    # unaffected. Exists because the queue value is shared by every processor on that queue
+    # and editable from the GUI: a caller whose correctness leans on a window needs to own
+    # it, not borrow it.
+    #
+    # Consumed entirely HERE, at enqueue. Deliberately NOT placed in processor_context —
+    # the stats axes are, because a receive site reads them back; this one has no reader
+    # downstream, and carrying it further would suggest it means something at execution.
+    dedup_interval_s = kwargs.get('_imq_deduplication_interval_s', None)
+    if '_imq_deduplication_interval_s' in kwargs:
+        del kwargs['_imq_deduplication_interval_s']
+    if dedup_interval_s is not None:
+        try:
+            dedup_interval_s = int(dedup_interval_s)
+        except (TypeError, ValueError):
+            raise UserError("_imq_deduplication_interval_s must be an integer number of "
+                            "seconds (got %r)." % (dedup_interval_s,))
+        if dedup_interval_s < 0:
+            # Not clamped to 0: a negative window is a programming error, and silently
+            # turning it into "never deduplicate" would hide the bug behind behaviour that
+            # looks deliberate.
+            raise UserError("_imq_deduplication_interval_s cannot be negative (got %s)."
+                            % dedup_interval_s)
 
     requesting_user_id = kwargs.get('_imq_requesting_user_id', None)
     if '_imq_requesting_user_id' in kwargs:
@@ -433,9 +464,10 @@ def enqueue(runnable, *args, **kwargs):
         message_name, 
         message_body_values, 
         message_group=message_group, 
-        message_deduplication_id=message_deduplication_id, 
+        message_deduplication_id=message_deduplication_id,
         message_attributes=message_attributes,
         raise_on_duplicate=_imq_raise_on_duplicate,
+        deduplication_interval_s=dedup_interval_s,
     )
     if return_duration_hint and stats_category and isinstance(response, dict):
         # build_launch_hint always returns an actionable dict (sensible default
@@ -505,12 +537,15 @@ def processor_method(queue_name='default', processor_visibility_timeout=0):
     return real_method_decorator
 
 def send_message(
-    env, queue, selector, payload, message_group=None, message_deduplication_id=None, 
-    message_name=None, message_attributes=None
+    env, queue, selector, payload, message_group=None, message_deduplication_id=None,
+    message_name=None, message_attributes=None, deduplication_interval_s=None
 ):
     """ Sends a Simple message to any Queue.
     :param env: A valid Odoo env
     :param queue: Queue name prefix of the queue to use or queue obj. Use 'default' or None for default queue.
+    :param deduplication_interval_s: same meaning as in enqueue()'s
+        `_imq_deduplication_interval_s` — None inherits the queue's setting. Carried here so
+        the simple-message API is not the one place where a window cannot be owned.
     """
     if queue is None:
         queue = 'default'
@@ -541,9 +576,10 @@ def send_message(
         queue_obj, 
         message_name, 
         message_body_values, 
-        message_group=message_group, 
-        message_deduplication_id=message_deduplication_id, 
-        message_attributes=message_attributes
+        message_group=message_group,
+        message_deduplication_id=message_deduplication_id,
+        message_attributes=message_attributes,
+        deduplication_interval_s=deduplication_interval_s
     )
     return response
 

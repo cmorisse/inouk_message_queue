@@ -341,13 +341,45 @@ def task_with_error_handling(env, data, _imq_logger=None):
 
 ### Message Deduplication (FIFO Queues)
 
+On a FIFO queue, an enqueue is **suppressed** when a message carrying the same
+deduplication id is still in flight (`wip`, `pending` or `retry`) inside a time
+window. Nothing is created and nothing is raised by default: `run_async` returns
+`{'error_code': 'MESSAGE_IS_DUPLICATED', 'id': None, …}` instead of a message.
+
 ```python
-# Prevent duplicate processing within time window
+# Prevent duplicate processing within a time window
 records.process_records.run_async(
     _imq_message_group='batch-1',
-    _imq_message_deduplication_id='unique-task-id'
+    _imq_message_deduplication_id='unique-task-id',
+    _imq_deduplication_interval_s=600,   # optional — see below
 )
 ```
+
+**Always pass an explicit `_imq_message_deduplication_id`.** With none, the id
+falls back to a hash of the message body — which includes the calling context.
+For an `ir.cron` that is fatal: Odoo puts `lastcall` in the job's context, so the
+hash differs at every tick and **deduplication can never fire**. The fallback is
+only usable for two calls that are byte-identical.
+
+**The window** is `_imq_deduplication_interval_s`, in seconds:
+
+| Value | Meaning |
+|---|---|
+| omitted / `None` | inherit `imq.queue.deduplication_interval_s` (default **300 s**) |
+| an integer | use it **for this enqueue only** |
+| `0` | a zero-length window — nothing ever matches, so nothing is suppressed |
+| negative | `UserError`; a negative window is a bug, not "never deduplicate" |
+
+Pass it when your correctness depends on the window. The queue's value is shared
+by *every* processor on that queue and editable from the Queues screen, so a guard
+built on it can be widened or narrowed by someone with unrelated concerns — and
+because a suppressed enqueue is the *absence* of a message, nothing would signal
+that your guard had stopped working.
+
+**SQS limitation**: AWS fixes the FIFO deduplication window at 5 minutes and offers
+no per-message override. On an SQS queue the parameter is refused out loud (a
+`warning` naming the queue and the ignored value) rather than silently dropped —
+the message is still sent, but the requested window is **not** applied.
 
 ### Failure handling in FIFO groups
 

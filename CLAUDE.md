@@ -43,11 +43,26 @@ All IMQ command-line tools are documented with examples in `README.md`:
 ### Execution Stats axes (`stats_category` / `stats_target`)
 Two optional Char columns on `imq.message`, mirrored as **related stored + indexed** fields on `imq.message_processing` (where `processing_time` lives). They are the aggregation/filter axes for execution-time reporting. Passed via kwargs `_imq_stats_category` / `_imq_stats_target`, extracted **once** in `enqueue()` into the processor context, then written onto the message at receive time by **both** `store_message__pgsql` and `store_message__aws_sqs` (same conditional pattern as `_imq_parent_message_id`) — hence identical behavior across providers. Muppy's `mpy_execute` auto-fills `stats_category` with the fabric task name. See README § "Execution Stats" for usage and querying.
 
+### Deduplication window (`_imq_deduplication_interval_s`)
+Optional per-enqueue override of `imq.queue.deduplication_interval_s`, extracted in `enqueue()` and threaded `_send_message` → `send_message__pgsql` → `check_message_duplicate`. `None` inherits the queue value (so every pre-existing caller is unchanged); an integer applies to that enqueue only; `0` is a zero-length window (never suppresses) and is deliberately **not** a synonym for "inherit"; negative raises. Honoured by pgsql only — `send_message__aws_sqs` logs a `warning` and ignores it, because AWS fixes the FIFO window at 5 minutes.
+
+**Contrast with the stats axes, and it is the load-bearing difference**: those go into `processor_context` *because a receive site reads them back*. The dedup window has no reader downstream — it is consumed entirely at enqueue — so it is passed as a plain argument and never enters the context or the payload. Locked by `test_dedup_window.py::test_the_window_reaches_neither_the_payload_nor_the_context`.
+
+**⚠ The trap worth knowing before you rely on deduplication at all**: with no explicit `_imq_message_deduplication_id`, `_send_message` falls back to a hash of the message body — and the body carries the calling context. An `ir.cron` gets `lastcall` injected into its context by Odoo (`ir_cron.py`), so the hash differs at every tick and **deduplication can NEVER fire for a cron-dispatched job on a FIFO queue**. This is not specific to any one consumer. Always pass an explicit id from a cron. See README § "Message Deduplication (FIFO Queues)" for usage.
+
 ## Development Guidelines
 
 ### Testing
-- Use `./run_tests.sh` to run the complete test suite
-- Tests are in `tests/` directory
+- The `tests/` directory holds ordinary Odoo `TransactionCase` tests. Run them through the
+  host repo's launcher, e.g. `make test ADDONS=inouk_message_queue TAGS=/inouk_message_queue`
+  from the Muppy repo root.
+- **`tests/__init__.py` imports each test module explicitly.** A new file that is not added
+  there never runs — silently, which looks exactly like a passing test.
+- ⚠ **`./run_tests.sh` is NOT the unit-test suite**, despite the name. It is a workers-v3
+  smoke script: it calls `bin/start_odoo` (a launcher that does not exist in the Muppy repo —
+  there it is `bin/mpy-srv`), boots a server and workers, and says so itself ("Unit tests
+  require proper Python path configuration — running basic import tests instead"). It runs
+  **none** of the files in `tests/`.
 - Use `imq-test` for creating test messages
 
 ### Debugging

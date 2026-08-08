@@ -7,5 +7,6 @@ from .test_phase1_simple import main as run_phase1_tests
 
 from . import test_stats_axes
 from . import test_purge_retention
+from . import test_dedup_window
 
 __all__ = ['run_phase1_tests']

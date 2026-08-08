@@ -19,12 +19,23 @@ _logger = logging.getLogger(__name__)
 
 
 def send_message__aws_sqs(
-    queue_obj, message_name, message_body_values, message_group=None, 
+    queue_obj, message_name, message_body_values, message_group=None,
     message_deduplication_id=None, message_attributes=None, raise_on_duplicate:bool=True,
+    deduplication_interval_s=None
 ):
     """ Send a simple message to AWS SQS queue.
     :param raise_on_duplicate: is ignored with SQS
+    :param deduplication_interval_s: is ignored with SQS, and says so out loud. AWS fixes
+        the FIFO deduplication window at 5 minutes and offers no per-message override, so a
+        caller asking for a different one is not getting it. Ignoring that silently would
+        leave them believing a guard is in place that is not.
     """
+    if deduplication_interval_s is not None:
+        _logger.warning(
+            "IMQ: _imq_deduplication_interval_s=%s ignored on SQS queue '%s' — AWS fixes "
+            "the FIFO deduplication window at 5 minutes and it is not settable per message. "
+            "The message is sent; the requested window is NOT applied.",
+            deduplication_interval_s, queue_obj.name)
     if message_attributes is None:
         message_attributes = {}
 

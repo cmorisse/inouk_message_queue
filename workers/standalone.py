@@ -1007,11 +1007,28 @@ class StandaloneWorker(BaseWorker):
         )
 
     def stop_stream_capture(self):
-        """Stop capturing console output"""
-        if hasattr(TLS, '_imq_stream'):
-            TLS._imq_stream.close()
-        if hasattr(TLS, 'log_cursor'):
-            TLS.log_cursor.close()
+        """Stop capturing console output — and DROP the stream, which is the whole point.
+
+        TLS lives as long as the worker THREAD, not as long as the message. A stream left
+        behind here is found again by the next message's cleanup, which closes it a second
+        time against the cursor closed on the line below. That is how one console-capturing
+        message used to poison every message after it: an
+        "ERROR Failed to log final console output: Cursor already closed" per message —
+        including messages with `capture_console=False`, which never opened a stream and
+        were merely re-closing someone else's.
+
+        `hasattr` cannot express "already cleaned up" once the attribute exists, hence the
+        `getattr(..., None)` pair. Odoo's `Cursor.close()` is a no-op on a closed cursor, so
+        the second call was always harmless; the stream's was not.
+        """
+        stream = getattr(TLS, '_imq_stream', None)
+        if stream is not None:
+            stream.close()
+        cursor = getattr(TLS, 'log_cursor', None)
+        if cursor is not None:
+            cursor.close()
+        TLS._imq_stream = None
+        TLS.log_cursor = None
 
 
 class IMQLogHandler(logging.Handler):
@@ -1106,8 +1123,20 @@ class MpyStringIO(StringIO):
             self._mpy_buffer += new_buffer
     
     def close(self):
-        """Close and flush any remaining buffer"""
+        """Flush what is left of the buffer — once, and only once.
+
+        The buffer is taken and cleared BEFORE the write, which makes this idempotent: a
+        second close has nothing left to say. The standalone worker closes the capture
+        twice per message (the nominal path, then the `finally` covering the failure
+        paths), and without this the second call replayed the same text against the cursor
+        the first one had just closed.
+
+        Clearing before rather than after a successful write is deliberate: the write can
+        realistically only fail because the cursor is gone, and a retry on a dead cursor
+        fails identically. Better to lose one trailing line, loudly, than to loop on it.
+        """
         if self._mpy_buffer:
+            buffered, self._mpy_buffer = self._mpy_buffer, ''
             try:
                 env = api.Environment(self._log_cr, self._uid, {})
                 env['imq.message_processing_log'].sudo().create({
@@ -1116,7 +1145,7 @@ class MpyStringIO(StringIO):
                         'processing_id': self._processing_id,
                         'logger_name': "Console",
                         'log_level': None,
-                        'log_message': self._mpy_buffer
+                        'log_message': buffered
                 })
                 self._log_cr.commit()
             except Exception as e:

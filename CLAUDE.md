@@ -40,6 +40,26 @@ All IMQ command-line tools are documented with examples in `README.md`:
 - **Queue types**: Standard (std) and FIFO queues
 - **Message targeting**: Workers can target specific messages by ID
 
+### Processing notifications — routing is NOT in the workers
+The 14 `send_notification()` call sites across `workers/base.py` and `models/worker.py` only
+*raise* notifications. Recipients and body are decided in **one** place —
+`send_odoo_notification` in `models/queue__odoo.py`, via `_resolve_notification_recipients()`
+and `_build_notification_body()`. Change routing or wording there; touching the workers only
+changes the **title** (7 hard-coded state labels, duplicated across the two worker
+implementations — edit both or they drift).
+
+Recipient cascade: `user_obj` → `message.requesting_user_id` → `message.user_id` → IMQ admin
+broadcast, with system/inactive/share candidates rejected down to the broadcast. `danger`
+adds the admin broadcast **on top of** the requester. The load-bearing fact is that
+`user_id` defaults to `env.user` at enqueue (`api.py:394`), so the requester is known without
+any caller change — but an **escalated** task still needs `_imq_requesting_user_id`, else it
+notifies the escalation identity itself.
+
+Body = message name + the worker's `message` argument below it (duration on success,
+exception class on failure). It used to be silently discarded. Composed via `markupsafe.Markup`
+because the browser renders it with OWL `markup()`. Canonical contract: the two method
+docstrings. See README § "Processing Notifications".
+
 ### Execution Stats axes (`stats_category` / `stats_target`)
 Two optional Char columns on `imq.message`, mirrored as **related stored + indexed** fields on `imq.message_processing` (where `processing_time` lives). They are the aggregation/filter axes for execution-time reporting. Passed via kwargs `_imq_stats_category` / `_imq_stats_target`, extracted **once** in `enqueue()` into the processor context, then written onto the message at receive time by **both** `store_message__pgsql` and `store_message__aws_sqs` (same conditional pattern as `_imq_parent_message_id`) — hence identical behavior across providers. Muppy's `mpy_execute` auto-fills `stats_category` with the fabric task name. See README § "Execution Stats" for usage and querying.
 

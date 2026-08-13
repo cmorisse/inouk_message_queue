@@ -10,7 +10,7 @@
     # (each version converts to MIT two years after its release).
     'license': 'Other proprietary',
     'category': 'Extra Tools',
-    'version': '0.3.0',
+    'version': '0.4.0',
     'depends': ['inouk_core', 'mail'],
     'data': [
         'security/res_users.xml',

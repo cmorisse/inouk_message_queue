@@ -212,7 +212,10 @@ class IMQQueue(models.Model):
             message,
             icon=icon,
             message_obj=message_obj,
-            user_obj=None,  # Broadcast to all IMQ administrators
+            # No explicit target: recipients are resolved from the message —
+            # requester first, admin broadcast as fallback and on failures.
+            # See imq.queue._resolve_notification_recipients().
+            user_obj=None,
         )
         self.send_slack_notification(message_type, message_title, message, icon=icon, message_obj=message_obj)
 

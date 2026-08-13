@@ -513,6 +513,56 @@ columns empty — fall back to `processor_id` at query time.
 **Execution Stats** pivot view (rows: category → target; measure: avg
 `processing_time`).
 
+### Processing Notifications
+
+Workers raise a toast at each step of a message's life. Emission is opt-in **per
+processor** via five booleans on `imq.message_processor`
+(`notify_message_processing_start`, `..._end`, `..._error`, `..._retry`,
+`..._terminate`) — all off by default.
+
+The workers only *raise* notifications; they never choose the recipients or
+compose the body. Both are decided in one place — `imq.queue`
+(`models/queue__odoo.py`) — so a change there covers every worker and every state.
+
+**Who receives it** (`_resolve_notification_recipients`):
+
+| Order | Candidate | Note |
+|---|---|---|
+| 1 | explicit `user_obj` argument | Always wins |
+| 2 | `message.requesting_user_id` | Set by `_imq_requesting_user_id` at enqueue |
+| 3 | `message.user_id` | Defaults to `env.user` at enqueue — names the launcher |
+| 4 | IMQ admin group | Fallback: no message, or candidate inactive / share / system |
+
+A candidate resolving to a system identity (`base.user_root`,
+`inouk_message_queue.user_imq`) is rejected in favour of the admin broadcast —
+notifying a daemon notifies no one.
+
+`message_type='danger'` is special: the admin broadcast is added **on top of**
+the requester, so failures keep operational visibility while routine
+success/info traffic stays with whoever asked for it.
+
+> **Escalated tasks must pass `_imq_requesting_user_id`.** A task running under a
+> system identity (`sudo`, an ACL escalation user) without it falls through to
+> step 3 and notifies the escalation identity itself. The fix belongs at the
+> caller.
+
+**What it says** (`_build_notification_body`): the message name on the first
+line, and the worker's own text below it — the duration on success, the
+exception class on failure. Name a message well and the toast reads well:
+
+```
+Processing done without error
+Create DB 'msa2' on cluster 'pgha-msa2'
+Duration=0hours0min4s
+[Open IMQ Message]
+```
+
+The body is rendered by the browser with OWL's `markup()`, so it is composed
+through `markupsafe.Markup` — the message name is escaped and cannot inject HTML.
+
+Slack and Teams have no notion of a target user and are unaffected by the
+routing above.
+
 ## Monitoring
 
 ### Message States

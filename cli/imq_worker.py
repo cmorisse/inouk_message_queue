@@ -76,6 +76,12 @@ class IMQWorker(Command):
                           help='HTTP path for Prometheus metrics endpoint')
         parser.add_argument('--queue-depth-caching-period-s', type=int, default=30,
                           help='Queue depth metrics caching period in seconds (Default: 30)')
+        parser.add_argument('--signaling-check-period-s', type=int, default=5,
+                          help='How often the worker re-reads the registry/cache signaling '
+                               'sequences, in seconds (Default: 5). This is how it learns '
+                               'that another process changed a module or a system parameter '
+                               '- including its own kill switch imq.STOP_STANDALONE_WORKERS. '
+                               'Lower = fresher, at one extra query per period.')
         parser.add_argument('--metrics-export-mode', type=str, default='network',
                           choices=['network', 'textfile'],
                           help='Metrics export mode: "network" (HTTP, default) or "textfile" (node_exporter textfile collector)')
@@ -144,6 +150,10 @@ class IMQWorker(Command):
             print("Error: --queue-depth-caching-period-s must be >= 1 second", file=sys.stderr)
             return 1
 
+        if parsed_args.signaling_check_period_s < 1:
+            print("Error: --signaling-check-period-s must be >= 1 second", file=sys.stderr)
+            return 1
+
         if parsed_args.metrics_export_mode == 'textfile' and parsed_args.observability_port:
             print("Warning: --observability-port is ignored in textfile mode", file=sys.stderr)
             
@@ -182,6 +192,7 @@ class IMQWorker(Command):
                 metrics_path=parsed_args.metrics_path,
                 target_message_id=parsed_args.message,
                 queue_depth_caching_period_s=parsed_args.queue_depth_caching_period_s,
+                signaling_check_period_s=parsed_args.signaling_check_period_s,
                 metrics_export_mode=parsed_args.metrics_export_mode,
                 textfile_dir=parsed_args.textfile_dir
             )

@@ -232,6 +232,9 @@ bin/start_odoo imq-worker --database $PGDATABASE --queues='(default|pack8s|healt
 
 # Run with monitoring enabled
 bin/start_odoo imq-worker --database $PGDATABASE --queues=default --observability-port=9090
+
+# React faster to system-parameter and module changes made by other processes
+bin/start_odoo imq-worker --database $PGDATABASE --queues=default --signaling-check-period-s=2
 ```
 
 > `--queue` (singular) is kept as a deprecated alias that emits a stderr warning. Update your scripts to use `--queues`. To target several named queues, use a regex alternation like `(a|b|c)`.
@@ -284,6 +287,43 @@ Value: $(hostname)
 ```
 
 **Note**: Workers check these parameters periodically and will stop gracefully when detected. This allows for controlled shutdown during deployments or maintenance without killing processes.
+
+**How a running worker sees a parameter you have just created.** `get_param` is an
+`@ormcache` read, so it answers from the worker's own process cache. What refreshes that
+cache is `Registry.check_signaling()`, which compares the two signaling sequences in the
+database against what the process last saw. A standalone worker runs it **at most once every
+`--signaling-check-period-s` seconds** (default 5), on the cursor it already holds, before it
+fetches each message.
+
+**This period is not the reaction time**, and the difference matters. Two independent things
+compose:
+
+| | Cadence | Unit |
+|---|---|---|
+| how often the worker **asks** for the stop parameter | every 10 processed messages — and every poll while idle, since `processed_count` stays at 0 | messages |
+| how fresh the **answer** can be | `--signaling-check-period-s` | seconds |
+
+So an idle worker stops within about the period, which is the case the kill switch mostly
+exists for. A busy worker stops within ten messages. And a worker **inside** a single long
+message stops when that message ends, whatever either number says.
+
+**That last one is a property of where the check sits, not a limit of the unit chosen.**
+`check_signaling` may call `Registry.new()` and replace the process-wide registry; doing that
+while a message holds an `Environment` bound to the old one is precisely the corruption to
+avoid. So the check belongs between messages — expressing it in messages instead of seconds
+would put it in the same place and change nothing here.
+
+Seconds are nevertheless the right unit for it, for the opposite case: **message count does
+not advance while a worker is idle**, so a message-based refresh would never refresh an idle
+worker — the one you most want the kill switch to reach.
+
+**A module upgrade is picked up the same way**: `check_signaling` returns a *different*
+registry when the registry sequence moved, and the worker adopts it — so a long-running
+worker executes the code that is deployed now, not the code that was deployed at its boot.
+
+Lower the period for faster reaction, at the cost of one extra query per period per worker.
+A failed check is logged and the worker keeps its current caches: a signaling problem slows
+propagation, it does not stop the queue draining.
 
 ### Message Retention (Purge)
 

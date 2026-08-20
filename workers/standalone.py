@@ -45,6 +45,14 @@ class StandaloneWorker(BaseWorker):
         
         # Queue depth caching configuration
         self.queue_depth_caching_period_s = kwargs.get('queue_depth_caching_period_s', 30)
+
+        # Cross-process cache invalidation (see _refresh_signaling). Time-throttled rather
+        # than per-message: an idle worker polls twice a second, so per-message would mean
+        # ~170k checks a day doing nothing — while a busy worker would check far more often
+        # than anything can change. A wall-clock period bounds BOTH the cost and the
+        # staleness, and it is the staleness an operator needs to reason about.
+        self.signaling_check_period_s = kwargs.get('signaling_check_period_s', 5)
+        self.last_signaling_check = 0.0
         
         # State tracking
         self.processed_count = 0
@@ -648,6 +656,11 @@ class StandaloneWorker(BaseWorker):
                 
                 # Process one message
                 start_time = time.time()
+                # Re-read the singleton rather than trusting the local: a signaling check
+                # inside _process_one_message may have called Registry.new(), which replaces
+                # the process-wide registry for this database. Registry(db) is a locked dict
+                # lookup, so this costs nothing and cannot go stale.
+                registry = Registry(self.database)
                 result = self._process_one_message(registry, queue_id, queue_name)
                 processing_time = time.time() - start_time
 
@@ -739,6 +752,60 @@ class StandaloneWorker(BaseWorker):
         if self.textfile_exporter:
             self.textfile_exporter.write()
 
+    def _refresh_signaling(self, registry, cr):
+        """Pick up registry/cache invalidations made by OTHER processes.
+
+        **Why a standalone worker needs this and the rest of Odoo does not.**
+        `Registry.check_signaling()` is what makes one process notice another's changes, and
+        Odoo calls it per HTTP request, per cron tick and per RPC dispatch. A worker started
+        from the CLI goes through none of those, so without this it reads every
+        `@ormcache`-backed value — `ir.config_parameter.get_param` above all — exactly as it
+        stood the moment it booted, for as long as it runs.
+
+        **The case that decided it is this worker's own kill switch.**
+        `_check_stop_parameter` reads `imq.STOP_STANDALONE_WORKERS`, and that key ships
+        *disabled* and is renamed into existence when an operator wants workers to stop. A
+        cached miss is what persists, so a worker that started before the rename would never
+        see it: the emergency stop silently does nothing, with no error anywhere.
+
+        **Ordering matters and is not incidental.** This runs BEFORE any query on `cr` and
+        before a message is fetched:
+          - a registry reload takes seconds; doing it with a message in flight risks losing
+            it to its own visibility timeout;
+          - `Registry.new()` opens its own cursors, so holding locks here invites a deadlock.
+
+        **The return value must be used.** On a registry-sequence change `check_signaling`
+        returns a DIFFERENT registry, and `Registry.new()` swaps the process-wide singleton.
+        Discarding it leaves the caller on stale model definitions against a new schema —
+        which looks like it works right up until it corrupts something.
+
+        **This period is not the reaction time, and the two are easy to conflate.** How
+        often the worker *asks* for a parameter is a separate, message-based cadence — the
+        stop check runs on `processed_count % 10`, hence on every poll while idle, since the
+        counter stays at 0. This period bounds only how STALE the answer may be. So an idle
+        worker reacts within about the period, a busy one within ten messages, and a worker
+        inside a single long message reacts when that message ends — whatever either number
+        says. Expressing this in messages instead of seconds would not change that (the
+        check sits between messages either way, and must — see the ordering note above), and
+        it would break the idle case outright: a message counter does not advance while a
+        worker is idle, which is precisely when the kill switch needs to arrive.
+
+        `cr` is passed rather than letting it open its own, so this costs no extra
+        connection: one SELECT over the signaling sequences, ~0.35 ms, and only when the
+        period has elapsed.
+        """
+        now = time.time()
+        if now - self.last_signaling_check < self.signaling_check_period_s:
+            return registry
+        self.last_signaling_check = now
+        try:
+            return registry.check_signaling(cr)
+        except Exception as e:
+            # Never let a signaling check stop the queue draining: worst case we keep the
+            # caches we already had, which is exactly the behaviour before this existed.
+            self.logger.warning(f"Registry signaling check failed, continuing: {e}")
+            return registry
+
     def _process_one_message(self, registry, queue_id, queue_name):
         """Process a single message from the queue
         
@@ -751,8 +818,10 @@ class StandaloneWorker(BaseWorker):
             str: 'processed' if message was processed, 'empty' if no message available, 'failed' if processing failed
         """
         with registry.cursor() as cr:
+            # BEFORE anything else on this cursor — see _refresh_signaling.
+            registry = self._refresh_signaling(registry, cr)
             env = api.Environment(cr, SUPERUSER_ID, {})
-            
+
             # Get queue object in this context
             queue = env['imq.queue'].browse(queue_id)
             if not queue.exists():

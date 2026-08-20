@@ -10,5 +10,6 @@ from . import test_purge_retention
 from . import test_dedup_window
 from . import test_console_capture_teardown
 from . import test_notification_routing
+from . import test_registry_signaling
 
 __all__ = ['run_phase1_tests']

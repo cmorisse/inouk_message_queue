@@ -1150,51 +1150,95 @@ class MpyStringIO(StringIO):
         self._processing_id = processing_id
         self._log_cr = log_cr
         self._uid = uid
-        self._mpy_buffer = ''
-        
+        # ONE partial line PER WRITING THREAD, not one for the object.
+        #
+        # invoke runs `handle_stdout` and `handle_stderr` on two separate threads
+        # (invoke/runners.py) and both call write() on this same object. A single shared
+        # buffer meant a partial stdout line could be flushed prefixed to a stderr chunk —
+        # two real lines welded into one journal row, unattributable afterwards since rows
+        # carry no stream label.
+        #
+        # invoke uses exactly one thread per stream, so a thread id IS a stream id: keying
+        # on it gives stdout and stderr independent line assembly. The cost is that their
+        # RELATIVE order in the journal is no longer guaranteed. Intact lines in
+        # approximate order beat spliced lines in exact order; restoring true ordering
+        # would need a `stream` column on imq_message_processing_log.
+        #
+        # This was unreachable until callers started passing pty=False: under a PTY invoke
+        # does not create the stderr thread at all, so write() only ever had one caller.
+        self._lock = threading.RLock()
+        # Keyed on the Thread OBJECT, not on threading.get_ident(): ident values are
+        # RECYCLED once a thread dies, and this stream outlives many commands (invoke
+        # spawns a fresh stdout/stderr pair per cnx.run(), each pair then exits). Keying on
+        # ident let a new thread inherit a dead thread's pending line and weld the two
+        # together -- the very bug this is meant to prevent, caught by
+        # test_close_flushes_the_leftovers_of_every_thread. Thread objects are never
+        # recycled. They are retained until the stream is dropped at end of message, which
+        # is bounded and small.
+        self._buffers = {}  # Thread object -> partial line still waiting for its newline
+
+    def _pending(self):
+        """The partial line the CALLING thread is still accumulating."""
+        return self._buffers.get(threading.current_thread(), '')
+
+    def _emit(self, log_message):
+        """Insert one journal row.
+
+        Caller MUST hold `self._lock`: `self._log_cr` is a single Odoo cursor shared by
+        every writing thread (`TLS.log_cursor`, one per message), and Odoo cursors are not
+        thread-safe. Two threads interleaving statements and commits on one connection can
+        raise or leave the transaction aborted — after which every later line of the
+        message is lost.
+        """
+        env = api.Environment(self._log_cr, self._uid, {})
+        env['imq.message_processing_log'].sudo().create({
+                'message_id': self._message_id,
+                'active_message_id': self._message_id,
+                'processing_id': self._processing_id,
+                'logger_name': "Console",
+                'log_level': None,
+                'log_message': log_message
+        })
+        self._log_cr.commit()
+
     def write(self, s):
         """Write string to buffer and log complete lines"""
         _logger.debug("MpyStringIO.write(%s)", repr(s))
-        super().write(s)
-        
-        # Buffer management for line-based logging
-        if '\n' in s:
-            if s.endswith('\n'):
-                new_buffer = ''
-                output_str = s
-            else:
-                new_buffer = s[s.rfind('\n')+1:]
-                output_str = s[:s.rfind('\n')+1]
-        else:
-            new_buffer = s
-            output_str = ''
-        
-        # Update buffer
-        if output_str:
-            full_output = self._mpy_buffer + output_str
-            self._mpy_buffer = new_buffer
-            
-            # Log to database (when console capture is enabled)
-            try:
-                env = api.Environment(self._log_cr, self._uid, {})
-                env['imq.message_processing_log'].sudo().create({
-                        'message_id': self._message_id,
-                        'active_message_id': self._message_id,
-                        'processing_id': self._processing_id,
-                        'logger_name': "Console",
-                        'log_level': None,
-                        'log_message': full_output.rstrip('\n')
-                })
-                self._log_cr.commit()
-            except Exception as e:
-                _logger.exception("Failed to log console output: %s", e)
-        else:
-            self._mpy_buffer += new_buffer
-    
-    def close(self):
-        """Flush what is left of the buffer — once, and only once.
+        with self._lock:
+            super().write(s)
 
-        The buffer is taken and cleared BEFORE the write, which makes this idempotent: a
+            key = threading.current_thread()
+            pending = self._buffers.get(key, '')
+
+            # Buffer management for line-based logging
+            if '\n' in s:
+                if s.endswith('\n'):
+                    new_buffer = ''
+                    output_str = s
+                else:
+                    new_buffer = s[s.rfind('\n')+1:]
+                    output_str = s[:s.rfind('\n')+1]
+            else:
+                new_buffer = s
+                output_str = ''
+
+            # Update buffer
+            if output_str:
+                full_output = pending + output_str
+                self._buffers[key] = new_buffer
+
+                # Log to database (when console capture is enabled)
+                try:
+                    self._emit(full_output.rstrip('\n'))
+                except Exception as e:
+                    _logger.exception("Failed to log console output: %s", e)
+            else:
+                self._buffers[key] = pending + new_buffer
+
+    def close(self):
+        """Flush what is left of EVERY thread's buffer — once, and only once.
+
+        Each buffer is taken and cleared BEFORE its write, which makes this idempotent: a
         second close has nothing left to say. The standalone worker closes the capture
         twice per message (the nominal path, then the `finally` covering the failure
         paths), and without this the second call replayed the same text against the cursor
@@ -1203,20 +1247,18 @@ class MpyStringIO(StringIO):
         Clearing before rather than after a successful write is deliberate: the write can
         realistically only fail because the cursor is gone, and a retry on a dead cursor
         fails identically. Better to lose one trailing line, loudly, than to loop on it.
+
+        Iterating over every buffer matters since buffers became per-thread: stdout and
+        stderr can each be holding a trailing line with no newline, and flushing only one
+        of them would silently drop the other.
         """
-        if self._mpy_buffer:
-            buffered, self._mpy_buffer = self._mpy_buffer, ''
-            try:
-                env = api.Environment(self._log_cr, self._uid, {})
-                env['imq.message_processing_log'].sudo().create({
-                        'message_id': self._message_id,
-                        'active_message_id': self._message_id,
-                        'processing_id': self._processing_id,
-                        'logger_name': "Console",
-                        'log_level': None,
-                        'log_message': buffered
-                })
-                self._log_cr.commit()
-            except Exception as e:
-                _logger.exception("Failed to log final console output: %s", e)
-        super().close()
+        with self._lock:
+            for key in list(self._buffers):
+                buffered, self._buffers[key] = self._buffers[key], ''
+                if not buffered:
+                    continue
+                try:
+                    self._emit(buffered)
+                except Exception as e:
+                    _logger.exception("Failed to log final console output: %s", e)
+            super().close()

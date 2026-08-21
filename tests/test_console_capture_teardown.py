@@ -23,6 +23,7 @@ that matters is "how many times is a row written", which a mocked Environment st
 directly. A real cursor would also mean committing rows on a second connection from inside
 a test — which is the very thing the appender guidance says not to do casually.
 """
+import threading
 from unittest import mock
 
 from odoo.tests.common import TransactionCase, tagged
@@ -66,7 +67,9 @@ class TestConsoleCaptureTeardown(TransactionCase):
         stream = self._stream()
         stream.write("complete line\npartial")
         self.assertEqual(create.call_count, 1, "the complete line is written immediately")
-        self.assertEqual(stream._mpy_buffer, "partial")
+        # _pending() is what _mpy_buffer used to be, now asked per writing thread — the
+        # question "what is this writer still holding" survives, the storage changed.
+        self.assertEqual(stream._pending(), "partial")
 
     # ----- close() is idempotent ---------------------------------------------
     def test_closing_twice_writes_the_leftover_once(self):
@@ -143,3 +146,108 @@ class TestConsoleCaptureTeardown(TransactionCase):
 
         self.assertEqual(create.call_count, 1,
                          "A's last line is written once, and never by anyone else")
+
+
+@tagged('post_install', '-at_install')
+class TestConsoleCaptureThreadSafety(TransactionCase):
+    """One line per writer, whoever writes — the guard for `pty=False`.
+
+    Under a PTY invoke never creates the stderr handler thread, so `MpyStringIO.write()`
+    only ever had one caller and the single shared line buffer was safe by construction.
+    The moment a call site passes `pty=False`, invoke runs `handle_stdout` and
+    `handle_stderr` on two threads that both write here — and a partial line from one
+    could be flushed prefixed to a complete line from the other, welding two real lines
+    into one journal row that nothing can pull apart afterwards (rows carry no stream
+    label).
+
+    Buffers are therefore keyed on the writing thread. invoke uses exactly one thread per
+    stream, so a thread id is a stream id.
+    """
+    def _stream(self):
+        return standalone.MpyStringIO(42, 7, 1, mock.MagicMock(name='log_cursor'))
+
+    def _patched_create(self):
+        patcher = mock.patch.object(standalone, 'api')
+        fake_api = patcher.start()
+        self.addCleanup(patcher.stop)
+        env = fake_api.Environment.return_value
+        return env.__getitem__.return_value.sudo.return_value.create
+
+    @staticmethod
+    def _messages(create):
+        return [c[0][0]['log_message'] for c in create.call_args_list]
+
+    def test_two_threads_never_weld_their_lines_together(self):
+        """The regression this whole change exists to prevent.
+
+        The ordering is forced, not hoped for: `out` leaves a partial line pending, and
+        only THEN does `err` emit a complete line. That is the exact interleaving that
+        used to weld them — with one shared buffer, `err`'s row came out as
+        "out-partial" + "err-line". Without the two events the threads could run
+        sequentially and the test would pass while exercising nothing.
+        """
+        create = self._patched_create()
+        stream = self._stream()
+
+        out_is_pending = threading.Event()
+        err_has_written = threading.Event()
+
+        def out_writer():
+            stream.write("out-partial")          # no newline: stays pending
+            out_is_pending.set()
+            err_has_written.wait(timeout=5)      # let err emit while we are mid-line
+            stream.write("-end\n")               # completes OUR line, not err's
+
+        def err_writer():
+            out_is_pending.wait(timeout=5)       # only once out is holding a partial line
+            stream.write("err-line\n")           # a whole line, in one shot
+            err_has_written.set()
+
+        threads = [threading.Thread(target=out_writer), threading.Thread(target=err_writer)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+        self.assertFalse(any(t.is_alive() for t in threads), "threads must not deadlock")
+
+        # Before the fix this was ["-end", "out-partialerr-line"].
+        self.assertEqual(sorted(self._messages(create)), ["err-line", "out-partial-end"],
+                         "each thread's line must come out whole and on its own")
+
+    def test_close_flushes_the_leftovers_of_every_thread(self):
+        """A trailing line with no newline, on BOTH streams. Flushing one would drop the
+        other — silently, which is the worst kind."""
+        create = self._patched_create()
+        stream = self._stream()
+
+        for name in ("out", "err"):
+            t = threading.Thread(target=lambda n=name: stream.write("%s-trailing" % n))
+            t.start()
+            t.join()
+
+        stream.close()
+        self.assertEqual(sorted(self._messages(create)), ["err-trailing", "out-trailing"])
+
+        stream.close()
+        self.assertEqual(create.call_count, 2, "a second close still has nothing to say")
+
+    def test_pending_is_per_thread(self):
+        """`_pending()` answers for the CALLING thread, not for the object."""
+        self._patched_create()
+        stream = self._stream()
+        stream.write("main-partial")
+
+        seen = {}
+
+        def other():
+            seen['before'] = stream._pending()   # must not see the main thread's line
+            stream.write("other-partial")
+            seen['after'] = stream._pending()
+
+        t = threading.Thread(target=other)
+        t.start()
+        t.join()
+
+        self.assertEqual(seen['before'], '')
+        self.assertEqual(seen['after'], "other-partial")
+        self.assertEqual(stream._pending(), "main-partial", "unchanged by the other thread")

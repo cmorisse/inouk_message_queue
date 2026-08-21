@@ -665,35 +665,34 @@ class MpyStringIO(StringIO):
         self._processing_id = processing_id
         self._log_cr = log_cr
         self._uid = uid
-        self._mpy_buffer = ''
+        # ONE partial line PER WRITING THREAD — see the v3 twin in workers/standalone.py
+        # for the full rationale. Short version: invoke runs handle_stdout and
+        # handle_stderr on two threads that share this object, so a single buffer welds a
+        # partial stdout line onto a stderr line, and a single unlocked cursor is not
+        # thread-safe. Unreachable until callers pass pty=False (under a PTY invoke never
+        # creates the stderr thread).
+        self._lock = threading.RLock()
+        # Keyed on the Thread OBJECT, not on threading.get_ident(): ident values are
+        # RECYCLED once a thread dies, and this stream outlives many commands (invoke
+        # spawns a fresh stdout/stderr pair per cnx.run(), each pair then exits). Keying on
+        # ident let a new thread inherit a dead thread's pending line and weld the two
+        # together -- the very bug this is meant to prevent, caught by
+        # test_close_flushes_the_leftovers_of_every_thread. Thread objects are never
+        # recycled. They are retained until the stream is dropped at end of message, which
+        # is bounded and small.
+        self._buffers = {}  # Thread object -> partial line still waiting for its newline
         super().__init__()
-        
-    def write(self, s):
-        _logger.debug("MpyStringIO.write(%s)", repr(s))
-        super().write(s)
-        if '\n' in s:
-            if s.endswith('\n'):
-                new_buffer = ''
-                output_str = s
-            else:
-                new_buffer = s[s.rfind('\n')+1:]
-                output_str = s[:s.rfind('\n')+1]
-        else:
-            new_buffer = s
-            output_str = ''
 
-        # self._log_model.create({
-        #     'message_id': self._message_id,
-        #     'active_message_id': self._message_id,
-        #     'processing_id': self._processing_id,
-        #     'logger_name': "Console",
-        #     'log_level': None,
-        #     'log_message': "%s%s" % (self._mpy_buffer, output_str)
-        # })
+    def _pending(self):
+        """The partial line the CALLING thread is still accumulating."""
+        return self._buffers.get(threading.current_thread(), '')
+
+    def _emit(self, log_message):
+        """Insert one journal row. Caller MUST hold `self._lock` (shared raw cursor)."""
         _now = datetime.datetime.now()
         self._log_cr.execute(
-            """INSERT INTO imq_message_processing_log ( 
-                    processing_id, message_id, active_message_id, logger_name, log_level, log_message, 
+            """INSERT INTO imq_message_processing_log (
+                    processing_id, message_id, active_message_id, logger_name, log_level, log_message,
                     create_uid, create_date, write_uid, write_date
                 ) VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s );""",
                 (
@@ -702,7 +701,7 @@ class MpyStringIO(StringIO):
                     self._message_id,
                     "Console",
                     None,
-                    "%s%s" % (self._mpy_buffer, output_str),
+                    log_message,
                     self._uid,
                     _now,
                     self._uid,
@@ -710,46 +709,62 @@ class MpyStringIO(StringIO):
                 )
         )
         self._log_cr.commit()
-        #print(">>>>>>>>>>>>>>>>>>>>>>>>")
-        #print("%s%s" % (self._mpy_buffer, output_str))
-        #print("<<<<<<<<<<<<<<<<<<<<<<<<")
-        self._mpy_buffer = new_buffer
+
+    def write(self, s):
+        _logger.debug("MpyStringIO.write(%s)", repr(s))
+        with self._lock:
+            super().write(s)
+
+            key = threading.current_thread()
+            pending = self._buffers.get(key, '')
+
+            if '\n' in s:
+                if s.endswith('\n'):
+                    new_buffer = ''
+                    output_str = s
+                else:
+                    new_buffer = s[s.rfind('\n')+1:]
+                    output_str = s[:s.rfind('\n')+1]
+            else:
+                new_buffer = s
+                output_str = ''
+
+            # Only emit once a COMPLETE line exists, and ACCUMULATE otherwise.
+            #
+            # This branch used to be missing here: the INSERT fired unconditionally, so a
+            # chunk with no newline wrote the previous buffer as a row and then REPLACED
+            # the buffer instead of appending to it — fragmenting one logical line into
+            # several journal rows. The v3 twin already had the guard; the two copies had
+            # silently diverged.
+            if output_str:
+                full_output = pending + output_str
+                self._buffers[key] = new_buffer
+                try:
+                    self._emit(full_output.rstrip('\n'))
+                except Exception as e:
+                    _logger.exception("Failed to log console output: %s", e)
+            else:
+                self._buffers[key] = pending + new_buffer
 
     #from typing import List
     #def writelines(self, __lines:List[str]) -> None:
     #    return super().writelines(__lines)
 
     def stop_capture(self):
+        """Flush what is left of EVERY thread's buffer.
+
+        Iterating matters since buffers became per-thread: stdout and stderr can each hold
+        a trailing line with no newline, and flushing only one would silently drop the
+        other. Take-and-clear before the write keeps this idempotent.
+        """
         self.flush()
-        if self._mpy_buffer:
-            # self._log_model.sudo().create({
-            #     'message_id': self._message_id,
-            #     'active_message_id': self._message_id,
-            #     'processing_id': self._processing_id,
-            #     'logger_name': "Console",
-            #     'log_level': None,
-            #     'log_message': "%s" % (self._mpy_buffer)
-            # })
-            # self._env.cr.commit()
-            _now = datetime.datetime.now()
-            self._log_cr.execute(
-                """INSERT INTO imq_message_processing_log ( 
-                        processing_id, message_id, active_message_id, logger_name, log_level, log_message, 
-                        create_uid, create_date, write_uid, write_date
-                    ) VALUES ( %s, %s, %s, %s, %s, %s, %s, %s, %s, %s );""",
-                    (
-                        self._processing_id,
-                        self._message_id,
-                        self._message_id,
-                        "Console",
-                        None,
-                        "%s" % (self._mpy_buffer),
-                        self._uid,
-                        _now,
-                        self._uid,
-                        _now,
-                    )
-            )
-            self._log_cr.commit()
-        self._mpy_buffer = None
+        with self._lock:
+            for key in list(self._buffers):
+                buffered, self._buffers[key] = self._buffers[key], ''
+                if not buffered:
+                    continue
+                try:
+                    self._emit(buffered)
+                except Exception as e:
+                    _logger.exception("Failed to log final console output: %s", e)
 

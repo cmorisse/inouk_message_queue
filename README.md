@@ -2,7 +2,7 @@
 
 **The production-ready task queue system built for Odoo developers who need reliable asynchronous processing.**
 
-Turn any Odoo method into an async task with just one `@processor` annotation. Get enterprise-grade task processing with exactly-once delivery, automatic retries, comprehensive logging, and transparent scaling from PostgreSQL to AWS SQS.
+Turn an Odoo model method into an async task with a single decorator. Get enterprise-grade task processing with exactly-once delivery, automatic retries, comprehensive logging, and transparent scaling from PostgreSQL to AWS SQS.
 
 ## What IMQ Is
 
@@ -21,106 +21,176 @@ IMQ is **not** a pub/sub system, event streaming platform, or real-time messagin
 
 ### 🎯 **Effortless Odoo Integration**
 ```python
-@processor('default')
-def my_heavy_task(env, data):
-    # Your business logic here
-    pass
+from odoo import models
+from odoo.addons.inouk_message_queue.api import processor_method
 
-# That's it! Call anywhere in Odoo:
-my_heavy_task.run_async({'key': 'value'})
+class SaleOrder(models.Model):
+    _inherit = 'sale.order'
+
+    @processor_method('default')
+    def rebuild_report(self, _imq_logger=None):
+        """Rebuild report for {0.name}"""
+        _imq_logger.info("Rebuilding %s", self.name)
+
+# That's it! Call anywhere in Odoo — pass the recordset explicitly:
+order.rebuild_report.run_async(order)
 ```
 
-### 📊 **Complete Observability** 
+### 📊 **Complete Observability**
 - **Automatic log capture** - Every print, log, and error is captured and stored
 - **Comprehensive GUI** - Monitor, debug, and replay tasks through Odoo's interface
-- **Processing history** - Full audit trail of all task attempts and outcomes
+- **Processing history** - Full audit trail with timing, attempts, and outcomes
 - **Performance metrics** - Built-in Prometheus metrics and health endpoints
 
 ### 🏗️ **Production-Ready Architecture**
-- **PostgreSQL-native HA** - Leverage your existing database infrastructure for high availability
-- **Transparent scaling** - Start with PostgreSQL, scale to AWS SQS without code changes
+- **Dual queue providers** - PostgreSQL (ACID, HA, zero extra infrastructure) and AWS SQS (standard and FIFO)
+- **Transparent switching** - Change providers without modifying application code; mix them per queue
 - **Kubernetes-ready** - Production deployments with monitoring and autoscaling
 - **Battle-tested** - Used in production Odoo environments
 
 ### 🛡️ **Robust & Reliable**
 - **Exactly-once delivery** - Business-critical tasks execute once and only once
-- **Automatic retries** - Configurable retry policies with exponential backoff
-- **Graceful error handling** - Distinguish between retryable and permanent failures
+- **Automatic retries** - `IMQRetryableError` retries with configurable delays and backoff
+- **Permanent failures** - `IMQError` marks a failure as final, with no retry
+- **Graceful worker shutdown** - `IMQTerminateException` stops a worker cleanly
 - **Database transaction safety** - Tasks integrate seamlessly with Odoo's transaction model
+- **Dead letter handling** - Failed messages are preserved for analysis
 
 ### 🔧 **Developer Experience**
-- **Zero configuration** - Works out of the box with PostgreSQL
-- **Rich debugging** - Inspect task state, logs, and execution history
+- **Four entry points, one contract** - see [Choosing Your Entry Point](#choosing-your-entry-point)
+- **Automatic serialization** - Handles Odoo models, records, and JSON-serializable objects
+- **Rich debugging** - Inspect task state, logs, and execution history from the GUI or the CLI
 - **Flexible routing** - Route tasks to specific queues and workers
+- **Notifications** - Odoo chat integration for processing outcomes
 - **Source-available** - FSL-1.1-MIT licensed (Functional Source License; each version converts to the MIT license two years after its release)
-
-## Quick Start
-
-### 1. Install
-```bash
-# Add to your Odoo addons and install through Apps menu
-```
-
-### 2. Create a Task
-```python
-from odoo.addons.inouk_message_queue.api import processor
-
-@processor('default')  # One annotation is all you need
-def send_welcome_email(env, user_id):
-    user = env['res.users'].browse(user_id)
-    # Send email logic here
-    return f"Email sent to {user.email}"
-```
-
-### 3. Execute Asynchronously
-```python
-# In any Odoo method:
-send_welcome_email.run_async(user.id)
-# Task is queued and will be processed by workers
-```
-
-### 4. Monitor & Debug
-Navigate to **IMQ > Messages** in Odoo to see task execution, logs, and performance metrics.
-
----
-
-## Technical Features
-
-### 🚀 Dual Queue Architecture
-- **PostgreSQL Provider**: Database-native queuing with ACID guarantees and HA support
-- **AWS SQS Provider**: Cloud-scale processing with standard and FIFO queues
-- **Transparent switching**: Change providers without modifying application code
-- **Hybrid deployments**: Mix providers for different queue types
-
-### 🎯 Developer-Friendly API
-- **One-line integration**: `@processor('queue_name')` decorator
-- **Automatic serialization**: Handles Odoo models, records, and complex Python objects
-- **Method processors**: `@processor_method` for class methods and model integration
-- **Flexible parameters**: Pass any JSON-serializable data to tasks
-
-### 🛡️ Advanced Error Handling
-- **IMQError**: Mark failures as permanent (no retry)
-- **IMQRetryableError**: Automatic retries with configurable delays and backoff
-- **IMQTerminateException**: Graceful worker termination
-- **Transaction safety**: Full integration with Odoo's database transaction model
-- **Dead letter handling**: Failed messages are preserved for analysis
-
-### 📊 Enterprise Monitoring
-- **Complete log capture**: Every print(), logger call, and exception is stored
-- **Processing history**: Full audit trail with timing, attempts, and outcomes  
-- **Performance metrics**: Built-in Prometheus metrics for production monitoring
-- **GUI integration**: Rich Odoo interface for task management and debugging
-- **Notification systems**: Slack, Teams, and Odoo chat integration for alerts
 
 ## Installation
 
 1. Add `inouk_message_queue` to your Odoo addons path
 2. Install the module through Odoo's Apps menu
-3. Configure your queue provider (AWS SQS or PostgreSQL)
+3. Configure your queue provider — PostgreSQL works with zero configuration; see [AWS SQS Configuration](#aws-sqs-configuration) for the cloud provider
 
 ## Quick Start
 
-### Basic Function Processing
+### 1. Create a Task
+
+```python
+from odoo import models
+from odoo.addons.inouk_message_queue.api import processor_method
+
+class MyModel(models.Model):
+    _name = 'my.model'
+
+    @processor_method('default')
+    def process_records(self, _imq_logger=None):
+        """Process {0.name} records"""
+        for record in self:
+            _imq_logger.info("Processing %s", record.name)
+            # Your processing logic
+        return f"Processed {len(self)} records"
+```
+
+Two details in that snippet are load-bearing, and both are easy to miss:
+
+- **The docstring becomes the message name.** It is formatted against the recordset, so
+  `{0.name}` renders as the record's name in the GUI. See
+  [Message Naming](#message-naming-_imq_message_name).
+- **The `_imq_logger=None` parameter is what turns logging on.** IMQ inspects the
+  signature — a task that omits the parameter captures *nothing*, silently. See
+  [Log capture is opt-in by signature](#log-capture-is-opt-in-by-signature).
+
+### 2. Execute Asynchronously
+
+```python
+records = env['my.model'].search([])
+records.process_records.run_async(records)   # note: recordset passed explicitly
+```
+
+The task is queued and will be processed by a worker. **Nothing runs until a worker is
+running** — see [Worker Command (`imq-worker`)](#worker-command-imq-worker).
+
+### 3. Monitor & Debug
+
+Navigate to **IMQ > Messages** in Odoo to see task execution, logs, and performance
+metrics — or use [`imq-ctl`](#imq-control-command-imq-ctl) from the shell.
+
+---
+
+## Choosing Your Entry Point
+
+IMQ offers four ways to get work onto a queue. They differ in *what you are enqueuing*, not
+in what happens afterwards — all four produce an `imq.message` consumed by the same workers.
+
+| Entry point | Use when | Contract |
+|---|---|---|
+| [`@processor_method(queue)`](#processor_method-model-methods) | You are enqueuing a **method of an Odoo model** | `args[0]` must be the recordset, **positional** |
+| [`@processor(queue)`](#processor-plain-functions) | You are enqueuing a **plain function** (no `self`) | a `Model` or `Environment` must appear somewhere in the arguments |
+| [`send_message(...)`](#send_message-simple-messages-and-selectors) | The producer should **not import the consumer** — decoupling by `selector`, or a message sent from outside Python | resolved to a processor by `selector` at receive time |
+| [`enqueue(runnable, ...)`](#enqueue-the-low-level-api) | Rarely called directly — it is what the decorators call | same environment rule as `@processor` |
+
+**Why two decorators rather than one?** IMQ cannot tell a function from a method by
+inspection, so it relies on your declaration (`api.py`, `processor_method` docstring):
+
+> *Since we are unable to know if a callable is a method or a function we rely on
+> developer's declaration, hence both decorators `@processor` and `@processor_method`.*
+
+### The one rule that binds every entry point
+
+**Every enqueue must carry an Odoo environment.** IMQ needs it to save the calling context
+and restore it when the task later runs on a worker. `enqueue()` scans the arguments and
+picks the first `odoo.models.Model` or `odoo.api.Environment` it finds; if there is none it
+raises `MissingError`.
+
+```python
+# ❌ MissingError — an int is not an environment
+send_welcome_email.run_async(user.id)
+
+# ✅ the recordset carries the environment
+send_welcome_email.run_async(user)
+
+# ✅ or pass the environment explicitly
+process_heavy_task.run_async(env, {'name': 'My Task'})
+```
+
+For `@processor_method` the rule is stricter: the recordset must be **`args[0]`, positional**.
+The decorator asserts it before doing anything else.
+
+```python
+# ❌ AssertionError — no positional recordset
+records.process_records.run_async()
+
+# ✅
+records.process_records.run_async(records)
+```
+
+This trips people up because `records.process_records` *looks* bound. It is not: `run_async`
+is an attribute attached to the underlying function, so it receives nothing implicitly.
+
+### `@processor_method`: model methods
+
+```python
+from odoo import models
+from odoo.addons.inouk_message_queue.api import processor_method
+
+class MyModel(models.Model):
+    _name = 'my.model'
+
+    @processor_method('default')
+    def process_records(self, _imq_logger=None):
+        """Process {0.name} records"""
+        for record in self:
+            _imq_logger.info("Processing %s", record.name)
+        return f"Processed {len(self)} records"
+
+records = env['my.model'].search([])
+records.process_records.run_async(records)
+```
+
+Signature: `processor_method(queue_name='default', processor_visibility_timeout=0)`.
+
+### `@processor`: plain functions
+
+For module-level functions that are not model methods.
 
 ```python
 from odoo.addons.inouk_message_queue.api import processor
@@ -129,34 +199,176 @@ from odoo.addons.inouk_message_queue.api import processor
 def process_heavy_task(env, data, _imq_logger=None):
     """Process heavy task: {data.get('name')}"""
     _imq_logger.info("Processing started")
-    # Your heavy processing here
     return "Success"
 
-# Enqueue the task
 process_heavy_task.run_async(env, {'name': 'My Task'})
 ```
 
-### Model Method Processing
+Signature: `processor(queue_name='default', processor_visibility_timeout=0)`.
+
+Both decorators also expose `.message()` and `.delay()` as **deprecated aliases** of
+`.run_async()`. They still work but log a warning at every call; use `.run_async()`.
+
+### `send_message`: simple messages and selectors
+
+The decorators enqueue a *callable* — the producer holds a Python reference to the consumer.
+A **simple message** inverts that: it carries a `selector` string, and IMQ resolves the
+selector to a processor at receive time. The producer never imports the consumer.
+
+Use it when the producer and the consumer should stay decoupled, or when the producer is not
+in a position to import the task at all.
 
 ```python
-from odoo import models
-from odoo.addons.inouk_message_queue.api import processor_method
+from odoo.addons.inouk_message_queue.api import send_message
 
-class MyModel(models.Model):
-    _name = 'my.model'
-    
-    @processor_method('default')
-    def process_records(self, _imq_logger=None):
-        """Process {0.name} records"""
-        for record in self:
-            _imq_logger.info(f"Processing {record.name}")
-            # Your processing logic
-        return f"Processed {len(self)} records"
-
-# Usage
-records = env['my.model'].search([])
-records.process_records.run_async()
+send_message(
+    env,
+    'default',                       # queue name, queue record, or None for 'default'
+    'UsageData.upsert',              # selector — resolved to a processor at receive time
+    {'host': 'web-03', 'cpu': 42},   # payload (JSON-serializable)
+    message_name="Upsert usage data for web-03",
+)
 ```
+
+Full signature:
+
+```python
+send_message(
+    env, queue, selector, payload,
+    message_group=None, message_deduplication_id=None,
+    message_name=None, message_attributes=None, deduplication_interval_s=None,
+)
+```
+
+To receive them, create a processor record with `type = simple` and the matching `selector`
+under **IMQ > Configuration > Processors** (or ship it as XML data).
+
+**On a FIFO queue, `message_group` is mandatory** — `send_message` raises `IMQError` without
+it, because a FIFO queue has no way to order a message that belongs to no group.
+
+`deduplication_interval_s` has the same meaning as `_imq_deduplication_interval_s` in
+`enqueue()`; `None` inherits the queue's setting. See
+[Message Deduplication](#message-deduplication-fifo-queues).
+
+### `enqueue`: the low-level API
+
+`enqueue(runnable, *args, **kwargs)` is what both decorators call. Calling it directly is
+rarely useful, but it is the function whose docstring documents the `_imq_*` keyword
+arguments — see the [complete reference](#the-_imq_-keyword-arguments).
+
+### Running synchronously (bypassing the queue)
+
+Any enqueue call accepts `_imq_run_synchronously=True`, which **skips the queue entirely**:
+the callable runs inline, in the caller's transaction, and its return value is returned to
+the caller. No message is created, nothing appears in the GUI, and no worker is involved.
+
+```python
+# Runs right here, right now — returns the task's own return value
+result = records.process_records.run_async(records, _imq_run_synchronously=True)
+```
+
+This is the natural way to let one code path serve both modes. Beware the polarity when you
+derive it from an `async` flag — `_imq_run_synchronously = not run_async` — an inversion that
+has caused real bugs in consuming projects.
+
+## The `_imq_*` keyword arguments
+
+Every entry point accepts the same set of magic keyword arguments. `enqueue()` **consumes**
+them — they are stripped from `kwargs` and never reach your task.
+
+> ⚠ **Unknown `_imq_*` names are silently forwarded to your task.** IMQ removes the ones it
+> knows and passes the rest through as ordinary keyword arguments. A typo like
+> `_imq_messqge_group` therefore raises nothing: it either lands in your task's `**kwargs`
+> and is ignored, or raises a confusing `TypeError`. **Spell them carefully** — this table is
+> the complete list.
+
+### Routing and identity
+
+| Kwarg | Default | Effect |
+|---|---|---|
+| `_imq_queue_name` | `'default'` | Queue to send to. The decorators pre-fill it from their own `queue_name`; pass it explicitly to override per call. |
+| `_imq_message_name` | docstring, then generated | Human-readable name shown in the GUI. See [Message Naming](#message-naming-_imq_message_name). |
+| `_imq_message_group` | auto | **FIFO**: the ordering key — messages sharing a group are processed strictly in order, and one failure blocks the rest of the group. **Standard**: just a tag, useful to group one fan-out for `imq-ctl get message --group`. Inherited automatically by tasks enqueued from inside a running task. |
+| `_imq_requesting_user_id` | `env.user` | Who asked for the task. Drives notification routing. **Set it explicitly when the task runs under an escalated identity**, otherwise the notification goes to the escalation account instead of the human. |
+
+### Deduplication
+
+| Kwarg | Default | Effect |
+|---|---|---|
+| `_imq_message_deduplication_id` | hash of the body | Identity used to suppress duplicates on a FIFO queue. **Always pass it explicitly** — see the trap in [Message Deduplication](#message-deduplication-fifo-queues). |
+| `_imq_deduplication_interval_s` | queue setting | Window, in seconds, for this enqueue only. `None` inherits the queue; `0` means a zero-length window (never suppresses) and is **not** a synonym for inherit; negative raises. PostgreSQL only — AWS SQS fixes its FIFO window at 5 minutes and this is ignored with a warning. |
+| `_imq_raise_on_duplicate` | provider default | Raise instead of returning `{'error_code': 'MESSAGE_IS_DUPLICATED', …}` when an enqueue is suppressed. |
+
+### Execution
+
+| Kwarg | Default | Effect |
+|---|---|---|
+| `_imq_run_synchronously` | `False` | Bypass the queue entirely: run inline and return the task's own value. No message is created. |
+| `_imq_processor_visibility_timeout` | `0` | Per-processor visibility timeout override, in seconds. `0` means "use the queue's". The decorators pass their own `processor_visibility_timeout` through this. |
+| `_imq_logger` | absent | **Never passed by a caller** — it is how IMQ decides whether to capture logs, and the worker injects the real logger at run time. See below. |
+
+### Reporting and fan-out
+
+| Kwarg | Default | Effect |
+|---|---|---|
+| `_imq_stats_category` | none | Low-cardinality *kind* of task — the aggregation axis. |
+| `_imq_stats_target` | none | Free-form *what it acted on* — the filter axis. |
+| `_imq_return_duration_hint` | `False` | Merge a duration estimate into the value `run_async` returns, so the caller gets an ETA at launch without a follow-up `get_task_status()` call. Requires `_imq_stats_category`. |
+| `_imq_parent_message_id` | none | Attach this message to a parent, so the parent's `get_task_status()` reports `children_summary` / `children`. |
+| `_imq_target_children_count` | none | How many children the parent should expect — lets progress be computed before every child exists. |
+
+### Internal
+
+| Kwarg | Effect |
+|---|---|
+| `_imq_is_method` | Set by `@processor_method` to mark the callable as a method. Do not pass it yourself. |
+| `_imq_ephemeral_env` | Consumed and discarded while scanning for the environment. Lets you hand `enqueue()` an environment that must not be treated as a task argument. |
+
+### Log capture is opt-in by signature
+
+IMQ decides whether to capture a task's output by **inspecting its signature**:
+
+```python
+logging_activated = '_imq_logger' in function_signature.args
+```
+
+A task that declares `_imq_logger=None` gets a real logger injected at run time, and
+everything it logs — plus anything printed to stdout — is stored on the message and visible
+in the GUI. **A task that omits the parameter captures nothing, silently.** There is no
+warning; the message simply has an empty log.
+
+```python
+@processor_method('default')
+def with_logs(self, _imq_logger=None):     # ✅ captured
+    _imq_logger.info("visible in the GUI")
+
+@processor_method('default')
+def without_logs(self):                    # ⚠ runs fine, captures nothing
+    ...
+```
+
+The convention for a task that also runs synchronously is to fall back to the module logger:
+
+```python
+def my_task(self, _imq_logger=None):
+    _task_logger = _imq_logger or _logger
+    _task_logger.info("works in both modes")
+```
+
+### Reading your own message id
+
+A running task learns its own message id from the context:
+
+```python
+message_id = env.context.get('_imq_message_id')
+```
+
+It is **absent when the code runs outside IMQ**, which makes it the supported way to ask *"am
+I running inside a worker?"* — and the handle you pass to children as
+`_imq_parent_message_id`.
+
+Two more context keys are set at run time: `_imq_su` records whether the enqueueing
+environment was in superuser mode, so it can be restored faithfully on the worker.
 
 ## Configuration
 
@@ -219,22 +431,40 @@ Workers are configured as Odoo cron jobs:
 3. Set execution frequency based on your needs
 
 #### Standalone Worker Setup
+
+> ### 📌 The `<odoo-launcher>` convention
+>
+> IMQ ships CLI commands as Odoo subcommands, so they are invoked through **your server's
+> own launcher** — which differs from one Odoo distribution to the next. Every command in
+> this document is therefore written as `<odoo-launcher> imq-… `. Substitute the launcher
+> your server uses:
+>
+> | Server | Launcher |
+> |---|---|
+> | Plain Odoo | `odoo-bin` |
+> | Muppy | `bin/mpy-srv` |
+> | Your distribution | whatever wraps `odoo.cli` |
+>
+> ⚠ **On Odoo 19 the subcommand is spelled with an underscore** — `imq_worker`, not
+> `imq-worker`. The dash spelling fails with `Unknown command 'imq-worker'`. Odoo 18 and
+> earlier accept the dash.
+
 Deploy workers using the CLI:
 ```bash
 # Process a single queue
-bin/start_odoo imq-worker --database $PGDATABASE --queues=default
+<odoo-launcher> imq-worker --database $PGDATABASE --queues=default
 
 # Process multiple queues with a glob pattern
-bin/start_odoo imq-worker --database $PGDATABASE --queues="high_priority_*" --max-messages=1000
+<odoo-launcher> imq-worker --database $PGDATABASE --queues="high_priority_*" --max-messages=1000
 
 # Target a specific list of queues by name (regex alternation)
-bin/start_odoo imq-worker --database $PGDATABASE --queues='(default|pack8s|healthcheck)'
+<odoo-launcher> imq-worker --database $PGDATABASE --queues='(default|pack8s|healthcheck)'
 
 # Run with monitoring enabled
-bin/start_odoo imq-worker --database $PGDATABASE --queues=default --observability-port=9090
+<odoo-launcher> imq-worker --database $PGDATABASE --queues=default --observability-port=9090
 
 # React faster to system-parameter and module changes made by other processes
-bin/start_odoo imq-worker --database $PGDATABASE --queues=default --signaling-check-period-s=2
+<odoo-launcher> imq-worker --database $PGDATABASE --queues=default --signaling-check-period-s=2
 ```
 
 > `--queue` (singular) is kept as a deprecated alias that emits a stderr warning. Update your scripts to use `--queues`. To target several named queues, use a regex alternation like `(a|b|c)`.
@@ -389,6 +619,7 @@ window. Nothing is created and nothing is raised by default: `run_async` returns
 ```python
 # Prevent duplicate processing within a time window
 records.process_records.run_async(
+    records,                             # mandatory positional recordset
     _imq_message_group='batch-1',
     _imq_message_deduplication_id='unique-task-id',
     _imq_deduplication_interval_s=600,   # optional — see below
@@ -473,19 +704,12 @@ _imq_message_name="Retry upload pg_dump 'my_db' to S3 bucket 'backups'"
 
 # Bad — too generic, missing context
 _imq_message_name="backup"
-_imq_message_name="mpy_execute::mpy_pg_backup() on web-03"
+_imq_message_name="pg_backup::run() on web-03"
 ```
 
-**How it works**: If `_imq_message_name` is not provided, IMQ falls back to the processor's docstring first line, then to a generated name like `mpy_execute::function_name()`.
+**How it works**: If `_imq_message_name` is not provided, IMQ falls back to the processor's docstring first line — formatted against the recordset, so `"""Rebuild report for {0.name}"""` renders the record's name — and then to a generated name like `module::function_name()`.
 
 ```python
-# With mpy_execute
-mpy_execute(
-    my_task, host_obj,
-    _imq_message_name=f"Install PostgreSQL ({version}) on host '{host_obj.name}'"
-)
-
-# With run_async
 record.process.run_async(
     record, data,
     _imq_message_name=f"Process order #{record.name}"
@@ -495,12 +719,13 @@ record.process.run_async(
 ### Parent-Child Message Relationships
 
 ```python
-# Create child tasks that update parent progress
+# Inside a running task: fan out children that report progress to this message.
+# `_imq_message_id` is how a task learns its own message id — it is placed in the
+# context by the worker, and is absent when the code runs outside IMQ.
 parent_msg_id = env.context.get('_imq_message_id')
 for item in items:
-    mpy_execute(
-        process_item, host_obj,
-        item_name=item.name,
+    item.process_item.run_async(
+        item,
         _imq_parent_message_id=parent_msg_id,
         _imq_target_children_count=len(items),
         _imq_message_name=f"Process item '{item.name}'"
@@ -509,7 +734,7 @@ for item in items:
 
 When a parent message has children, `get_task_status()` returns `children_summary` (per-state counters) and `children` (list of child statuses).
 
-### Execution Stats (`_imq_stats_category` / `_imq_stats_target`)
+### Execution Stats (`_imq_stats_category`, `_imq_stats_target`)
 
 Two optional reporting axes promoted to queryable columns on the message and
 mirrored (stored + indexed) onto `imq.message_processing`, where the existing
@@ -531,17 +756,14 @@ record.process.run_async(
 )
 ```
 
-With Muppy's `mpy_execute`, `stats_category` is **auto-filled** with the fabric
-task name (`fabric_task_callable.__name__`) when not provided — because every
-Muppy task runs through the same `_mpy_execute` processor, so `processor_id`
-can't tell them apart. The caller always wins if it passes `_imq_stats_category`
-explicitly. Pass `_imq_stats_target` for the acted-on object:
-
-```python
-mpy_execute(mpy_pg_backup, host_obj)                       # category = "mpy_pg_backup"
-mpy_execute(mpy_pg_backup, host_obj,                       # target tagged
-            _imq_stats_target=cluster_obj.name)
-```
+**Why the axes exist at all**: `processor_id` already tells one processor from
+another, so it looks redundant. It stops being redundant as soon as an
+application routes many different tasks through **one** generic processor — a
+common shape for a host application that wraps IMQ in its own helper. Every
+message then shares a single `processor_id`, and `stats_category` becomes the
+only discriminator. If your integration layer does this, have it default
+`_imq_stats_category` to the wrapped callable's name, and let an explicit
+caller-supplied value win.
 
 **Provider parity**: the values ride in the processor context, so they are set
 identically for the PostgreSQL and AWS SQS providers (read back at receive time
@@ -606,13 +828,24 @@ routing above.
 ## Monitoring
 
 ### Message States
-- **new**: Just created
-- **pending**: Queued for processing
-- **wip**: Currently being processed
-- **done**: Successfully completed
-- **failed**: Permanently failed
-- **retry**: Waiting for retry
-- **terminated**: Stopped by user or system
+
+The ten states of `imq.message`, in `models/message.py`:
+
+| State | Meaning |
+|---|---|
+| `new` | Created, not yet queued. May stay here indefinitely while a user fills it in — **excluded from queue depth** for that reason. |
+| `pending` | Queued, waiting for a worker |
+| `wip` | Currently being processed |
+| `retry` | Failed but retryable; waiting for the next attempt |
+| `done` | Successfully completed |
+| `terminated` | The processing itself decided to stop — a deliberate, non-error end |
+| `failed` | Permanently failed, no further automatic attempt |
+| `archived` | Set aside by an operator. **On a FIFO queue this is what unblocks the group** — see [Failure handling in FIFO groups](#failure-handling-in-fifo-groups). |
+| `reset` | Put back for a fresh attempt |
+| `cancelled` | Cancelled before it ran |
+
+**Queue depth** counts messages in `pending` or `retry` whose `planned_time` is null or
+already past — that is, the backlog a worker could pick up right now.
 
 ### Viewing Messages
 1. Navigate to **IMQ > Messages**
@@ -643,10 +876,29 @@ Returns a list of dicts:
         'name': 'Provision dev server...',
         'state': 'wip',
         'elapsed_seconds': 145,
-        'hint': 'Executing. Poll again in 30 seconds.',
+        'hint': 'Executing. Poll again in 30 seconds. Typically ~120s (p95 260s, n=37). '
+                'Sleep ~60s, then poll once.',
+        # present when the task is tagged and has historical samples
+        'expected': {'p50_seconds': 120, 'p95_seconds': 260, 'sample_count': 37},
+        # ALWAYS present while pending/wip, even with no history
+        'next_poll_seconds': 60,
+        # present only when elapsed has passed the p95
+        'overdue': True,
     }
 ]
 ```
+
+| Key | Always? | Meaning |
+|---|---|---|
+| `id`, `name`, `state`, `elapsed_seconds`, `hint` | yes | Identity, current state, seconds since start, next-step guidance |
+| `expected` | when tagged **and** sampled | `{p50_seconds, p95_seconds, sample_count}` from past runs sharing the same `stats_category` + `stats_target` |
+| `next_poll_seconds` | while `pending`/`wip` | How long to sleep before polling again — present even with no history, so a caller never has to handle its absence |
+| `overdue` | when past p95 | The task has exceeded its typical maximum and may be stuck |
+| `children_summary`, `children` | when the message has children | Per-state counters, and the same shape recursively for each child |
+
+**`expected` is the payoff of tagging.** A task with no `_imq_stats_category` /
+`_imq_stats_target` gets no estimate and falls back to a fixed poll interval. See
+[Execution Stats](#execution-stats-_imq_stats_category-_imq_stats_target).
 
 **Hints by state:**
 | State | Hint |
@@ -654,9 +906,13 @@ Returns a list of dicts:
 | `pending` | Task queued. If still pending after 2min, IMQ worker may not be running. |
 | `wip` | Executing. Poll again in 30 seconds. |
 | `done` | Completed. Read the target record for results. |
-| `failed` | Failed. Read imq.message_processing_log for details. |
+| `failed` | Failed. Read `imq.message_processing_log` (filter `message_id=<id>`) for details. **If this task is in a FIFO queue group, subsequent pending tasks in the same group are blocked until this one is archived** — call `archive()` once you have captured the diagnostics. |
 | `retry` | Will be retried automatically. |
 | `terminated` | Manually terminated. |
+| `cancelled` | Cancelled by user. |
+
+While `pending` or `wip`, the hint is **extended in place** with the duration estimate and
+the recommended sleep, so a caller that only reads `hint` still gets the guidance.
 
 ## Best Practices
 
@@ -760,13 +1016,13 @@ The IMQ Workers v3 system provides a standalone worker command that can process 
 
 ```bash
 # Process messages from default queue
-bin/start_odoo imq-worker --database $PGDATABASE --queues default
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default
 
 # Process with queue pattern matching
-bin/start_odoo imq-worker --database $PGDATABASE --queues "mpy.*" --max-messages 100
+<odoo-launcher> imq-worker --database $PGDATABASE --queues "mpy.*" --max-messages 100
 
 # Process with memory limit and observability
-bin/start_odoo imq-worker --database $PGDATABASE --queues default \
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default \
   --max-rss-memory 1024M --observability-port 8080
 ```
 
@@ -778,10 +1034,10 @@ The `--message` parameter allows you to process a specific message by ID or Mess
 
 ```bash
 # Process specific message by numeric ID
-bin/start_odoo imq-worker --database $PGDATABASE --queues default --message 49737
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default --message 49737
 
 # Process specific message by MessageId (UUID)
-bin/start_odoo imq-worker --database $PGDATABASE --queues default \
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default \
   --message "8f3ec366-68c8-4945-87cc-aaf2cad5dd0f"
 ```
 
@@ -797,15 +1053,15 @@ bin/start_odoo imq-worker --database $PGDATABASE --queues default \
 
 ```bash
 # Debug specific message processing
-bin/start_odoo imq-worker --database $PGDATABASE --queues default \
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default \
   --message 49737 --max-messages 1 --log-level DEBUG
 
 # Process message and exit immediately  
-bin/start_odoo imq-worker --database $PGDATABASE --queues default \
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default \
   --message 49737 --max-messages 1 --worker-name "debug-worker"
 
 # Process message with observability for monitoring
-bin/start_odoo imq-worker --database $PGDATABASE --queues default \
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default \
   --message 49737 --observability-port 8080
 ```
 
@@ -836,7 +1092,19 @@ bin/start_odoo imq-worker --database $PGDATABASE --queues default \
 --observability-port PORT  # Port for liveness probe and metrics (0=disabled)
 --metrics-path PATH        # HTTP path for Prometheus metrics (default: /metrics)
 --queue-depth-caching-period-s SECONDS  # Queue depth metrics caching period (default: 30)
+--metrics-export-mode MODE # network (default) | textfile — see Systemd Deployments
+--textfile-dir DIR         # Where textfile mode writes .prom files
+                           #   (default: /var/lib/node_exporter/textfile)
+
+# Cache freshness
+--signaling-check-period-s S  # How often the worker checks for registry/cache
+                           #   invalidation from other processes (default: 5)
 ```
+
+> ℹ **`--queues` vs `--queue`.** For `imq-worker`, `--queue` is a deprecated alias that
+> emits a stderr warning — write `--queues`. **`imq-test` is the opposite**: there the flag
+> really is `--queue` (singular) and there is no `--queues`. The two tools disagree; check
+> which one you are invoking.
 
 ### Known Quirk: Exit Code is Always 0
 
@@ -1052,7 +1320,7 @@ spec:
 Restart=always
 RestartSec=5s
 LimitNPROC=2048
-ExecStart=bin/start_odoo imq-worker --queues muppy --max-thread-delta 80 --observability-port 9000
+ExecStart=<odoo-launcher> imq-worker --queues muppy --max-thread-delta 80 --observability-port 9000
 ```
 
 ### Troubleshooting
@@ -1079,7 +1347,7 @@ IMQ Workers v3 provides comprehensive observability features designed for modern
 
 ```bash
 # Start worker with observability on port 8080
-bin/start_odoo imq-worker --database $PGDATABASE --queues default \
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default \
   --observability-port 8080 --worker-name "production-worker"
 ```
 
@@ -1366,7 +1634,7 @@ spec:
       containers:
       - name: worker
         image: myapp:latest
-        command: ["bin/start_odoo"]
+        command: ["<odoo-launcher>"]
         args:
           - "imq-worker"
           - "--database=$(DATABASE_NAME)"
@@ -1624,7 +1892,7 @@ curl -s http://localhost:8080/status | jq '
 MONITOR_PID=$!
 
 # Create load test messages
-bin/start_odoo imq-test --database $PGDATABASE --simple \
+<odoo-launcher> imq-test --database $PGDATABASE --simple \
   --queue production --count 1000 --delay 0.1
 
 # Monitor processing
@@ -1706,7 +1974,7 @@ When running multiple IMQ workers as systemd units, each worker would normally e
 
 ```bash
 # Each worker writes to /var/lib/node_exporter/textfile/imq_<worker_name>.prom
-bin/start_odoo imq-worker --database $PGDATABASE --queues=default \
+<odoo-launcher> imq-worker --database $PGDATABASE --queues=default \
   --worker-name=imq-default \
   --metrics-export-mode=textfile \
   --textfile-dir=/var/lib/node_exporter/textfile
@@ -1755,7 +2023,7 @@ After=network.target
 [Service]
 User=odoo
 WorkingDirectory=/opt/your-project
-ExecStart=bin/start_odoo imq-worker \
+ExecStart=<odoo-launcher> imq-worker \
     --queues=default \
     --worker-name=imq-default \
     --metrics-export-mode=textfile \
@@ -1867,78 +2135,126 @@ The `imq-ctl` command provides a kubectl-style management tool for IMQ objects, 
 
 ```bash
 # Describe message information in YAML format (default)
-bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737
+<odoo-launcher> imq-ctl --database $PGDATABASE describe message 49737
 
 # Describe message with logs in JSON format
-bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737 --include-logs --output json
+<odoo-launcher> imq-ctl --database $PGDATABASE describe message 49737 --include-logs --output json
 
 # Describe queue information
-bin/start_odoo imq-ctl --database $PGDATABASE describe queue default
+<odoo-launcher> imq-ctl --database $PGDATABASE describe queue default
 
 # Describe processor by selector
-bin/start_odoo imq-ctl --database $PGDATABASE describe processor TestMessage
+<odoo-launcher> imq-ctl --database $PGDATABASE describe processor TestMessage
 ```
+
+### Verbs
+
+`imq-ctl` follows kubectl's shape: `imq-ctl --database DB <verb> <resource> [name] [flags]`.
+
+| Verb | Resources | Purpose |
+|---|---|---|
+| `get` | `queue`, `message`, `processor`, `processing` | List resources (table by default) |
+| `describe` | `queue`, `message`, `processor`, `processing` | Full detail of one resource |
+| `logs` | `processing`, `message` | Stream processing logs |
+| `create` | `queue` | Create a queue |
+| `delete` | `queue` | Delete a queue |
+
+#### Listing with `get`
+
+```bash
+# List all queues (table output)
+<odoo-launcher> imq-ctl --database $PGDATABASE get queue
+
+# List messages, filtered
+<odoo-launcher> imq-ctl --database $PGDATABASE get message --queue default --state failed
+
+# Filter by group — the per-run tag shared by every message of one fan-out
+<odoo-launcher> imq-ctl --database $PGDATABASE get message --group 7f3a91c2
+
+# Machine-readable
+<odoo-launcher> imq-ctl --database $PGDATABASE get message --state pending --output json
+```
+
+Flags: `--output/-o {table,yaml,json}` (default `table`), `--queue`, `--state`, `--group`.
+
+#### Creating and deleting queues
+
+```bash
+# Create a FIFO queue on PostgreSQL with a 10-minute visibility timeout
+<odoo-launcher> imq-ctl --database $PGDATABASE create queue myqueue \
+  --type fifo --provider pgsql --visibility-timeout 600
+
+# Preview without writing
+<odoo-launcher> imq-ctl --database $PGDATABASE create queue myqueue --dry-run
+
+# Delete, skipping the confirmation prompt
+<odoo-launcher> imq-ctl --database $PGDATABASE delete queue myqueue --force
+```
+
+`create queue` flags: `--type {std,fifo}` (default `std`), `--provider {pgsql,aws_sqs}`
+(default `pgsql`), `--visibility-timeout N` (default `30`), `--active`, `--dry-run`.
+`delete queue` flags: `--force`, `--dry-run`.
 
 ### Object Types
 
-#### Messages (`--message`)
+#### Messages
 
 Dump detailed message information including processing history and logs:
 
 ```bash
 # By numeric ID
-bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737
+<odoo-launcher> imq-ctl --database $PGDATABASE describe message 49737
 
 # By MessageId (UUID)  
-bin/start_odoo imq-ctl --database $PGDATABASE describe message "8f3ec366-68c8-4945-87cc-aaf2cad5dd0f"
+<odoo-launcher> imq-ctl --database $PGDATABASE describe message "8f3ec366-68c8-4945-87cc-aaf2cad5dd0f"
 
 # Include processing logs
-bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737 --include-logs
+<odoo-launcher> imq-ctl --database $PGDATABASE describe message 49737 --include-logs
 ```
 
-#### Queues (`--queue`)
+#### Queues
 
 Dump queue configuration and statistics:
 
 ```bash
 # Queue information with message counts by state
-bin/start_odoo imq-ctl --database $PGDATABASE describe queue default
+<odoo-launcher> imq-ctl --database $PGDATABASE describe queue default
 ```
 
-#### Processors (`--processor`)
+#### Processors
 
 Dump message processor configuration:
 
 ```bash
 # By numeric ID
-bin/start_odoo imq-ctl --database $PGDATABASE describe processor 1
+<odoo-launcher> imq-ctl --database $PGDATABASE describe processor 1
 
 # By selector name
-bin/start_odoo imq-ctl --database $PGDATABASE describe processor TestMessage
+<odoo-launcher> imq-ctl --database $PGDATABASE describe processor TestMessage
 ```
 
-#### Processing Records (`--processing`)
+#### Processing Records
 
 Dump individual processing attempt information:
 
 ```bash
 # Processing record with logs
-bin/start_odoo imq-ctl --database $PGDATABASE describe processing 47495 --include-logs
+<odoo-launcher> imq-ctl --database $PGDATABASE describe processing 47495 --include-logs
 ```
 
-#### Processing Logs (`--logs`)
+#### Processing Logs
 
 Dump processing logs in streaming format, similar to `kubectl logs`:
 
 ```bash
 # Stream format - human-readable log output
-bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497
+<odoo-launcher> imq-ctl --database $PGDATABASE logs processing 47497
 
 # JSON format - structured log data
-bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --json
+<odoo-launcher> imq-ctl --database $PGDATABASE logs processing 47497 --output json
 
 # Save logs to file for analysis
-bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --output processing_47497.log
+<odoo-launcher> imq-ctl --database $PGDATABASE logs processing 47497 --output-file processing_47497.log
 ```
 
 ### Output Formats
@@ -1980,7 +2296,7 @@ status:
 
 ```bash
 # Output in JSON format
-bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737 --json
+<odoo-launcher> imq-ctl --database $PGDATABASE describe message 49737 --output json
 ```
 
 ```json
@@ -2005,7 +2321,7 @@ The `--logs` command provides a specialized streaming format for processing logs
 
 ```bash
 # Stream format output
-bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497
+<odoo-launcher> imq-ctl --database $PGDATABASE logs processing 47497
 ```
 
 ```
@@ -2028,7 +2344,7 @@ bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497
 
 ```bash
 # JSON format provides structured data
-bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --json
+<odoo-launcher> imq-ctl --database $PGDATABASE logs processing 47497 --output json
 ```
 
 ```json
@@ -2067,19 +2383,39 @@ bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --json
 # Required arguments
 --database, -d DATABASE    # Database name to connect to
 
-# Object type (choose one)
---message, -m ID          # Dump message by ID or MessageId
---queue, -q NAME          # Dump queue by name  
---processor, -p REF       # Dump processor by ID or selector
---processing ID           # Dump processing record by ID
---logs PROCESSING_ID      # Dump processing logs stream for processing ID
-
-# Output options
---json                    # Output in JSON format (default: YAML)
---output, -o FILE         # Output file path (default: stdout)
---include-logs            # Include processing logs for messages/processing
+# Global
+--database, -d NAME       # Database to connect to (required)
 --verbose, -v             # Verbose output with debug information
+
+# get <queue|message|processor|processing> [name]
+--output, -o FORMAT       # table (default) | yaml | json
+--queue NAME              # Filter messages by queue name
+--state STATE             # Filter messages by state
+--group TAG               # Filter messages by group (per-run tag)
+
+# describe <queue|message|processor|processing> <name>
+--output, -o FORMAT       # yaml (default) | json
+--output-file, -f FILE    # Write to file (default: stdout)
+--include-logs            # Include processing logs for messages/processing
+
+# logs <processing|message> <id>
+--output, -o FORMAT       # stream (default) | json
+--output-file, -f FILE    # Write to file (default: stdout)
+
+# create queue <name>
+--type TYPE               # std (default) | fifo
+--provider PROVIDER       # pgsql (default) | aws_sqs
+--visibility-timeout N    # Seconds (default: 30)
+--active                  # Create as active (default: true)
+--dry-run                 # Show what would be created
+
+# delete queue <name>
+--force                   # Skip confirmation
+--dry-run                 # Show what would be deleted
 ```
+
+> ⚠ **There is no `--json` flag.** Use `--output json`. And the flag that writes to a file
+> is `--output-file` / `-f`, not `--output` — `--output` selects the *format*.
 
 ### Use Cases
 
@@ -2087,33 +2423,33 @@ bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --json
 
 ```bash
 # Check message state and processing history
-bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737
+<odoo-launcher> imq-ctl --database $PGDATABASE describe message 49737
 
 # Examine detailed logs
-bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737 --include-logs
+<odoo-launcher> imq-ctl --database $PGDATABASE describe message 49737 --include-logs
 
 # Stream processing logs for detailed debugging
-bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497
+<odoo-launcher> imq-ctl --database $PGDATABASE logs processing 47497
 
 # Check what processor handles the message
-bin/start_odoo imq-ctl --database $PGDATABASE describe processor TestMessage
+<odoo-launcher> imq-ctl --database $PGDATABASE describe processor TestMessage
 ```
 
 #### Monitoring and Operations
 
 ```bash
 # Export message data for analysis
-bin/start_odoo imq-ctl --database $PGDATABASE describe message 49737 --json \
-  --output message_49737.json
+<odoo-launcher> imq-ctl --database $PGDATABASE describe message 49737 --output json \
+  --output-file message_49737.json
 
 # Check queue health
-bin/start_odoo imq-ctl --database $PGDATABASE describe queue default
+<odoo-launcher> imq-ctl --database $PGDATABASE describe queue default
 
 # Audit processing attempts
-bin/start_odoo imq-ctl --database $PGDATABASE describe processing 47495 --include-logs
+<odoo-launcher> imq-ctl --database $PGDATABASE describe processing 47495 --include-logs
 
 # Tail processing logs for monitoring
-bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --output /var/log/imq/processing_47497.log
+<odoo-launcher> imq-ctl --database $PGDATABASE logs processing 47497 --output /var/log/imq/processing_47497.log
 ```
 
 #### CI/CD Integration
@@ -2122,17 +2458,17 @@ bin/start_odoo imq-ctl --database $PGDATABASE logs processing 47497 --output /va
 #!/bin/bash
 # Verify message processing in pipeline
 
-MESSAGE_ID=$(bin/start_odoo imq-test --database $PGDATABASE --simple --json-output | jq -r '.[0].id')
+MESSAGE_ID=$(<odoo-launcher> imq-test --database $PGDATABASE --simple --json-output | jq -r '.[0].id')
 
 # Process the message
-bin/start_odoo imq-worker --database $PGDATABASE --queues default --message $MESSAGE_ID --max-messages 1
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default --message $MESSAGE_ID --max-messages 1
 
 # Verify it completed successfully
-FINAL_STATE=$(bin/start_odoo imq-ctl --database $PGDATABASE describe message $MESSAGE_ID --output json | jq -r '.status.state')
+FINAL_STATE=$(<odoo-launcher> imq-ctl --database $PGDATABASE describe message $MESSAGE_ID --output json | jq -r '.status.state')
 
 if [ "$FINAL_STATE" != "done" ]; then
   echo "Message processing failed: $FINAL_STATE"
-  bin/start_odoo imq-ctl --database $PGDATABASE describe message $MESSAGE_ID --include-logs
+  <odoo-launcher> imq-ctl --database $PGDATABASE describe message $MESSAGE_ID --include-logs
   exit 1
 fi
 
@@ -2149,22 +2485,22 @@ The `imq-test` command provides a powerful CLI interface for creating and testin
 
 ```bash
 # List available test processors
-bin/start_odoo imq-test --database $PGDATABASE --list-processors
+<odoo-launcher> imq-test --database $PGDATABASE --list-processors
 
 # Create a simple test message
-bin/start_odoo imq-test --database $PGDATABASE --simple --queue default --verbose
+<odoo-launcher> imq-test --database $PGDATABASE --simple --queue default --verbose
 
 # Create an RPC method test with custom parameters
-bin/start_odoo imq-test --database $PGDATABASE --rpc-method --queue default --param "test_data" --duration 10
+<odoo-launcher> imq-test --database $PGDATABASE --rpc-method --queue default --param "test_data" --duration 10
 
 # Create multiple messages with JSON output
-bin/start_odoo imq-test --database $PGDATABASE --simple --queue default --count 5 --json-output
+<odoo-launcher> imq-test --database $PGDATABASE --simple --queue default --count 5 --json-output
 ```
 
 #### Command Syntax
 
 ```bash
-bin/start_odoo imq-test [OPTIONS] TEST_TYPE
+<odoo-launcher> imq-test [OPTIONS] TEST_TYPE
 ```
 
 #### Required Arguments
@@ -2240,7 +2576,7 @@ bin/start_odoo imq-test [OPTIONS] TEST_TYPE
 
 ```bash
 # Create a simple test message
-bin/start_odoo imq-test --database $PGDATABASE --simple --queue default --verbose
+<odoo-launcher> imq-test --database $PGDATABASE --simple --queue default --verbose
 
 # Output:
 # Created simple message 1/1: ID=49682, MessageID=f2f1b01a-8559-4058-9e69-e16b8ec288fa
@@ -2252,7 +2588,7 @@ bin/start_odoo imq-test --database $PGDATABASE --simple --queue default --verbos
 
 ```bash
 # Test RPC method with 30-second duration and custom parameter
-bin/start_odoo imq-test --database $PGDATABASE --rpc-method \
+<odoo-launcher> imq-test --database $PGDATABASE --rpc-method \
   --queue default --param "production_data" --duration 30 --verbose
 ```
 
@@ -2260,7 +2596,7 @@ bin/start_odoo imq-test --database $PGDATABASE --rpc-method \
 
 ```bash
 # Test IMQRetryableError with 60-second delay
-bin/start_odoo imq-test --database $PGDATABASE --rpc-method \
+<odoo-launcher> imq-test --database $PGDATABASE --rpc-method \
   --queue default --raise-exception --exception-type imqretryable \
   --delay-param 60 --pass-imqerror-value
 ```
@@ -2269,7 +2605,7 @@ bin/start_odoo imq-test --database $PGDATABASE --rpc-method \
 
 ```bash
 # Create FIFO test sequence with exception on step 3
-bin/start_odoo imq-test --database $PGDATABASE --fifo-test \
+<odoo-launcher> imq-test --database $PGDATABASE --fifo-test \
   --queue fifo_queue --raise-exception --exception-step fifo_step3 \
   --exception-type usererror --message-group "test-batch-001"
 ```
@@ -2278,7 +2614,7 @@ bin/start_odoo imq-test --database $PGDATABASE --fifo-test \
 
 ```bash
 # Create 10 simple messages with 2-second delay between each
-bin/start_odoo imq-test --database $PGDATABASE --simple \
+<odoo-launcher> imq-test --database $PGDATABASE --simple \
   --queue default --count 10 --delay 2 --json-output > test_results.json
 ```
 
@@ -2286,7 +2622,7 @@ bin/start_odoo imq-test --database $PGDATABASE --simple \
 
 ```bash
 # Test with custom JSON payload
-bin/start_odoo imq-test --database $PGDATABASE --simple \
+<odoo-launcher> imq-test --database $PGDATABASE --simple \
   --queue default --payload '{"customer_id": 12345, "action": "process_order"}' \
   --selector "OrderProcessor" --name "Order Processing Test"
 ```
@@ -2295,7 +2631,7 @@ bin/start_odoo imq-test --database $PGDATABASE --simple \
 
 ```bash
 # Create 100 messages quickly for load testing
-bin/start_odoo imq-test --database $PGDATABASE --simple \
+<odoo-launcher> imq-test --database $PGDATABASE --simple \
   --queue default --count 100 --json-output | jq '.[].id'
 ```
 
@@ -2333,11 +2669,11 @@ When using `--json-output`, the command returns structured data:
 # test_imq_pipeline.sh
 
 # Create test messages
-RESULT=$(bin/start_odoo imq-test --database $PGDATABASE --simple --count 5 --json-output)
+RESULT=$(<odoo-launcher> imq-test --database $PGDATABASE --simple --count 5 --json-output)
 MESSAGE_IDS=$(echo "$RESULT" | jq -r '.[].id')
 
 # Start worker to process them
-bin/start_odoo imq-worker --database $PGDATABASE --queues default --max-messages 5 &
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default --max-messages 5 &
 WORKER_PID=$!
 
 # Wait for processing and check results
@@ -2346,7 +2682,7 @@ kill $WORKER_PID
 
 # Verify all messages processed successfully
 for id in $MESSAGE_IDS; do
-  STATUS=$(bin/start_odoo shell --database $PGDATABASE -c "
+  STATUS=$(<odoo-launcher> shell --database $PGDATABASE -c "
     msg = env['imq.message'].browse($id)
     print(msg.state)
   ")
@@ -2363,12 +2699,12 @@ echo "All test messages processed successfully!"
 
 ```bash
 # Create load test with timing
-time bin/start_odoo imq-test --database $PGDATABASE --simple \
+time <odoo-launcher> imq-test --database $PGDATABASE --simple \
   --queue performance_test --count 1000 --verbose
 
 # Monitor queue depth during test  
 while true; do
-  PENDING=$(bin/start_odoo shell --database $PGDATABASE -c "
+  PENDING=$(<odoo-launcher> shell --database $PGDATABASE -c "
     count = env['imq.message'].search_count([('state', '=', 'pending')])
     print(count)
   ")
@@ -2385,13 +2721,13 @@ done
    ```bash
    # Verify database name and access
    echo $PGDATABASE
-   bin/start_odoo shell --database $PGDATABASE -c "print('Connected successfully')"
+   <odoo-launcher> shell --database $PGDATABASE -c "print('Connected successfully')"
    ```
 
 2. **Queue Not Found**
    ```bash
    # List available queues
-   bin/start_odoo shell --database $PGDATABASE -c "
+   <odoo-launcher> shell --database $PGDATABASE -c "
    queues = env['imq.queue'].search([])
    for q in queues:
        print(f'{q.name} ({q.provider}, {q.q_type})')
@@ -2401,7 +2737,7 @@ done
 3. **Permission Issues**
    ```bash
    # Test with specific user ID
-   bin/start_odoo imq-test --database $PGDATABASE --simple \
+   <odoo-launcher> imq-test --database $PGDATABASE --simple \
      --queue default --user-id 1 --verbose
    ```
 
@@ -2409,56 +2745,75 @@ done
 
 ```bash
 # Run in debug mode for immediate execution
-bin/start_odoo imq-test --database $PGDATABASE --rpc-method \
+<odoo-launcher> imq-test --database $PGDATABASE --rpc-method \
   --queue default --debug-mode --enable-logging --verbose
 ```
 
-### Running All Tests
+### Running the Unit Tests
 
-A comprehensive test suite is available to validate the IMQ Workers v3 implementation:
+The `tests/` directory holds ordinary Odoo `TransactionCase` tests. Run them the way you run
+any Odoo module's tests:
 
 ```bash
-# Run all tests
-./run_tests.sh
+# Generic
+<odoo-launcher> --test-enable --stop-after-init -u inouk_message_queue
+
+# On Muppy, from the repo root
+make test ADDONS=inouk_message_queue TAGS=/inouk_message_queue
 ```
 
-The test script performs the following checks:
+> ⚠ **`tests/__init__.py` imports each test module explicitly.** A test file that is not
+> added there **never runs — silently**, which is indistinguishable from a passing test.
+> Whenever you add a file to `tests/`, add its `from . import …` line in the same commit.
 
-1. **Module Loading Test**: Verifies the module loads without errors in Odoo
-2. **CLI Command Registration Test**: Confirms the `imq-worker` command is properly registered
-3. **CLI Help Test**: Validates the command-line help system works
-4. **Worker Initialization Test**: Tests worker startup and database connection
-5. **Unit Tests**: Runs basic import and utility function tests
-6. **CLI Argument Validation**: Ensures invalid arguments are rejected
-7. **Database Connection Test**: Verifies database connectivity through the worker
+### `run_tests.sh` is a smoke script, not the test suite
+
+Despite its name, `./run_tests.sh` runs **none** of the files in `tests/`. It says so itself
+while running ("Unit tests require proper Python path configuration — running basic import
+tests instead"). It is a **workers-v3 smoke script**: it boots a server and a worker and
+checks that the CLI is wired up.
+
+It is also **not portable as shipped** — it hard-codes an absolute checkout path and a
+developer's database name, and invokes a launcher that only exists on one machine. Adapt
+those three values before expecting it to run anywhere else.
+
+What it actually checks:
+
+1. **Module Loading**: the module loads without errors in Odoo
+2. **CLI Command Registration**: the `imq-worker` command is registered
+3. **CLI Help**: the command-line help system works
+4. **Worker Initialization**: worker startup and database connection
+5. **Import smoke test**: basic imports and utility functions — *not* the `tests/` suite
+6. **CLI Argument Validation**: invalid arguments are rejected
+7. **Database Connection**: database connectivity through the worker
 
 ### Manual Testing
 
 #### Test CLI Command
 ```bash
 # Test command registration
-bin/start_odoo help | grep imq-worker
+<odoo-launcher> help | grep imq-worker
 
 # Test help system
-bin/start_odoo imq-worker --help
+<odoo-launcher> imq-worker --help
 
 # Test worker with non-existent queue (should exit gracefully)
-bin/start_odoo imq-worker --database $PGDATABASE --queues test_queue --max-messages 1
+<odoo-launcher> imq-worker --database $PGDATABASE --queues test_queue --max-messages 1
 ```
 
 #### Test Worker Functionality
 ```bash
 # Test with existing queue
-bin/start_odoo imq-worker --database $PGDATABASE --queues default --max-messages 5
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default --max-messages 5
 
 # Test with memory limit
-bin/start_odoo imq-worker --database $PGDATABASE --queues default --max-rss-memory 512M
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default --max-rss-memory 512M
 
 # Test with regex pattern
-bin/start_odoo imq-worker --database $PGDATABASE --queues "mpy.*" --max-messages 10
+<odoo-launcher> imq-worker --database $PGDATABASE --queues "mpy.*" --max-messages 10
 
 # Test with observability (metrics and health checks)
-bin/start_odoo imq-worker --database $PGDATABASE --queues default --observability-port 8080
+<odoo-launcher> imq-worker --database $PGDATABASE --queues default --observability-port 8080
 ```
 
 ### Test Results
@@ -2501,9 +2856,19 @@ Contributions are welcome! Please submit pull requests or issues on the project 
 
 When contributing:
 1. Review the development documentation in `./docs/dev/`
-2. Run the test suite with `./run_tests.sh`
-3. Follow the existing code patterns and conventions
+2. Run the unit tests — see [Running the Unit Tests](#running-the-unit-tests). Do **not**
+   rely on `run_tests.sh`; it does not run them.
+3. If you add a file under `tests/`, add its import to `tests/__init__.py` in the same commit
+4. Follow the existing code patterns and conventions
 
 ## Support
 
 For questions or support, please contact the author @cmorisse.
+
+When reporting a problem, include:
+
+1. The IMQ version (`__manifest__.py`) and the queue's provider and type (`pgsql`/`aws_sqs`, `std`/`fifo`)
+2. The message id, and the output of
+   `<odoo-launcher> imq-ctl --database $PGDATABASE describe message <id> --include-logs`
+3. Whether a worker was running at the time — the single most common cause of a task that
+   "never runs" is that no `imq-worker` process is consuming its queue

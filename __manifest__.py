@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Inouk Message Queue',
-    'summary': 'Inouk Message Queue a.k.a. IMQ allows to process tasks \nand interconnect asynchronously Odoo subprocesses with external programs using\ncloud message queues (AWS SQS for now but more to come).',
-    'description': 'A toolkit to manage heavyweight tasks and distribute them \nas asynchronous processing on workers that can be Odoo, AWS Lambda or any program\nable to consume Messages.',
+    'summary': 'Inouk Message Queue a.k.a. IMQ is a task queue for Odoo: turn a model\nmethod into an async task with one decorator, and get exactly-once delivery, ordered\nFIFO processing, automatic retries and full log capture.',
+    'description': 'A task queue built for Odoo business applications, where transactional\nsafety and auditability matter more than raw throughput. Runs on PostgreSQL with no extra\ninfrastructure, or on AWS SQS, switchable per queue without touching application code.\nTasks are consumed by standalone workers exposing Prometheus metrics and Kubernetes\nhealth probes. See README.md.',
     'author': 'Cyril MORISSE (twitter @cmorisse)',
     # FSL-1.1-MIT (Functional Source License) — see the LICENSE file.
     # Odoo's 'license' vocabulary has no FSL value; 'Other proprietary' is the

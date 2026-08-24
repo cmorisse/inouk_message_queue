@@ -96,6 +96,29 @@ class TestImqDedupWindow(TransactionCase):
         self._enqueue(interval_s=0)
         self.assertEqual(self._sent(), 2, "nothing can fall inside a zero-length window")
 
+    def test_the_window_is_measured_from_now_not_from_transaction_start(self):
+        """A long-open transaction must not suppress the row it just enqueued.
+
+        `enqueued_time` is stamped when the row is written, and stored truncated to
+        the second (the fraction lives in enqueued_time_microseconds). The check used
+        to compare it against `NOW()`, which is fixed at TRANSACTION START and does
+        not advance — two different clocks. Once the transaction had been open past
+        the remainder of its first second, the row it wrote read as *later* than
+        NOW(), so `enqueued_time > NOW() - 0` was TRUE and a zero-length window
+        suppressed the message.
+
+        The sleep reproduces on purpose what a long test run or a busy worker used to
+        hit by accident: it was the same code passing or failing on how much wall
+        clock had gone by, which is why it surfaced as a flake rather than a bug.
+        """
+        self.env.cr.execute("SELECT pg_sleep(1.1)")   # cross a second boundary
+        self._enqueue()
+        self._enqueue(interval_s=0)
+        self.assertEqual(
+            self._sent(), 2,
+            "a zero-length window must hold nothing, however long the transaction "
+            "has been open")
+
     def test_a_negative_window_is_refused(self):
         """Not clamped to 0: silently turning a bug into 'never deduplicate' would hide it
         behind behaviour that looks deliberate."""

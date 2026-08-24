@@ -21,11 +21,27 @@ _logger = logging.getLogger(__name__)
 # `make_interval(secs => %s)` rather than '%s seconds'::INTERVAL: the placeholder used to sit
 # INSIDE a string literal, which was tolerable while the value could only come from an Integer
 # column. It can now come from a caller, so the interval is built from a typed parameter.
+#
+# `clock_timestamp()` and NOT `NOW()`. NOW() is the TRANSACTION START time and does not
+# advance, while `enqueued_time` is stamped when the row is written -- two different clocks.
+# The column also stores whole seconds (the fraction goes to enqueued_time_microseconds), so
+# a row written after the transaction crossed a second boundary reads as LATER than NOW(),
+# and then `enqueued_time > NOW() - 0` is TRUE: a zero-length window suppresses the message
+# the caller has just enqueued. That is not a rounding artefact, it is the documented
+# contract of `deduplication_interval_s=0` failing outright, and it grew more likely the
+# longer the enclosing transaction had been open.
+#
+# Measuring from the real clock also makes the window mean what it says: "still in flight in
+# the last N seconds", rather than "in the N seconds before this transaction began".
+#
+# One bias remains and is the safe one: because enqueued_time is truncated DOWN, a message
+# looks up to a second older than it is, so a window is effectively up to a second short.
+# That errs toward NOT suppressing -- running twice, never silently skipping.
 CHECK_MESSAGE_DUPLICATE_SQL = """SELECT id
 FROM imq_message
 WHERE
     state IN ('wip', 'pending', 'retry')
-AND enqueued_time > NOW() - make_interval(secs => %s)
+AND enqueued_time > clock_timestamp() - make_interval(secs => %s)
 AND message_deduplication_id = %s;
 """
 

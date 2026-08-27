@@ -14,11 +14,25 @@ own rules — see `muppy_manganese/security/ir_rules__imq.xml` for an example.
 - **`imq.message.company_id`** is set at `create()` from
   `requesting_user_id.company_id`. It represents *the tenant for whom this
   work was submitted* — a snapshot frozen at submission time.
-- If `requesting_user_id` is not set (system-driven message: cron, daemon,
-  GC), `company_id` is `NULL`. There is **no fallback** to
-  `user_id.company_id`. Rationale: a fallback could leak system messages
-  into a tenant's view if the system user happens to be assigned to that
-  tenant's company.
+- If `requesting_user_id` is not set (system message), `company_id` is
+  `NULL`. There is **no fallback** to `user_id.company_id` at `create()`.
+  Rationale: a fallback could leak system messages into a tenant's view if
+  the system user happens to be assigned to that tenant's company.
+- **At enqueue, `_imq_requesting_user_id` carries three cases** (resolved
+  in `api_pgsql.py`):
+    - **an id** — that user requested the work. The escalated-path form:
+      the message is filed under that user and their company.
+    - **omitted** — the message is attributed to the enqueuing user
+      (`user_id`). This is the default, and it is almost always right: the
+      person whose action enqueued the work is the person the message is
+      about.
+    - **`False`, explicitly** — a **system message**: `requesting_user_id`
+      stays `NULL`, so `company_id` derives to `NULL` and the message is
+      invisible to every tenant-scoped rule by construction. This is the
+      form for platform-internal findings a tenant must never be shown
+      (first consumer: `muppy_keyring`'s vault-divergence dispatcher).
+      Omitting the kwarg does **not** produce a system message — the
+      omission fallback above swallows it.
 - `imq.message_processing.company_id` and
   `imq.message_processing_log.company_id` are stored related fields on
   `message_id.company_id` — they always mirror their parent message's

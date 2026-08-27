@@ -106,14 +106,26 @@ def send_message__pgsql(
         )
         if _r: return _r
 
+    # `_imq_requesting_user_id` carries three cases, and the difference between the
+    # last two is load-bearing (docs/multi_tenancy.md):
+    #   an id    -> that user requested the work (escalated paths);
+    #   None     -> nothing was declared: attribute to the enqueuing user;
+    #   False    -> a SYSTEM message. requesting_user_id stays NULL, so company_id
+    #               derives to NULL at create and the message is invisible to every
+    #               MGX tenant BY CONSTRUCTION -- for vault-internal or
+    #               platform-internal findings a tenant must never be shown.
+    # A plain `or` chain cannot express the third case: it swallows the explicit
+    # False into the fallback and quietly attributes the message to whoever's read
+    # happened to trigger it.
+    _requesting_ctx = message_body_values.get('context', {}).get('_imq_requesting_user_id')
     message_values = {
         "name": message_name,
         "queue_id": queue_obj.id,
         "group": message_group,
         "queue_message_id": queue_obj.generate_message_id(),
         "user_id": odoo_env.user.id,
-        # Get requesting_user_id from processor_context, fallback to user_id
-        "requesting_user_id": message_body_values.get('context', {}).get('_imq_requesting_user_id') or message_body_values.get('user_id') or odoo_env.user.id,
+        "requesting_user_id": None if _requesting_ctx is False else (
+            _requesting_ctx or message_body_values.get('user_id') or odoo_env.user.id),
         # Reporting axes set at ENQUEUE (pgsql creates the record here), so a
         # still-'pending' message already carries its bucket and get_task_status
         # can return a duration hint before a worker even picks it up. The receive

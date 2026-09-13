@@ -11,7 +11,9 @@
     'license': 'Other proprietary',
     'category': 'Extra Tools',
     'version': '0.5.0',
-    'depends': ['inouk_core', 'mail'],
+    # inouk_notifications: the queue's Odoo channel is ik_notify and nothing else, so the
+    # dependency is declared rather than probed at call time.
+    'depends': ['inouk_core', 'mail', 'inouk_notifications'],
     'data': [
         'security/res_users.xml',
         'security/res_groups.xml',

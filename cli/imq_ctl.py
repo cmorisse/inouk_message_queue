@@ -2,16 +2,53 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import os
+import re
 import sys
 import json
 import yaml
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from odoo.cli import Command
 from odoo import api, SUPERUSER_ID
 from odoo.modules.registry import Registry
 
 _logger = logging.getLogger(__name__)
+
+
+# READY = what a worker would pick up RIGHT NOW. These mirror the worker's own
+# pickup predicates (models/worker_pgsql.py, PGSQL_GET_MESSAGE_SQL_std and
+# _fifo). Keep the three in sync: a READY that disagrees with the worker is
+# worse than no READY at all, because automation waits on this number — an
+# over-count makes it wait until its timeout for messages nobody will take.
+#
+# The fifo form carries the head-of-group condition: within a `group`, a
+# message is takeable only once its predecessor has finished. Dropping it
+# over-counts every fifo queue with a queued group.
+READY_COUNT_SQL_STD = """
+SELECT count(*) FROM imq_message
+WHERE queue_id = %s
+  AND state IN ('pending', 'retry')
+  AND (planned_time IS NULL OR planned_time < NOW())
+"""
+
+READY_COUNT_SQL_FIFO = """
+WITH sq1 AS (
+    SELECT im.id, im.state, im.planned_time,
+           LAG(im.state) OVER (PARTITION BY im."group" ORDER BY im.id) AS prev_state
+    FROM imq_message AS im
+    WHERE im.queue_id = %s
+)
+SELECT count(*) FROM sq1
+WHERE state IN ('pending', 'retry')
+  AND (planned_time IS NULL OR planned_time < NOW())
+  AND (prev_state IN ('done', 'terminated', 'archived') OR prev_state IS NULL)
+"""
+
+# READY is the ONLY column that is not an imq.message state: it is a predicate
+# over 'pending' and 'retry' ("a worker would take it now"), which no single
+# state can express. Every other column is a state, named with the state's own
+# label — the CLI speaks IMQ's vocabulary, it does not invent a parallel one.
 
 
 class IMQCtl(Command):
@@ -32,6 +69,8 @@ Examples:
   %(prog)s create queue test-queue          # Create new queue
   %(prog)s delete queue test-queue          # Delete queue
   %(prog)s describe queue default           # Detailed queue information
+  %(prog)s top queue                        # Message backlog per queue, with a TOTAL line
+  %(prog)s top queue -o json                # ... as JSON, for automation
 
   # Message inspection
   %(prog)s get message --queue default      # List messages in queue
@@ -44,13 +83,26 @@ Examples:
         )
         
         # Required arguments
-        parser.add_argument('--database', '-d', required=True,
-                          help='Database name to connect to')
+        parser.add_argument('--database', '-d',
+                          default=os.environ.get('PGDATABASE') or None,
+                          help='Database name to connect to '
+                               '(default: $PGDATABASE, so on a configured box '
+                               'you can leave it out)')
         
         # Subcommands
         subparsers = parser.add_subparsers(dest='verb', help='Available commands')
         subparsers.required = True
         
+        # Top command — current load, kubectl-style (no mutation, no listing)
+        top_parser = subparsers.add_parser(
+            'top', help='Show the current message backlog of queues')
+        top_parser.add_argument('resource_type', choices=['queue'],
+                              help='Resource type to summarise')
+        top_parser.add_argument('resource_name', nargs='?',
+                              help='Limit to one queue')
+        top_parser.add_argument('--output', '-o', choices=['table', 'yaml', 'json'],
+                              default='table', help='Output format')
+
         # Get command
         get_parser = subparsers.add_parser('get', help='Display one or many resources')
         get_parser.add_argument('resource_type', choices=['queue', 'message', 'processor', 'processing'],
@@ -61,6 +113,15 @@ Examples:
         get_parser.add_argument('--queue', help='Filter messages by queue name')
         get_parser.add_argument('--state', help='Filter messages by state')
         get_parser.add_argument('--group', help='Filter messages by group (per-run tag)')
+        get_parser.add_argument('--since',
+                              help='Only what was created within this window, '
+                                   'kubectl-style: 30s, 5m, 2h, 3d. Applies to '
+                                   'message and processing (the time-series '
+                                   'resources); rejected on queue/processor.')
+        get_parser.add_argument('--limit', type=int, default=50,
+                              help='Maximum rows to return (default 50, '
+                                   '0 = no limit). The default silently '
+                                   'truncated every listing before it existed.')
         
         # Create command
         create_parser = subparsers.add_parser('create', help='Create a resource')
@@ -133,7 +194,9 @@ Examples:
                 env = api.Environment(cr, SUPERUSER_ID, {})
                 
                 # Route to appropriate handler
-                if parsed_args.verb == 'get':
+                if parsed_args.verb == 'top':
+                    return self._handle_top(env, parsed_args)
+                elif parsed_args.verb == 'get':
                     return self._handle_get(env, parsed_args)
                 elif parsed_args.verb == 'create':
                     return self._handle_create(env, parsed_args)
@@ -154,8 +217,159 @@ Examples:
                 traceback.print_exc()
             return 1
     
+    def _queue_stats(self, env, queues):
+        """Message counts per queue, keyed by queue id.
+
+        Returns {queue_id: {'byState': {...}, 'ready': n, 'inflight': n,
+        'total': n}}. 'ready' comes from the worker's own predicate (see
+        READY_COUNT_SQL_* above), which is why it is SQL and not a domain: the
+        fifo case needs a window function the ORM cannot express.
+        """
+        stats = {q.id: {'byState': {}, 'ready': 0, 'total': 0} for q in queues}
+        if not queues:
+            return stats
+
+        env.cr.execute(
+            "SELECT queue_id, state, count(*) FROM imq_message "
+            "WHERE queue_id IN %s GROUP BY queue_id, state",
+            (tuple(queues.ids),))
+        for queue_id, state, count in env.cr.fetchall():
+            entry = stats[queue_id]
+            entry['byState'][state] = count
+            entry['total'] += count
+
+        for queue in queues:
+            sql = (READY_COUNT_SQL_FIFO if queue.q_type == 'fifo'
+                   else READY_COUNT_SQL_STD)
+            env.cr.execute(sql, (queue.id,))
+            stats[queue.id]['ready'] = env.cr.fetchone()[0]
+
+        return stats
+
+    @staticmethod
+    def _since_cutoff(value):
+        """A kubectl-style duration ('30s', '5m', '2h', '3d') as a UTC cutoff.
+
+        Same spelling as `kubectl logs --since`. Odoo stores create_date as
+        naive UTC, which is what utcnow() returns, so the two compare directly.
+        """
+        match = re.fullmatch(r'(\d+)([smhd])', (value or '').strip())
+        if not match:
+            raise ValueError(
+                f"--since: expected a duration like 30s, 5m, 2h or 3d, "
+                f"got '{value}'")
+        amount = int(match.group(1))
+        seconds = amount * {'s': 1, 'm': 60, 'h': 3600, 'd': 86400}[match.group(2)]
+        return datetime.utcnow() - timedelta(seconds=seconds)
+
+    @staticmethod
+    def _column_header(label):
+        """An imq.message state label, as a table column header.
+
+        Underscores rather than spaces: a header is one token, so a
+        space-separated one ('In progress') reads as two columns in a
+        space-aligned table and breaks any awk/cut over the output.
+        """
+        return label.upper().replace(' ', '_')
+
+    def _state_labels(self, env):
+        """The imq.message states, in lifecycle order, as (code, label).
+
+        Read off the live field rather than imported from the model, so a state
+        added by this addon OR by a selection_add in another one shows up on its
+        own — the columns can never go stale against the data.
+        """
+        return list(env['imq.message']._fields['state'].selection)
+
+    def _handle_top(self, env, args):
+        """Handle 'top' command"""
+        if args.resource_name:
+            queues = env['imq.queue'].search(
+                [('name', '=', args.resource_name)], limit=1)
+            if not queues:
+                print(f"Error: Queue '{args.resource_name}' not found",
+                      file=sys.stderr)
+                return 1
+        else:
+            queues = env['imq.queue'].search([])
+
+        stats = self._queue_stats(env, queues)
+        states = self._state_labels(env)
+
+        rows = []
+        for queue in queues:
+            s = stats[queue.id]
+            rows.append({
+                'name': queue.name,
+                'type': queue.q_type,
+                'ready': s['ready'],
+                'byState': {code: s['byState'].get(code, 0)
+                            for code, _label in states},
+                'total': s['total'],
+            })
+
+        total = {
+            'ready': sum(r['ready'] for r in rows),
+            'byState': {code: sum(r['byState'][code] for r in rows)
+                        for code, _label in states},
+            'total': sum(r['total'] for r in rows),
+        }
+
+        if args.output == 'table':
+            if not rows:
+                print("No queues found")
+                return 0
+
+            # READY first (it is what an operator acts on), then one column per
+            # state in lifecycle order, TOTAL last. Widths follow the labels, so
+            # a longer state name never breaks the alignment.
+            name_w = max([len('NAME')] + [len(r['name']) for r in rows])
+            type_w = max([len('TYPE')] + [len(r['type']) for r in rows])
+            cols = [('READY', 'ready')] + [(self._column_header(label), code)
+                                           for code, label in states]
+            widths = {}
+            for header, code in cols:
+                values = ([r['ready'] for r in rows] if code == 'ready'
+                          else [r['byState'][code] for r in rows])
+                widths[header] = max(len(header), *(len(str(v)) for v in values))
+            total_w = max(len('TOTAL'), *(len(str(r['total'])) for r in rows))
+
+            def _line(name, qtype, get, grand):
+                cells = ' '.join(f"{str(get(code)):>{widths[h]}}"
+                                 for h, code in cols)
+                return (f"{name:<{name_w}} {qtype:<{type_w}} {cells} "
+                        f"{str(grand):>{total_w}}")
+
+            header = (f"{'NAME':<{name_w}} {'TYPE':<{type_w}} "
+                      + ' '.join(f"{h:>{widths[h]}}" for h, _c in cols)
+                      + f" {'TOTAL':>{total_w}}")
+            print(header)
+            print("-" * len(header))
+            for r in rows:
+                print(_line(r['name'], r['type'],
+                            lambda c, r=r: r['ready'] if c == 'ready'
+                            else r['byState'][c], r['total']))
+            print("-" * len(header))
+            print(_line('TOTAL', '',
+                        lambda c: total['ready'] if c == 'ready'
+                        else total['byState'][c], total['total']))
+        elif args.output == 'yaml':
+            print(yaml.dump({'queues': rows, 'total': total},
+                            default_flow_style=False, indent=2))
+        elif args.output == 'json':
+            print(json.dumps({'queues': rows, 'total': total},
+                             indent=2, default=str))
+
+        return 0
+
     def _handle_get(self, env, args):
         """Handle 'get' command"""
+        if getattr(args, 'since', None) and args.resource_type not in (
+                'message', 'processing'):
+            print(f"Error: --since does not apply to '{args.resource_type}' "
+                  f"(it has no creation timeline to filter); use it on "
+                  f"message or processing", file=sys.stderr)
+            return 1
         if args.resource_type == 'queue':
             return self._get_queue(env, args)
         elif args.resource_type == 'message':
@@ -222,12 +436,14 @@ Examples:
             # Get all queues
             queues = env['imq.queue'].search([])
         
+        stats = self._queue_stats(env, queues)
+        labels = dict(self._state_labels(env))
         if args.output == 'table':
-            self._print_queue_table(queues)
+            self._print_queue_table(queues, stats, labels)
         elif args.output == 'yaml':
-            self._print_queue_yaml(queues)
+            self._print_queue_yaml(queues, stats)
         elif args.output == 'json':
-            self._print_queue_json(queues)
+            self._print_queue_json(queues, stats)
         
         return 0
     
@@ -367,13 +583,18 @@ Examples:
         if getattr(args, 'group', None):
             domain.append(('group', '=', args.group))
 
+        if getattr(args, 'since', None):
+            domain.append(('create_date', '>=', self._since_cutoff(args.since)))
+
         if args.resource_name:
             if args.resource_name.isdigit():
                 domain.append(('id', '=', int(args.resource_name)))
             else:
                 domain.append(('queue_message_id', '=', args.resource_name))
-        
-        messages = env['imq.message'].search(domain, limit=50, order='create_date desc')
+
+        messages = env['imq.message'].search(
+            domain, limit=(getattr(args, 'limit', 50) or None),
+            order='create_date desc')
         
         if args.output == 'table':
             self._print_message_table(messages)
@@ -541,14 +762,34 @@ Examples:
         return 0
     
     def _get_processing(self, env, args):
-        """Get processing record(s)"""
+        """Get processing record(s)
+
+        --queue and --state were declared on the `get` parser but never read
+        here, so they filtered nothing and said nothing: the listing came back
+        complete and looked like an answer.
+        """
         domain = []
-        
+
+        if args.queue:
+            queue = env['imq.queue'].search([('name', '=', args.queue)], limit=1)
+            if not queue:
+                print(f"Error: Queue '{args.queue}' not found", file=sys.stderr)
+                return 1
+            domain.append(('queue_id', '=', queue.id))
+
+        if args.state:
+            domain.append(('state', '=', args.state))
+
+        if getattr(args, 'since', None):
+            domain.append(('create_date', '>=', self._since_cutoff(args.since)))
+
         if args.resource_name:
             if args.resource_name.isdigit():
                 domain.append(('id', '=', int(args.resource_name)))
-        
-        processings = env['imq.message_processing'].search(domain, limit=50, order='create_date desc')
+
+        processings = env['imq.message_processing'].search(
+            domain, limit=(getattr(args, 'limit', 50) or None),
+            order='create_date desc')
         
         if args.output == 'table':
             self._print_processing_table(processings)
@@ -591,22 +832,39 @@ Examples:
         return 0
     
     # Table formatting methods
-    def _print_queue_table(self, queues):
-        """Print queues in table format"""
+    def _print_queue_table(self, queues, stats, labels):
+        """Print queues in table format
+
+        The listing carries the queue's status, the way `kubectl get` does: a
+        digest, not the full breakdown — `top queue` has every state. The one
+        shipped before read queue.imq_message_ids, a field the model does not
+        have, so it printed 0 for every queue, always.
+
+        The two state columns are named with the states' own labels; READY is
+        the only header that is not a state (see the note on READY above).
+        """
         if not queues:
             print("No queues found")
             return
-        
-        print(f"{'NAME':<20} {'TYPE':<8} {'PROVIDER':<10} {'ACTIVE':<8} {'MESSAGES':<10} {'AGE':<15}")
-        print("-" * 80)
-        
+
+        wip_h = self._column_header(labels.get('wip', 'In progress'))
+        failed_h = self._column_header(labels.get('failed', 'Failed'))
+        header = (f"{'NAME':<20} {'TYPE':<8} {'PROVIDER':<10} {'ACTIVE':<8} "
+                  f"{'READY':>7} {wip_h:>{max(len(wip_h), 9)}} "
+                  f"{failed_h:>{max(len(failed_h), 7)}} {'AGE':<15}")
+        print(header)
+        print("-" * len(header))
+
         for queue in queues:
-            # Get message count
-            message_count = len(queue.imq_message_ids) if hasattr(queue, 'imq_message_ids') else 0
+            s = stats[queue.id]
             age = self._calculate_age(queue.create_date)
             active_status = "Yes" if queue.active else "No"
-            
-            print(f"{queue.name:<20} {queue.q_type:<8} {queue.provider:<10} {active_status:<8} {message_count:<10} {age:<15}")
+
+            print(f"{queue.name:<20} {queue.q_type:<8} {queue.provider:<10} "
+                  f"{active_status:<8} {s['ready']:>7} "
+                  f"{s['byState'].get('wip', 0):>{max(len(wip_h), 9)}} "
+                  f"{s['byState'].get('failed', 0):>{max(len(failed_h), 7)}} "
+                  f"{age:<15}")
     
     def _print_message_table(self, messages):
         """Print messages in table format"""
@@ -624,6 +882,18 @@ Examples:
             
             print(f"{message.id:<8} {name:<25} {message.queue_id.name:<15} {message.state:<12} {msg_type:<8} {age:<15}")
     
+    @staticmethod
+    def _cell(value, width, empty='N/A'):
+        """Fit a field value into a fixed-width table cell.
+
+        Goes through `or empty` first because an unset Odoo Char reads as
+        False, not '': calling len() on it raises "object of type 'bool' has
+        no len()", which is what `get processor` did on any processor whose
+        name, function or module was empty — the listing died mid-table.
+        """
+        text = value or empty
+        return (text[:width - 3] + '...') if len(text) > width else text
+
     def _print_processor_table(self, processors):
         """Print processors in table format"""
         if not processors:
@@ -634,11 +904,11 @@ Examples:
         print("-" * 105)
         
         for processor in processors:
-            name = (processor.name[:17] + '...') if len(processor.name) > 20 else processor.name
-            selector = (processor.selector[:17] + '...') if processor.selector and len(processor.selector) > 20 else (processor.selector or 'N/A')
-            function = (processor.function[:22] + '...') if len(processor.function) > 25 else processor.function
-            module = (processor.module[:27] + '...') if len(processor.module) > 30 else processor.module
-            
+            name = self._cell(processor.name, 20)
+            selector = self._cell(processor.selector, 20)
+            function = self._cell(processor.function, 25)
+            module = self._cell(processor.module, 30)
+
             print(f"{processor.id:<6} {name:<20} {selector:<20} {function:<25} {module}")
     
     def _print_processing_table(self, processings):
@@ -652,36 +922,48 @@ Examples:
         
         for processing in processings:
             age = self._calculate_age(processing.create_date)
-            worker_type = (processing.worker_type[:12] + '...') if len(processing.worker_type) > 15 else processing.worker_type
+            worker_type = self._cell(processing.worker_type, 15)
             
             print(f"{processing.id:<8} {processing.message_id.id:<12} {processing.state:<12} {worker_type:<15} {processing.attempt:<8} {age:<15}")
     
     # YAML/JSON formatting methods
-    def _print_queue_yaml(self, queues):
+    def _print_queue_yaml(self, queues, stats):
         """Print queues in YAML format"""
         data = []
         for queue in queues:
+            s = stats[queue.id]
             data.append({
                 'name': queue.name,
                 'type': queue.q_type,
                 'provider': queue.provider,
                 'active': queue.active,
                 'visibilityTimeout': queue.visibility_timeout,
-                'createdAt': self._format_datetime(queue.create_date)
+                'createdAt': self._format_datetime(queue.create_date),
+                'status': {
+                    'ready': s['ready'],
+                    'byState': s['byState'],
+                    'totalMessages': s['total'],
+                },
             })
         print(yaml.dump({'queues': data}, default_flow_style=False, indent=2))
     
-    def _print_queue_json(self, queues):
+    def _print_queue_json(self, queues, stats):
         """Print queues in JSON format"""
         data = []
         for queue in queues:
+            s = stats[queue.id]
             data.append({
                 'name': queue.name,
                 'type': queue.q_type,
                 'provider': queue.provider,
                 'active': queue.active,
                 'visibilityTimeout': queue.visibility_timeout,
-                'createdAt': self._format_datetime(queue.create_date)
+                'createdAt': self._format_datetime(queue.create_date),
+                'status': {
+                    'ready': s['ready'],
+                    'byState': s['byState'],
+                    'totalMessages': s['total'],
+                },
             })
         print(json.dumps({'queues': data}, indent=2, default=str))
     

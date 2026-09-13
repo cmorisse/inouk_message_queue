@@ -1068,8 +1068,10 @@ The `--message` parameter allows you to process a specific message by ID or Mess
 ### Command Options
 
 ```bash
+# Global
+--database, -d DATABASE    # Database name to connect to (default: $PGDATABASE)
+
 # Required arguments
---database, -d DATABASE    # Database name to connect to
 --queues, -q PATTERN       # Queue name, glob, or regex pattern (e.g.,
                            #   default, "mpy.*", "(default|pack8s)")
 --queue PATTERN            # [DEPRECATED] Alias for --queues
@@ -2149,11 +2151,14 @@ The `imq-ctl` command provides a kubectl-style management tool for IMQ objects, 
 
 ### Verbs
 
-`imq-ctl` follows kubectl's shape: `imq-ctl --database DB <verb> <resource> [name] [flags]`.
+`imq-ctl` follows kubectl's shape: `imq-ctl [--database DB] <verb> <resource> [name] [flags]`.
+`--database` defaults to `$PGDATABASE`, so on a configured box it can be left out; the examples
+below keep it for boxes where that variable is not set.
 
 | Verb | Resources | Purpose |
 |---|---|---|
 | `get` | `queue`, `message`, `processor`, `processing` | List resources (table by default) |
+| `top` | `queue` | Current backlog per queue, one column per state, with a TOTAL line |
 | `describe` | `queue`, `message`, `processor`, `processing` | Full detail of one resource |
 | `logs` | `processing`, `message` | Stream processing logs |
 | `create` | `queue` | Create a queue |
@@ -2175,7 +2180,68 @@ The `imq-ctl` command provides a kubectl-style management tool for IMQ objects, 
 <odoo-launcher> imq-ctl --database $PGDATABASE get message --state pending --output json
 ```
 
-Flags: `--output/-o {table,yaml,json}` (default `table`), `--queue`, `--state`, `--group`.
+Flags: `--output/-o {table,yaml,json}` (default `table`), `--queue`, `--state`, `--group`,
+`--since`, `--limit`.
+
+- `--queue` and `--state` apply to `message` and `processing`; `--group` to `message`.
+- `--since` takes a kubectl-style duration — `30s`, `5m`, `2h`, `3d` — and keeps only what was
+  created within that window. It applies to `message` and `processing`, the two resources with
+  a creation timeline, and is **refused** on `queue` and `processor` rather than ignored.
+- `--limit N` caps the rows (default `50`; `0` = no limit). Before it existed every listing was
+  silently cut at 50 and looked complete.
+
+`get queue` lists each queue with its status — `READY`, `IN_PROGRESS`, `FAILED` — and the
+`yaml`/`json` outputs carry the same under `status`, with the full by-state breakdown.
+
+#### Load with `top`
+
+`top queue` is `kubectl top` for queues: the current backlog, one column per message state,
+and a TOTAL line. It lists nothing and mutates nothing.
+
+```bash
+# Backlog per queue, every imq.message state as a column
+<odoo-launcher> imq-ctl top queue
+
+# One queue
+<odoo-launcher> imq-ctl top queue muppy
+
+# For automation
+<odoo-launcher> imq-ctl top queue -o json
+```
+
+```
+NAME     TYPE READY NEW PENDING IN_PROGRESS RETRY DONE TERMINATED FAILED ARCHIVED RESET CANCELLED TOTAL
+default  std      2   0       2           0     0   80          0      0        0     0         0    82
+muppy    fifo     5   0       5           0     0 2090          0     21        8     0         0  2124
+--------------------------------------------------------------------------------------------------
+TOTAL             7   0       7           0     0 2170          0     21        8     0         0  2206
+```
+
+The state columns come from the live `imq.message.state` selection, so a state added here or
+by a `selection_add` elsewhere appears on its own. Headers are the states' labels, upper-cased
+with underscores (`IN_PROGRESS`); the JSON keys are the state **codes** (`wip`), which is what
+automation should read — labels are translatable.
+
+**`READY` is the one column that is not a state.** It is the number of messages a worker would
+take *right now*, computed with the worker's own pickup predicate (`models/worker_pgsql.py`):
+state `pending` or `retry`, `planned_time` not in the future, and on a **fifo** queue the
+head-of-group condition — a message whose predecessor in its `group` has not finished is not
+ready, whatever its state says. That clause is why `READY` can be lower than `PENDING` on a
+fifo queue, and why anything that waits on the queue must wait on `READY`: an over-count would
+make it wait forever for messages nobody will take.
+
+```json
+{
+  "queues": [
+    {"name": "muppy", "type": "fifo", "ready": 5,
+     "byState": {"new": 0, "pending": 5, "wip": 0, "retry": 0, "done": 2090,
+                 "terminated": 0, "failed": 21, "archived": 8, "reset": 0, "cancelled": 0},
+     "total": 2124}
+  ],
+  "total": {"ready": 7, "byState": {"pending": 7, "done": 2170, "failed": 21, "archived": 8},
+            "total": 2206}
+}
+```
 
 #### Creating and deleting queues
 
@@ -2380,18 +2446,20 @@ The `--logs` command provides a specialized streaming format for processing logs
 ### Command Options
 
 ```bash
-# Required arguments
---database, -d DATABASE    # Database name to connect to
-
 # Global
---database, -d NAME       # Database to connect to (required)
+--database, -d NAME       # Database to connect to (default: $PGDATABASE)
 --verbose, -v             # Verbose output with debug information
+
+# top queue [name]
+--output, -o FORMAT       # table (default) | yaml | json
 
 # get <queue|message|processor|processing> [name]
 --output, -o FORMAT       # table (default) | yaml | json
---queue NAME              # Filter messages by queue name
---state STATE             # Filter messages by state
+--queue NAME              # Filter messages / processing records by queue name
+--state STATE             # Filter messages / processing records by state
 --group TAG               # Filter messages by group (per-run tag)
+--since DURATION          # Only what was created within 30s | 5m | 2h | 3d (message, processing)
+--limit N                 # Max rows (default 50, 0 = no limit)
 
 # describe <queue|message|processor|processing> <name>
 --output, -o FORMAT       # yaml (default) | json
@@ -2442,8 +2510,14 @@ The `--logs` command provides a specialized streaming format for processing logs
 <odoo-launcher> imq-ctl --database $PGDATABASE describe message 49737 --output json \
   --output-file message_49737.json
 
-# Check queue health
+# Backlog across all queues — READY is what a worker would take now
+<odoo-launcher> imq-ctl --database $PGDATABASE top queue
+
+# Check one queue in depth
 <odoo-launcher> imq-ctl --database $PGDATABASE describe queue default
+
+# What ran in the last ten minutes, and how it ended
+<odoo-launcher> imq-ctl --database $PGDATABASE get processing --since=10m --limit=0
 
 # Audit processing attempts
 <odoo-launcher> imq-ctl --database $PGDATABASE describe processing 47495 --include-logs
